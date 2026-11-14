@@ -103,6 +103,7 @@ def test_silpo_connect_store_list_disconnect(client):
     row = client.app.state.conn.execute("SELECT tokens_enc FROM silpo_links").fetchone()
     assert "AT-secret-123" not in row["tokens_enc"]
 
+    assert "Оберіть свій магазин" in client.get("/list").text
     page = client.get("/silpo", params={"city": "Київ"}).text
     assert "Київ, вул. Івана Франка, 1" in page
     r = client.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Київ, вул. Івана Франка, 1"})

@@ -2,7 +2,9 @@
 {% block title %}Мій список — Кошик з акцій{% endblock %}
 {% block body %}
 <h1>Ваш список з акцій</h1>
-{% if is_demo %}
+{% if need_store %}
+<div class="note" style="margin-bottom:14px">«Сільпо» підключено. <a href="/silpo"><b>Оберіть свій магазин</b></a>, щоб бачити його справжні акції. Поки що нижче — <b>демо</b> з вигаданими цінами.</div>
+{% elif is_demo %}
 <div class="note" style="margin-bottom:14px">Це <b>демо</b>: товари й ціни вигадані. <a href="/silpo">Підключіть «Сільпо»</a> і оберіть магазин, щоб бачити справжні акції.</div>
 {% elif notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/silpo">Перейти до «Сільпо»</a></div>
 {% elif link %}<p class="lead">Акції магазину «Сільпо»: {{ link.store_title }}. <a href="/list?refresh=1">Оновити</a></p>{% endif %}

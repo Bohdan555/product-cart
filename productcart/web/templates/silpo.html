@@ -11,7 +11,8 @@
 </div>
 {% else %}
 <div class="ok">«Сільпо» підключено{% if link.store_title %} · магазин: {{ link.store_title }}{% endif %}.</div>
-<h2>{{ 'Змінити магазин' if link.store_id else 'Оберіть свій магазин' }}</h2>
+<h2>{{ 'Змінити магазин' if link.store_id else 'Крок 2: оберіть свій магазин' }}</h2>
+{% if not link.store_id %}<p class="hint">Знайдіть магазин за містом і частиною адреси й натисніть «Мій магазин» — після цього відкриється ваш список.</p>{% endif %}
 <form class="card row" method="get" action="/silpo">
   <div><label for="city">Місто</label><input id="city" type="text" name="city" value="{{ city }}" placeholder="Київ"></div>
   <div><label for="q">Частина адреси</label><input id="q" type="text" name="q" value="{{ q }}" placeholder="Франка"></div>

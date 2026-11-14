@@ -230,6 +230,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         link = silpo_link(u["id"])
         stores, err = [], error or None
+        p, _ = load_profile(u["id"])
+        # Щойно підключили й магазину ще немає — одразу показуємо магазини міста з профілю
+        if link and not link["store_id"] and not (city or q) and p.city and not error:
+            city = p.city
         if link and (city or q):
             tokens = silpo_tokens(u["id"])
             if not tokens:
@@ -242,7 +246,6 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                     err = f"«Сільпо» не відповіло: {str(e)[:120]}"
                 if not stores and not err:
                     err = "Магазинів не знайдено. Перевірте місто або частину адреси."
-        p, _ = load_profile(u["id"])
         return render(request, "silpo.html", u, link=link, stores=stores, city=city or (p.city or ""), q=q, error=err)
 
     @app.post("/silpo/connect")
@@ -314,7 +317,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         matches, rejected = matcher.rank(offers, p)
         sl = planner.build(matches, p)
         return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
-                      is_demo=is_demo, link=link, notice=notice)
+                      is_demo=is_demo, link=link, notice=notice, need_store=bool(link and not link["store_id"]))
 
     @app.get("/privacy", response_class=HTMLResponse)
     def privacy(request: Request):
