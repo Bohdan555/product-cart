@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .catalog import TAG_LABELS
@@ -37,10 +38,17 @@ def _norm(s: str) -> str:
 
 
 def _matches_regular(offer: Offer, regular: str) -> bool:
-    """«молоко» ловить «Молоко 2,5% 900 г»; «кава зернова» — назви з обома словами."""
-    name = _norm(f"{offer.name} {offer.category or ''}")
+    """«молоко» ловить «Молоко 2,5% 900 г», але не «Йогурт» з категорії «Молочні продукти» і не «Молочний шоколад».
+    Кожне слово пункту має бути початком якогось слова в назві товару (без закінчення)."""
+    tokens = [t for t in re.split(r"[^\wʼ'-]+", _norm(offer.name)) if t]
     words = [w for w in _norm(regular).split() if w]
-    return bool(words) and all(w[: max(3, len(w) - 2)] in name for w in words)
+    if not words:
+        return False
+
+    def stem(w: str) -> str:
+        return w if len(w) <= 4 else w[: len(w) - 1]
+
+    return all(any(t.startswith(stem(w)) for t in tokens) for w in words)
 
 
 def check(offer: Offer, profile: Profile) -> Rejected | None:

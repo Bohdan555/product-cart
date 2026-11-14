@@ -72,3 +72,13 @@ def test_demo_and_feed(tmp_path):
     csv_path.write_text('chain,product_id,name,price,old_price,valid_to\nvarus,1,Гречка ядриця 1 кг,"44,9",57.9,2026-11-20\n', encoding="utf-8")
     [o] = feed.load(csv_path)
     assert o.price == 44.9 and o.valid_to == "2026-11-20" and "grains" in o.tags and o.source == "feed:varus"
+
+
+def test_regular_matching_by_name_words():
+    p = Profile(regulars=["молоко", "кава зернова", "яйця"], min_discount=0)
+    yes = ["Молоко 2,5% 900 г", "Кава зернова Lavazza 1 кг", "Яйця курячі С1 10 шт"]
+    no = [("Йогурт грецький 2% 300 г", "Молочні продукти"), ("Молочний шоколад 90 г", None), ("Кава мелена 250 г", None)]
+    for n in yes:
+        assert matcher.score(offer(n, 10, 12), p).regular, n
+    for n, cat in no:
+        assert not matcher.score(offer(n, 10, 12, category=cat), p).regular, n

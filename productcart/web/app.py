@@ -53,7 +53,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     app.state.conn, app.state.gw = conn, gw
     analytics.init(conn)
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
-    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o))
+    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual)
 
     # ---------- допоміжне ----------
     def user_of(request: Request):
@@ -460,6 +460,20 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return render(request, "privacy.html", user_of(request))
 
     return app
+
+
+# Іконка й колір плитки для товару без фото (за тегом), і підпис категорії для фільтра
+VISUALS = [("coffee", "☕", 28, "Кава"), ("tea", "🍵", 95, "Чай"), ("fish", "🐟", 200, "Риба"), ("meat", "🍗", 12, "М'ясо"),
+           ("dairy", "🥛", 210, "Молочне"), ("eggs", "🥚", 45, "Яйця"), ("vegetables", "🥦", 120, "Овочі"),
+           ("fruits", "🍎", 350, "Фрукти"), ("grains", "🌾", 40, "Крупи"), ("sweets", "🍫", 330, "Солодке"),
+           ("alcohol", "🍷", 345, "Напої"), ("household", "🧴", 260, "Побут"), ("gluten", "🍞", 32, "Хліб і макарони")]
+
+
+def offer_visual(o: Offer) -> dict:
+    for tag, emoji, hue, label in VISUALS:
+        if tag in o.tags:
+            return {"emoji": emoji, "hue": hue, "cat": label}
+    return {"emoji": "🛒", "hue": 150, "cat": o.category or "Інше"}
 
 
 def offer_from_dict(d: dict) -> Offer:

@@ -39,27 +39,55 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% if p.diets %}<p class="hint">Фільтри: {% for d in p.diets %}{{ DIET_LABELS[d] }}{% if not loop.last %}, {% endif %}{% endfor %} — за назвою товару, склад перевіряйте на упаковці.</p>{% endif %}
 
 {% if sl.items %}
-<div class="summary">
-  <div><b>{{ uah(sl.total) }}</b><span>разом за {{ sl.items|length }} позицій</span></div>
-  <div class="save"><b>−{{ uah(sl.saving) }}</b><span>економія на акціях</span></div>
-  {% if p.budget_week %}<div><b>{{ uah(p.budget_week) }}</b><span>ваш бюджет</span></div>{% endif %}
+{% set cats = [] %}{% for m in sl.items %}{% set c = visual(m.offer).cat %}{% if c not in cats %}{% set _ = cats.append(c) %}{% endif %}{% endfor %}
+<section class="hero-sum">
+  <div class="hs-main"><span class="hs-label">Ваш кошик цього тижня</span><b class="hs-total">{{ uah(sl.total) }}</b>
+    <span class="hs-items">{{ sl.items|length }} товарів{% if p.budget_week %} · бюджет {{ uah(p.budget_week) }}{% endif %}</span></div>
+  <div class="hs-save"><span>економія</span><b>−{{ uah(sl.saving) }}</b></div>
+</section>
+{% if cats|length > 1 %}
+<div class="filters" role="group" aria-label="Категорії">
+  <button type="button" class="fchip on" data-cat="">Усе</button>
+  {% for c in cats %}<button type="button" class="fchip" data-cat="{{ c }}">{{ c }}</button>{% endfor %}
 </div>
+{% endif %}
 {% for key, items in sl.groups.items() %}
-<h2>{{ chain_name(key) }}{% if ' · ' in key %} <span class="hint">· {{ key.split(' · ',1)[1] }}</span>{% endif %}</h2>
-<div class="card store">
-  {% for m in items %}{% set o = m.offer %}
-  <div class="item">
-    <div>
-      <div class="name">{% set link_url = click_url(o) %}{% if link_url %}<a href="{{ link_url }}" target="_blank" rel="noopener">{{ o.name }}</a>{% else %}{{ o.name }}{% endif %}</div>
-      <div class="why">{{ m.reasons|join(' · ') }}</div>
-      <div class="meta">{% if o.promo %}{{ o.promo }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}{% set up = o.unit_price() %}{% if up %} · {{ uah(up[0]) }}/{{ up[1] }}{% endif %}</div>
+<h2 class="store-h"><span class="chain-dot"></span>{{ chain_name(key) }}{% if ' · ' in key %} <span class="hint">{{ key.split(' · ',1)[1] }}</span>{% endif %}</h2>
+<div class="grid">
+  {% for m in items %}{% set o = m.offer %}{% set v = visual(o) %}{% set link_url = click_url(o) %}
+  <article class="pcard" data-cat="{{ v.cat }}">
+    <div class="pimg" style="--h:{{ v.hue }}">
+      {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
+      <span class="pemoji" aria-hidden="true">{{ v.emoji }}</span>
+      <span class="pdisc">−{{ o.discount_pct|round|int }}%</span>
+      {% if o.also_in %}<span class="palso">ще в {{ o.also_in }} поруч</span>{% endif %}
     </div>
-    <div class="price">{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}<b>{{ uah(o.price) }}</b><br><span class="sticker">−{{ o.discount_pct|round|int }}%</span></div>
-  </div>
+    <div class="pbody">
+      <h3 class="pname">{{ o.name }}</h3>
+      <div class="pprice"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</div>
+      {% set up = o.unit_price() %}<div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
+      <div class="pwhy">{% for r in m.reasons %}{% if not r.startswith('−') %}<span>{{ r }}</span>{% endif %}{% endfor %}</div>
+      {% if o.promo %}<div class="ppromo">{{ o.promo }}</div>{% endif %}
+      {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener">До {{ chain_name(o.chain) }} →</a>{% endif %}
+    </div>
+  </article>
   {% endfor %}
 </div>
 {% endfor %}
 {% if sl.regulars_missing %}<p class="note" style="margin-top:14px">Без акції цього тижня: {{ sl.regulars_missing|join(', ') }}.</p>{% endif %}
+<script>
+document.querySelectorAll('.fchip').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('.fchip').forEach(function (x) { x.classList.toggle('on', x === b); });
+    var c = b.dataset.cat;
+    document.querySelectorAll('.pcard').forEach(function (card) { card.hidden = c && card.dataset.cat !== c; });
+    document.querySelectorAll('.grid').forEach(function (g) {
+      var any = Array.prototype.some.call(g.children, function (x) { return !x.hidden; });
+      g.hidden = !any; g.previousElementSibling.hidden = !any;
+    });
+  });
+});
+</script>
 {% else %}
 <div class="card">Під ваш профіль акцій не знайшлося. Спробуйте знизити мінімальну знижку в <a href="/profile">профілі</a>.</div>
 {% endif %}

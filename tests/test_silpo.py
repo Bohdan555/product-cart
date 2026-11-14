@@ -94,3 +94,11 @@ def test_nearest_by_distance():
                 {"id": "nocoords", "title": "Без координат", "lat": None, "lon": None}]
     got = silpo.nearest(branches, 50.45, 30.52, n=2)
     assert [b["id"] for b in got] == ["near", "far"] and got[0]["km"] < 2 and 460 < got[1]["km"] < 480
+
+
+def test_image_urls():
+    assert silpo.image_url({"image_url": "https://images.silpo.ua/products/1600x1600/webp/abc.png"}) == \
+        "https://images.silpo.ua/products/300x300/webp/abc.png"
+    assert silpo.image_url({"image": "abc.png"}) == "https://images.silpo.ua/products/300x300/webp/abc.png"
+    assert silpo.image_url({"images": [{"url": "//cdn.example/x.jpg"}]}) == "https://cdn.example/x.jpg"
+    assert silpo.image_url({}) is None

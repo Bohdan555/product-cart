@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 
 Call = Callable[[str, dict], Awaitable[Any]]
 CHAIN = "silpo"
+IMAGE_BASE = "https://images.silpo.ua/products/300x300/webp/"
 PRODUCT_URL = "https://silpo.ua/product/{slug}"
 
 
@@ -110,23 +111,36 @@ async def branch_context(call: Call, branch_id: str) -> dict:
 
 # ---------- товари ----------
 
+def image_url(p: dict) -> str | None:
+    """Фото товару: повна адреса або ідентифікатор файлу на images.silpo.ua. Великі фото зменшуємо до 300×300."""
+    img = p.get("image") or p.get("image_url") or p.get("imageUrl") or p.get("mainImage")
+    if not img and isinstance(p.get("images"), list) and p["images"]:
+        first = p["images"][0]
+        img = first.get("url") if isinstance(first, dict) else first
+    if not img or not isinstance(img, str):
+        return None
+    img = img.strip()
+    if img.startswith("//"):
+        img = "https:" + img
+    if not img.startswith("http"):
+        img = IMAGE_BASE + img.split("/")[-1]
+    return img.replace("/1600x1600/", "/300x300/")
+
+
 def normalize_product(p: dict, *, branch: dict | None = None, promo: str | None = None) -> Offer | None:
-    price = _num(p.get("price"), p.get("currentPrice"))
+    price = _num(p.get("price"), p.get("currentPrice"), p.get("current_price"))
     if price is None:
         return None
-    old = _num(p.get("oldPrice"), p.get("priceOld"))
+    old = _num(p.get("oldPrice"), p.get("priceOld"), p.get("old_price"))
     special = (p.get("specialPrices") or [None])[0] if isinstance(p.get("specialPrices"), list) else None
     promo_text = promo
     if special and special.get("price") and special.get("count"):
         promo_text = f"{special['count']} шт по {special['price']} ₴" + (f" · {promo}" if promo else "")
     name = p.get("name") or p.get("title") or "Товар"
-    ratio = p.get("displayRatio") or ""
+    ratio = p.get("displayRatio") or p.get("display_ratio") or ""
     weighted = bool(p.get("weighted") or p.get("isWeighted"))
     qty, unit = parse_pack(ratio) if ratio else (None, None)
-    image = p.get("image") or p.get("mainImage") or p.get("imageUrl")
-    if not image and isinstance(p.get("images"), list) and p["images"]:
-        first = p["images"][0]
-        image = first.get("url") if isinstance(first, dict) else first
+    image = image_url(p)
     slug = p.get("slug")
     offer = Offer(
         chain=CHAIN,
@@ -140,7 +154,7 @@ def normalize_product(p: dict, *, branch: dict | None = None, promo: str | None 
         store_id=(branch or {}).get("id") or (str(p["branchId"]) if p.get("branchId") else None),
         store_name=(branch or {}).get("title"),
         promo=promo_text,
-        url=PRODUCT_URL.format(slug=slug) if slug else None,
+        url=PRODUCT_URL.format(slug=slug) if slug else (p.get("url") or p.get("product_url")),
         ean=p.get("barcode") or p.get("ean"),
         image=image,
         source="silpo-mcp",
