@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .. import matcher, planner
+from .. import matcher, menu, planner
 from ..catalog import TAG_LABELS, enrich
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
@@ -280,6 +280,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         )
         prev, _ = load_profile(u["id"])
         p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
+        p.dinners, p.max_minutes, p.menu_budget = prev.dinners, prev.max_minutes, prev.menu_budget
         if diets and not consent:
             return render(request, "profile.html", u, p=p, consent=False, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS,
                           diets=list(DIETS), silpo=silpo_link(u["id"]), status=400, picked_diets=diets,
@@ -385,6 +386,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         conn.execute("DELETE FROM silpo_links WHERE user_id=?", (u["id"],))
         return go("/silpo")
 
+    async def current_offers(user_id: int, p: Profile, refresh: bool):
+        """Акції магазинів поруч (або демо, якщо «Сільпо» не підключено)."""
+        link = silpo_link(user_id)
+        stores, offers, notice = await silpo_list_input(user_id, p, force=refresh) if link else ([], [], None)
+        is_demo = not offers and not notice
+        if is_demo:
+            offers = demo.load()
+        return link, stores, planner.merge_nearby(offers), notice, is_demo
+
     # ---------- список ----------
     @app.get("/list", response_class=HTMLResponse)
     async def shopping_list(request: Request, refresh: int = 0):
@@ -392,12 +402,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return bad
         p, _ = load_profile(u["id"])
-        link = silpo_link(u["id"])
-        stores, offers, notice = await silpo_list_input(u["id"], p, force=bool(refresh)) if link else ([], [], None)
-        is_demo = not offers and not notice
-        if is_demo:
-            offers = demo.load()
-        offers = planner.merge_nearby(offers)
+        link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
         matches, rejected = matcher.rank(offers, p)
         sl = planner.build(matches, p)
         analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
@@ -407,6 +412,39 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
                       is_demo=is_demo, link=link, notice=notice, stores=stores,
                       need_location=bool(link and p.lat is None and not link["store_id"]))
+
+    # ---------- меню ----------
+    @app.get("/menu", response_class=HTMLResponse)
+    async def menu_page(request: Request, refresh: int = 0):
+        u, bad = need_user(request)
+        if bad:
+            return bad
+        p, _ = load_profile(u["id"])
+        link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
+        m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget)
+        analytics.track(conn, u["id"], "menu_viewed", source="demo" if is_demo else "silpo", stores=len(stores),
+                        dishes=len(m.dishes), promo_lines=len(m.promo_lines), total=m.total, saving=m.saving)
+        return render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
+                      days=menu.DAYS, ingredient_unit=menu.unit_label, fmt_qty=menu.fmt_qty, pantry=menu.PANTRY)
+
+    @app.post("/menu/settings")
+    async def menu_settings(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, form.get("csrf", ""))
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        try:
+            p.dinners = max(1, min(7, int(form.get("dinners") or 5)))
+            p.max_minutes = max(15, min(180, int(form.get("max_minutes") or 60)))
+            b = form.get("menu_budget")
+            p.menu_budget = max(0.0, float(b)) if b else None
+        except ValueError:
+            return HTMLResponse("Неправильні налаштування меню.", status_code=400)
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "menu_settings", dinners=p.dinners, max_minutes=p.max_minutes,
+                        budget=bool(p.menu_budget))
+        return go("/menu")
 
     @app.post("/location")
     def location_save(request: Request, csrf: str = Form(""), lat: float = Form(...), lon: float = Form(...),

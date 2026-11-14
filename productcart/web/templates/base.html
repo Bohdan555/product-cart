@@ -10,6 +10,7 @@
   {% if user %}
   <nav class="top">
     <a href="/list" {% if request.url.path == '/list' %}class="on"{% endif %}>Мій список</a>
+    <a href="/menu" {% if request.url.path == '/menu' %}class="on"{% endif %}>Меню</a>
     <a href="/profile" {% if request.url.path == '/profile' %}class="on"{% endif %}>Профіль</a>
     <a href="/silpo" {% if request.url.path == '/silpo' %}class="on"{% endif %}>Сільпо</a>
     {% if is_admin %}<a href="/admin/stats" {% if request.url.path == '/admin/stats' %}class="on"{% endif %}>Статистика</a>{% endif %}

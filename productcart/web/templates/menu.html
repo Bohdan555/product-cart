@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Меню з акцій — Кошик з акцій{% endblock %}
+{% block body %}
+<h1>Вечері на тиждень з акцій</h1>
+<p class="lead">Страви підібрані так, щоб якомога більше інгредієнтів були зараз в акції{% if stores %} у {{ stores|length }} {{ 'магазині' if stores|length == 1 else 'магазинах' }} «Сільпо» поруч{% endif %}, а відкриті упаковки доїдались.</p>
+{% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
+{% if is_demo %}<div class="note" style="margin-bottom:14px">Це <b>демо</b>: ціни вигадані.{% if not link %} <a href="/silpo">Підключіть «Сільпо»</a>, щоб меню складалось зі справжніх акцій поруч.{% endif %}</div>{% endif %}
+
+<details class="card msettings">
+  <summary>⚙️ {{ p.dinners }} {{ 'вечеря' if p.dinners == 1 else ('вечері' if p.dinners < 5 else 'вечерь') }} · до {{ p.max_minutes }} хв · {{ m.people }} {{ 'людина' if m.people == 1 else ('людини' if m.people < 5 else 'людей') }}{% if p.menu_budget %} · бюджет {{ uah(p.menu_budget) }}{% endif %}</summary>
+  <form method="post" action="/menu/settings" class="mform">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}">
+    <div><label for="dinners">Скільки вечерь</label><input id="dinners" type="number" name="dinners" min="1" max="7" value="{{ p.dinners }}"></div>
+    <div><label for="max_minutes">Час на готування, хв</label><input id="max_minutes" type="number" name="max_minutes" min="15" max="180" step="5" value="{{ p.max_minutes }}"></div>
+    <div><label for="menu_budget">Бюджет, ₴ <span class="hint">· необов'язково</span></label><input id="menu_budget" type="number" name="menu_budget" min="0" step="50" value="{{ p.menu_budget|int if p.menu_budget else '' }}"></div>
+    <button class="btn" type="submit">Перескласти меню</button>
+  </form>
+  <p class="hint" style="margin:8px 0 0">Кількість людей і обмеження в харчуванні — у <a href="/profile">профілі</a>.</p>
+</details>
+
+{% if m.dishes %}
+<section class="hero-sum">
+  <div class="hs-main"><span class="hs-label">Продукти на {{ m.dishes|length }} вечер{{ 'ю' if m.dishes|length == 1 else ('і' if m.dishes|length < 5 else 'ь') }}</span><b class="hs-total">{{ uah(m.total) }}</b>
+    <span class="hs-items">≈ {{ uah(m.per_portion) }} за порцію</span></div>
+  {% if m.saving > 0 %}<div class="hs-save"><span>економія</span><b>−{{ uah(m.saving) }}</b></div>{% endif %}
+</section>
+
+<div class="days">
+{% for d in m.dishes %}
+  <article class="day">
+    <div class="day-ico" aria-hidden="true">{{ d.emoji }}</div>
+    <div class="day-body">
+      <div class="day-top"><span class="day-n">{{ days[loop.index0] }}</span><span class="hint">⏱ {{ d.minutes }} хв</span></div>
+      <h3 class="day-t">{{ d.title }}</h3>
+      {% if d.why %}<div class="pwhy">{% for r in d.why %}<span>{{ r }}</span>{% endfor %}</div>{% endif %}
+    </div>
+  </article>
+{% endfor %}
+</div>
+
+<h2>Що купити</h2>
+{% if m.promo_lines %}
+<h3 class="store-h"><span class="chain-dot"></span>В акції</h3>
+<ul class="buy">
+{% for l in m.promo_lines %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
+  <li>
+    <div class="buy-main"><b>{{ o.name }}</b>
+      <span class="hint">{{ l.name }} · треба {{ fmt_qty(l.need, l.unit) }}{% if l.key in pantry %} · можливо, вже є вдома{% endif %}{% if o.store_name %} · {{ o.store_name }}{% endif %}</span></div>
+    <div class="buy-price"><b>{{ uah(l.cost) }}</b>{% if l.packs > 1 %}<span class="hint">{{ l.packs }} уп.</span>{% endif %}{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</div>
+    {% if link_url %}<a class="buy-go" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if m.other_lines %}
+<h3 class="store-h"><span class="chain-dot grey"></span>Решта <span class="hint">· орієнтовні ціни, акції зараз немає</span></h3>
+<ul class="buy">
+{% for l in m.other_lines %}
+  <li><div class="buy-main"><b>{{ l.name }}</b><span class="hint">треба {{ fmt_qty(l.need, l.unit) }}{% if l.key in pantry %} · можливо, вже є вдома{% endif %}</span></div>
+    <div class="buy-price"><b>≈ {{ uah(l.cost) }}</b></div></li>
+{% endfor %}
+</ul>
+{% endif %}
+<p class="hint">Сіль, спеції й вода не враховані. Ціни «орієнтовно» — середні для магазинів, не з чека. Обмеження в харчуванні враховані за назвою інгредієнтів — склад перевіряйте на упаковці.</p>
+{% else %}
+<div class="card">Під ваші налаштування страв не знайшлося. Збільште час на готування або змініть обмеження в <a href="/profile">профілі</a>.</div>
+{% endif %}
+{% endblock %}

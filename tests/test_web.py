@@ -72,7 +72,7 @@ def test_register_validation_and_login(client):
 
 
 def test_pages_require_login(client):
-    for path in ("/list", "/profile", "/silpo"):
+    for path in ("/list", "/menu", "/profile", "/silpo"):
         assert client.get(path).headers["location"] == "/login"
 
 
@@ -176,3 +176,17 @@ def test_nearby_stores_within_radius(client):
     assert "найближчий" in page  # у 300 м магазинів немає → беремо найближчий
     client.post("/location/clear", data={"csrf": token})
     assert "Визначити моє місце" in client.get("/list").text
+
+
+def test_menu_page_and_settings(client):
+    token = register(client)
+    r = client.get("/menu")
+    assert r.status_code == 200 and "Вечері на тиждень" in r.text and "демо" in r.text and "Що купити" in r.text
+    assert client.post("/menu/settings", data={"csrf": "bad", "dinners": "3"}).status_code == 400
+    r = client.post("/menu/settings", data={"csrf": token, "dinners": "3", "max_minutes": "30", "menu_budget": ""})
+    assert r.status_code == 303
+    html = client.get("/menu").text
+    assert "3 вечері · до 30 хв" in html and html.count('class="day"') == 3
+    # збереження профілю не скидає налаштувань меню
+    client.post("/profile", data={"csrf": token, "household": "2", "min_discount": "10"})
+    assert "3 вечері · до 30 хв · 2 людини" in client.get("/menu").text

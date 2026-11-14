@@ -95,6 +95,10 @@ class Profile:
     lon: float | None = None
     radius_km: float = 1.0
     location_at: str | None = None
+    # Меню вечерь з акцій
+    dinners: int = 5
+    max_minutes: int = 60
+    menu_budget: float | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "Profile":
