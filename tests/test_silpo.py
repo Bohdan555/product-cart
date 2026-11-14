@@ -84,3 +84,11 @@ def test_profile_hints_and_end_to_end():
     p = Profile(regulars=["кава зернова"], min_discount=10)
     sl = planner.build(matcher.rank(offers, p)[0], p)
     assert sl.regulars_covered == ["кава зернова"] and "silpo · Франка" in sl.groups
+
+
+def test_nearest_by_distance():
+    branches = [{"id": "far", "title": "Львів", "lat": 49.84, "lon": 24.03},
+                {"id": "near", "title": "Київ, Франка", "lat": 50.44, "lon": 30.51},
+                {"id": "nocoords", "title": "Без координат", "lat": None, "lon": None}]
+    got = silpo.nearest(branches, 50.45, 30.52, n=2)
+    assert [b["id"] for b in got] == ["near", "far"] and got[0]["km"] < 2 and 460 < got[1]["km"] < 480

@@ -104,6 +104,11 @@ def test_silpo_connect_store_list_disconnect(client):
     assert "AT-secret-123" not in row["tokens_enc"]
 
     assert "Оберіть свій магазин" in client.get("/list").text
+    near = client.get("/silpo", params={"lat": "50.45", "lon": "30.52"}).text
+    assert "Найближчі до вас" in near and "км" in near
+    ip = client.get("/silpo", headers={"x-vercel-ip-latitude": "50.45", "x-vercel-ip-longitude": "30.52",
+                                       "x-vercel-ip-city": "Kyiv"}).text
+    assert "приблизно за вашою мережею (Kyiv)" in ip
     page = client.get("/silpo", params={"city": "Київ"}).text
     assert "Київ, вул. Івана Франка, 1" in page
     r = client.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Київ, вул. Івана Франка, 1"})

@@ -8,6 +8,7 @@ import json
 import os
 import secrets
 from datetime import timedelta
+from urllib.parse import unquote
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -224,29 +225,43 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     # ---------- «Сільпо» ----------
     @app.get("/silpo", response_class=HTMLResponse)
-    async def silpo_page(request: Request, city: str = "", q: str = "", error: str = ""):
+    async def silpo_page(request: Request, city: str = "", q: str = "", error: str = "",
+                         lat: float | None = None, lon: float | None = None):
         u, bad = need_user(request)
         if bad:
             return bad
         link = silpo_link(u["id"])
-        stores, err = [], error or None
+        stores, err, near_mode, ip_city = [], error or None, None, None
         p, _ = load_profile(u["id"])
-        # Щойно підключили й магазину ще немає — одразу показуємо магазини міста з профілю
-        if link and not link["store_id"] and not (city or q) and p.city and not error:
-            city = p.city
-        if link and (city or q):
+        if link and lat is None and not (city or q) and not link["store_id"] and not error:
+            # Магазин ще не обрано: пропонуємо найближчі за приблизною локацією з IP (Vercel додає ці заголовки),
+            # а якщо її немає — магазини міста з профілю. Координати ніде не зберігаємо.
+            try:
+                lat = float(request.headers["x-vercel-ip-latitude"])
+                lon = float(request.headers["x-vercel-ip-longitude"])
+                near_mode = "ip"
+                ip_city = unquote(request.headers.get("x-vercel-ip-city", "")) or None
+            except (KeyError, ValueError):
+                city = p.city or ""
+        elif lat is not None and lon is not None:
+            near_mode = "gps"
+        if link and (near_mode or city or q):
             tokens = silpo_tokens(u["id"])
             if not tokens:
                 err = "Вхід у «Сільпо» застарів. Підключіть ще раз."
             else:
                 try:
                     async with gw.session(tokens["access_token"]) as call:
-                        stores = (await silpo.list_branches(call, city or None, q or None))[:40]
+                        if near_mode:
+                            stores = silpo.nearest(await silpo.list_branches(call), lat, lon, n=6)
+                        else:
+                            stores = (await silpo.list_branches(call, city or None, q or None))[:40]
                 except Exception as e:
                     err = f"«Сільпо» не відповіло: {str(e)[:120]}"
                 if not stores and not err:
                     err = "Магазинів не знайдено. Перевірте місто або частину адреси."
-        return render(request, "silpo.html", u, link=link, stores=stores, city=city or (p.city or ""), q=q, error=err)
+        return render(request, "silpo.html", u, link=link, stores=stores, city=city or (p.city or ""), q=q, error=err,
+                      near_mode=near_mode, ip_city=ip_city)
 
     @app.post("/silpo/connect")
     def silpo_connect(request: Request, csrf: str = Form("")):
