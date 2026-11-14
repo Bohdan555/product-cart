@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Профіль — Кошик з акцій{% endblock %}
+{% block body %}
+<h1>{{ 'Вітаємо! Розкажіть про себе' if welcome else 'Профіль' }}</h1>
+<p class="lead">За цим профілем ми відбираємо акції. Змінити його можна будь-коли.</p>
+<form class="stack" method="post" action="/profile">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <div class="card stack">
+    <div class="row">
+      <div><label for="name">Назва профілю</label><input id="name" type="text" name="name" value="{{ p.name }}"></div>
+      <div><label for="household">Скільки людей у сім'ї</label><input id="household" type="number" name="household" min="1" max="12" value="{{ p.household }}"></div>
+      <div><label for="city">Місто</label><input id="city" type="text" name="city" value="{{ p.city or '' }}" placeholder="Київ"></div>
+    </div>
+    <div><label for="regulars">Що купуєте щотижня <span class="hint">· через кому: ці товари шукаємо першими</span></label>
+      <textarea id="regulars" name="regulars" placeholder="молоко, яйця, хліб, кава зернова">{{ p.regulars|join(', ') }}</textarea></div>
+  </div>
+
+  <div class="card stack">
+    <div><label>Обмеження в харчуванні</label>
+      <div class="chips no">{% for d in diets %}<label><input type="checkbox" name="diets" value="{{ d }}" {% if d in (picked_diets or p.diets) %}checked{% endif %}> {{ DIET_LABELS[d] }}</label>{% endfor %}</div></div>
+    <label class="consent"><input type="checkbox" name="health_consent" value="1" {% if consent %}checked{% endif %}>
+      <span>Погоджуюся, щоб мої обмеження в харчуванні використовували лише для підбору акцій. Це дані про здоров'я; ми не передаємо їх нікому, а видалити їх можна, знявши позначки.</span></label>
+    <p class="hint">Товари відсіюємо за назвою та категорією. Склад перевіряйте на упаковці.</p>
+  </div>
+
+  <div class="card stack">
+    <div><label>Що любите</label>
+      <div class="chips yes">{% for t in like_tags %}<label><input type="checkbox" name="likes" value="{{ t }}" {% if t in p.likes %}checked{% endif %}> {{ TAG_LABELS[t] }}</label>{% endfor %}</div></div>
+    <div><label>Не показувати</label>
+      <div class="chips no">{% for t in hide_tags %}<label><input type="checkbox" name="dislikes" value="{{ t }}" {% if t in p.dislikes %}checked{% endif %}> {{ TAG_LABELS[t] }}</label>{% endfor %}</div></div>
+    <div class="row">
+      <div><label for="brands_like">Улюблені бренди</label><input id="brands_like" type="text" name="brands_like" value="{{ p.brands_like|join(', ') }}"></div>
+      <div><label for="brands_avoid">Бренди, які не купуєте</label><input id="brands_avoid" type="text" name="brands_avoid" value="{{ p.brands_avoid|join(', ') }}"></div>
+    </div>
+  </div>
+
+  <div class="card row">
+    <div><label for="budget_week">Бюджет на тиждень, ₴ <span class="hint">· необов'язково</span></label><input id="budget_week" type="number" name="budget_week" min="0" step="10" value="{{ p.budget_week|int if p.budget_week else '' }}"></div>
+    <div><label for="min_discount">Мінімальна знижка, %</label><input id="min_discount" type="number" name="min_discount" min="0" max="80" value="{{ p.min_discount|int }}"></div>
+    <div><label for="max_items">Позицій у списку</label><input id="max_items" type="number" name="max_items" min="5" max="40" value="{{ p.max_items }}"></div>
+  </div>
+  <div><button class="btn" type="submit">Зберегти профіль</button></div>
+</form>
+{% endblock %}

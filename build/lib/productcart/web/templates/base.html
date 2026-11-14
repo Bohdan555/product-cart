@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{% block title %}Кошик з акцій{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head><body><div class="wrap">
+<header class="top">
+  <a class="logo" href="/"><i>%</i>Кошик з акцій</a>
+  {% if user %}
+  <nav class="top">
+    <a href="/list" {% if request.url.path == '/list' %}class="on"{% endif %}>Мій список</a>
+    <a href="/profile" {% if request.url.path == '/profile' %}class="on"{% endif %}>Профіль</a>
+    <a href="/silpo" {% if request.url.path == '/silpo' %}class="on"{% endif %}>Сільпо</a>
+    <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button type="submit">Вийти</button></form>
+  </nav>
+  {% else %}
+  <nav class="top"><a href="/login">Увійти</a></nav>
+  {% endif %}
+</header>
+{% block body %}{% endblock %}
+<footer>Кошик з акцій — прототип. <a href="/privacy">Приватність і дані</a></footer>
+</div></body></html>

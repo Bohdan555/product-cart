@@ -1,0 +1,54 @@
+name: Deploy to Azure App Service
+
+# Кожен push у main: тести → викладання на Azure (Web App «product-cart»).
+# Потрібен секрет репозиторію AZURE_WEBAPP_PUBLISH_PROFILE (див. docs/deploy-azure.md).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: azure-deploy
+  cancel-in-progress: true
+
+env:
+  AZURE_WEBAPP_NAME: product-cart
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Tests
+        run: |
+          pip install -e '.[web,dev]'
+          python -m pytest -q
+
+      - name: Package
+        run: zip -qr app.zip . -x '.git/*' '.github/*' 'tests/*' '.venv/*' 'data/*' 'out/*' '*__pycache__*'
+
+      - name: Deploy
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        if: env.PUBLISH_PROFILE != ''
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: app.zip
+
+      - name: Deploy skipped
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        if: env.PUBLISH_PROFILE == ''
+        run: echo "::warning::Немає секрету AZURE_WEBAPP_PUBLISH_PROFILE — деплой пропущено (див. docs/deploy-azure.md)"

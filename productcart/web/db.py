@@ -1,6 +1,7 @@
 """SQLite сайту: користувачі, сесії, профілі, підключення «Сільпо», кеш акцій."""
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -56,7 +57,11 @@ def connect(path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
+    # WAL не працює надійно на мережевих дисках (Azure App Service /home — це Azure Files),
+    # тому на Azure ставимо SQLITE_JOURNAL=DELETE.
+    mode = os.environ.get("SQLITE_JOURNAL", "WAL").upper()
+    conn.execute(f"PRAGMA journal_mode = {mode if mode in ('WAL', 'DELETE', 'TRUNCATE') else 'WAL'}")
+    conn.execute("PRAGMA busy_timeout = 10000")
     conn.executescript(SCHEMA)
     return conn
 

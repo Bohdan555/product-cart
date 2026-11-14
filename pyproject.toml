@@ -24,3 +24,6 @@ include = ["productcart*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
+
+[tool.setuptools.package-data]
+productcart = ["web/templates/*.html", "web/static/*"]
