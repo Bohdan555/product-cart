@@ -9,3 +9,4 @@ profiles/*.json
 out/
 data/
 build/
+.vercel

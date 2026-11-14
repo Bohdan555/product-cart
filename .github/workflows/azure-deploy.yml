@@ -31,7 +31,7 @@ jobs:
 
       - name: Tests
         run: |
-          pip install -e '.[web,dev]'
+          pip install -e '.[dev]'
           python -m pytest -q
 
       - name: Package

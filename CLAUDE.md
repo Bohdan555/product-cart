@@ -17,7 +17,7 @@
 - Демо-дані позначені як вигадані (`chain` = `demo-*`).
 
 ## Код
-- Python ≥ 3.11, ядро без залежностей; `mcp` 1.x лише для «Сільпо» (`pip install -e '.[silpo]'`).
+- Python ≥ 3.11. Залежності (сайт, `mcp` 1.x для «Сільпо», Postgres) — у `pyproject.toml`; модулі ядра (models, catalog, matcher, planner, render) їх не імпортують.
 - База сайту: SQLite локально й у тестах, Postgres на хостингу (`DATABASE_URL`). Запити з `?`, сумісні з обома; тести сайту можна прогнати й на Postgres (`TEST_DATABASE_URL`).
 - Хостинг: Vercel (`api/index.py`, `vercel.json`, `docs/deploy-vercel.md`); запасний варіант — Azure App Service (`docs/deploy-azure.md`).
 - Числа, бали й фільтри рахує код, без LLM.

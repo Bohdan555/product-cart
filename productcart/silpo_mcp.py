@@ -1,7 +1,7 @@
 """Клієнт офіційного MCP «Сільпо» з OAuth 2.1 (PKCE, динамічна реєстрація клієнта).
 
 Вхід — від імені покупця через auth.silpo.ua (телефон + код). Токени зберігаються локально
-у файлі з правами 0600 і в git не потрапляють. Потрібен пакет `mcp` 1.x: `pip install -e .[silpo]`.
+у файлі з правами 0600 і в git не потрапляють. Потрібен пакет `mcp` 1.x (є в залежностях проєкту).
 
 Використання:
     async with silpo_session() as call:
@@ -32,7 +32,7 @@ def _sdk():
         from mcp.client.streamable_http import streamablehttp_client
         from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
     except ImportError as e:  # pragma: no cover
-        raise SystemExit("Потрібен пакет mcp 1.x: pip install -e '.[silpo]'") from e
+        raise SystemExit("Потрібен пакет mcp 1.x: pip install -e .") from e
     return ClientSession, OAuthClientProvider, TokenStorage, streamablehttp_client, OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 
 

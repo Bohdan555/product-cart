@@ -12,7 +12,7 @@
 
 ## Швидкий старт
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e '.[silpo,dev]'
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/python -m productcart list --source demo            # демо-акції, профіль profiles/example.json
 .venv/bin/python -m productcart profile profiles/me.json      # анкета свого профілю
 .venv/bin/python -m pytest -q
@@ -33,7 +33,7 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[silpo,dev]'
 ## Сайт
 Реєстрація → профіль (анкета) → «Підключити Сільпо» (вхід на сторінці «Сільпо») → вибір магазину → «Мій список». Поки «Сільпо» не підключено, список будується з демо-акцій з чіткою позначкою.
 ```bash
-.venv/bin/pip install -e '.[web,dev]'
+.venv/bin/pip install -e '.[dev]'
 APP_SECRET=$(python3 -c "import secrets;print(secrets.token_urlsafe(32))") \
 DB_PATH=data/web.db BASE_URL=http://127.0.0.1:8000 \
 .venv/bin/uvicorn productcart.web.app:app --port 8000
