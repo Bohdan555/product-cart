@@ -1,0 +1,16 @@
+{
+  "name": "Приклад: сім'я, без лактози",
+  "household": 3,
+  "diets": ["no_lactose"],
+  "likes": ["fish", "coffee", "fruits"],
+  "dislikes": ["alcohol"],
+  "regulars": ["молоко", "яйця", "хліб", "кава зернова", "гречка"],
+  "brands_like": [],
+  "brands_avoid": [],
+  "chains": [],
+  "stores": {},
+  "city": "Київ",
+  "budget_week": 900,
+  "min_discount": 10,
+  "max_items": 15
+}
