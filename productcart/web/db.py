@@ -71,7 +71,9 @@ class Database:
             import psycopg
             from psycopg.rows import dict_row
 
-            self._conn = psycopg.connect(self.target, autocommit=True, row_factory=dict_row, connect_timeout=10)
+            # prepare_threshold=None: без серверних prepared statements — сумісно з пулером з'єднань (Neon/PgBouncer)
+            self._conn = psycopg.connect(self.target, autocommit=True, row_factory=dict_row, connect_timeout=10,
+                                         prepare_threshold=None)
         else:
             if self.target != ":memory:":
                 Path(self.target).parent.mkdir(parents=True, exist_ok=True)
