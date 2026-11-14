@@ -33,8 +33,10 @@ HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None,
                gateway: SilpoGateway | None = None, secure_cookies: bool | None = None) -> FastAPI:
     app_secret = app_secret or os.environ.get("APP_SECRET", "")
-    base_url = (base_url or os.environ.get("BASE_URL", "http://127.0.0.1:8000")).rstrip("/")
-    conn = db.connect(db_path or os.environ.get("DB_PATH", "data/web.db"))
+    vercel_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")  # Vercel задає сам, без https://
+    base_url = (base_url or os.environ.get("BASE_URL")
+                or (f"https://{vercel_url}" if vercel_url else "http://127.0.0.1:8000")).rstrip("/")
+    conn = db.connect(db_path)
     box = security.TokenBox(app_secret)
     gw = gateway or SilpoGateway(conn, redirect_uri=f"{base_url}/auth/silpo/callback")
     secure = base_url.startswith("https://") if secure_cookies is None else secure_cookies
@@ -143,9 +145,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             err = "Цей email уже зареєстровано. Увійдіть."
         if err:
             return render(request, "auth.html", mode="register", error=err, email=email, status=400)
-        cur = conn.execute("INSERT INTO users (email, pw_hash, created_at) VALUES (?, ?, ?)",
-                           (email, security.hash_password(password), security.iso(security.now())))
-        token, _ = security.new_session(conn, cur.lastrowid)
+        uid = conn.execute("INSERT INTO users (email, pw_hash, created_at) VALUES (?, ?, ?) RETURNING id",
+                           (email, security.hash_password(password), security.iso(security.now()))).fetchone()["id"]
+        token, _ = security.new_session(conn, uid)
         resp = go("/profile?welcome=1")
         resp.set_cookie(COOKIE, token, max_age=security.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=secure)
         return resp

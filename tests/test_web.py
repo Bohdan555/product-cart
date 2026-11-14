@@ -31,9 +31,21 @@ class FakeGateway:
         yield FakeMCP()
 
 
-@pytest.fixture
-def client(tmp_path):
-    app = create_app(db_path=str(tmp_path / "web.db"), app_secret="x" * 32, base_url="http://test", gateway=FakeGateway())
+import os
+
+PG_URL = os.environ.get("TEST_DATABASE_URL")
+
+
+@pytest.fixture(params=["sqlite"] + (["postgres"] if PG_URL else []))
+def client(tmp_path, request):
+    if request.param == "postgres":
+        import psycopg
+        with psycopg.connect(PG_URL, autocommit=True) as c:
+            c.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")
+        target = PG_URL
+    else:
+        target = str(tmp_path / "web.db")
+    app = create_app(db_path=target, app_secret="x" * 32, base_url="http://test", gateway=FakeGateway())
     with TestClient(app, follow_redirects=False) as c:
         yield c
 

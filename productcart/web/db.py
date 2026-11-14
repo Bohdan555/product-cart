@@ -1,13 +1,18 @@
-"""SQLite сайту: користувачі, сесії, профілі, підключення «Сільпо», кеш акцій."""
+"""База сайту: SQLite локально й у тестах, Postgres на хостингу (Vercel + Neon).
+
+Вибір: якщо задано DATABASE_URL (postgres://…), працюємо з Postgres, інакше — з SQLite за DB_PATH.
+Запити пишемо один раз з плейсхолдерами `?`; для Postgres вони перетворюються на `%s`.
+`INSERT … ON CONFLICT … DO UPDATE` і `RETURNING` однаково працюють в обох базах.
+"""
 from __future__ import annotations
 
 import os
 import sqlite3
 from pathlib import Path
 
-SCHEMA = """
+TABLES = """
 CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id {pk},
   email TEXT NOT NULL UNIQUE,
   pw_hash TEXT NOT NULL,
   created_at TEXT NOT NULL
@@ -51,26 +56,69 @@ CREATE TABLE IF NOT EXISTS offers_cache (
 """
 
 
-def connect(path: str | Path) -> sqlite3.Connection:
-    if str(path) != ":memory:":
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    # WAL не працює надійно на мережевих дисках (Azure App Service /home — це Azure Files),
-    # тому на Azure ставимо SQLITE_JOURNAL=DELETE.
-    mode = os.environ.get("SQLITE_JOURNAL", "WAL").upper()
-    conn.execute(f"PRAGMA journal_mode = {mode if mode in ('WAL', 'DELETE', 'TRUNCATE') else 'WAL'}")
-    conn.execute("PRAGMA busy_timeout = 10000")
-    conn.executescript(SCHEMA)
-    return conn
+class Database:
+    """Тонка обгортка: execute(sql, params) → курсор з fetchone()/fetchall(); рядки доступні як r["поле"]."""
+
+    def __init__(self, url_or_path: str):
+        self.target = url_or_path
+        self.is_pg = url_or_path.startswith(("postgres://", "postgresql://"))
+        self._conn = None
+        self._open()
+        self.executescript(TABLES.format(pk="SERIAL PRIMARY KEY" if self.is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"))
+
+    def _open(self):
+        if self.is_pg:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            self._conn = psycopg.connect(self.target, autocommit=True, row_factory=dict_row, connect_timeout=10)
+        else:
+            if self.target != ":memory:":
+                Path(self.target).parent.mkdir(parents=True, exist_ok=True)
+            c = sqlite3.connect(self.target, check_same_thread=False, isolation_level=None)
+            c.row_factory = sqlite3.Row
+            c.execute("PRAGMA foreign_keys = ON")
+            # WAL ненадійний на мережевих дисках (напр. Azure App Service /home) — там SQLITE_JOURNAL=DELETE.
+            mode = os.environ.get("SQLITE_JOURNAL", "WAL").upper()
+            c.execute(f"PRAGMA journal_mode = {mode if mode in ('WAL', 'DELETE', 'TRUNCATE') else 'WAL'}")
+            c.execute("PRAGMA busy_timeout = 10000")
+            self._conn = c
+
+    def executescript(self, script: str) -> None:
+        if not self.is_pg:
+            self._conn.executescript(script)
+            return
+        body = "\n".join(line for line in script.splitlines() if not line.strip().startswith("--"))
+        for stmt in body.split(";"):
+            if stmt.strip():
+                self.execute(stmt.strip())
+
+    def execute(self, sql: str, params: tuple | list = ()):
+        if not self.is_pg:
+            return self._conn.execute(sql, params)
+        import psycopg
+
+        q = sql.replace("?", "%s")
+        try:
+            return self._conn.execute(q, params)
+        except psycopg.OperationalError:
+            # serverless: з'єднання могло закритися між викликами — відкриваємо знову один раз
+            self._open()
+            return self._conn.execute(q, params)
 
 
-def get_setting(conn, key: str) -> str | None:
+def connect(target: str | Path | None = None) -> Database:
+    url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if target is None and url:
+        return Database(url)
+    return Database(str(target or os.environ.get("DB_PATH", "data/web.db")))
+
+
+def get_setting(conn: Database, key: str) -> str | None:
     r = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
     return r["value"] if r else None
 
 
-def set_setting(conn, key: str, value: str) -> None:
+def set_setting(conn: Database, key: str, value: str) -> None:
     conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                  (key, value))

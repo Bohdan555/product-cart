@@ -1,0 +1,6 @@
+.venv
+data
+out
+tests
+build
+*.egg-info
