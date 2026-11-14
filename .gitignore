@@ -8,3 +8,4 @@ profiles/*.json
 !profiles/example.json
 out/
 data/
+build/
