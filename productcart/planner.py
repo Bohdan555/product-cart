@@ -27,6 +27,20 @@ class ShoppingList:
         return [m for ms in self.groups.values() for m in ms]
 
 
+def merge_nearby(offers: list) -> list:
+    """Та сама акція в кількох магазинах поруч → лишаємо найдешевший варіант і рахуємо, де ще вона є."""
+    best: dict = {}
+    seen: dict = {}
+    for o in offers:
+        key = (o.chain, o.product_id)
+        seen.setdefault(key, set()).add(o.store_id)
+        if key not in best or o.price < best[key].price:
+            best[key] = o
+    for key, o in best.items():
+        o.also_in = max(0, len(seen[key]) - 1)
+    return list(best.values())
+
+
 def group_key(m: Match) -> str:
     o = m.offer
     return f"{o.chain}" + (f" · {o.store_name}" if o.store_name else "")

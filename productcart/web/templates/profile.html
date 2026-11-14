@@ -38,6 +38,7 @@
   <div class="card row">
     <div><label for="budget_week">Бюджет на тиждень, ₴ <span class="hint">· необов'язково</span></label><input id="budget_week" type="number" name="budget_week" min="0" step="10" value="{{ p.budget_week|int if p.budget_week else '' }}"></div>
     <div><label for="min_discount">Мінімальна знижка, %</label><input id="min_discount" type="number" name="min_discount" min="0" max="80" value="{{ p.min_discount|int }}"></div>
+    <div><label for="radius_km">Радіус магазинів, км</label><input id="radius_km" type="number" name="radius_km" min="0.3" max="5" step="0.1" value="{{ p.radius_km }}"></div>
     <div><label for="max_items">Позицій у списку</label><input id="max_items" type="number" name="max_items" min="5" max="40" value="{{ p.max_items }}"></div>
   </div>
   <div><button class="btn" type="submit">Зберегти профіль</button></div>

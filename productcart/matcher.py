@@ -91,6 +91,8 @@ def score(offer: Offer, profile: Profile) -> Match:
         s += W_BRAND
         reasons.append(f"улюблений бренд {brand_hit}")
 
+    if offer.also_in:
+        reasons.append(f"також ще в {offer.also_in} магаз. поруч")
     s += min(MAX_SAVING_BONUS, offer.saving * W_SAVING)
     if offer.saving >= 20:
         reasons.append(f"економія {offer.saving:.0f} ₴")

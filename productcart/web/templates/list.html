@@ -2,12 +2,40 @@
 {% block title %}Мій список — Кошик з акцій{% endblock %}
 {% block body %}
 <h1>Ваш список з акцій</h1>
-{% if need_store %}
-<div class="note" style="margin-bottom:14px">«Сільпо» підключено. <a href="/silpo"><b>Оберіть свій магазин</b></a>, щоб бачити його справжні акції. Поки що нижче — <b>демо</b> з вигаданими цінами.</div>
-{% elif is_demo %}
-<div class="note" style="margin-bottom:14px">Це <b>демо</b>: товари й ціни вигадані. <a href="/silpo">Підключіть «Сільпо»</a> і оберіть магазин, щоб бачити справжні акції.</div>
-{% elif notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/silpo">Перейти до «Сільпо»</a></div>
-{% elif link %}<p class="lead">Акції магазину «Сільпо»: {{ link.store_title }}. <a href="/list?refresh=1">Оновити</a></p>{% endif %}
+{% if link and p.lat is none %}
+<form class="card stack" method="post" action="/location" id="loc-form" style="margin-bottom:14px">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="lat" id="loc-lat"><input type="hidden" name="lon" id="loc-lon">
+  <b>Список з магазинів поруч</b>
+  <p class="hint" style="margin:0">Зберемо акції всіх магазинів «Сільпо» в радіусі {{ p.radius_km|round(1) }} км від вас. Місце зберігаємо округленим (~100 м), щоб щотижня складати список без запитів; видалити можна будь-коли.</p>
+  <label class="consent"><input type="checkbox" name="consent" value="1" id="loc-consent" checked> <span>Погоджуюся зберегти моє приблизне місце для підбору магазинів</span></label>
+  <div class="row"><button class="btn" type="button" id="loc-btn">📍 Визначити моє місце</button><span class="hint" id="loc-msg"></span></div>
+  {% if not link.store_id %}<p class="hint" style="margin:0">Або <a href="/silpo">оберіть один магазин вручну</a>.</p>{% endif %}
+</form>
+<script>
+document.getElementById('loc-btn').addEventListener('click', function () {
+  var msg = document.getElementById('loc-msg');
+  if (!document.getElementById('loc-consent').checked) { msg.textContent = 'Позначте згоду, щоб зберегти місце.'; return; }
+  if (!navigator.geolocation) { msg.textContent = 'Браузер не підтримує геолокацію — оберіть магазин вручну.'; return; }
+  msg.textContent = 'Визначаємо, де ви…';
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    document.getElementById('loc-lat').value = pos.coords.latitude;
+    document.getElementById('loc-lon').value = pos.coords.longitude;
+    document.getElementById('loc-form').submit();
+  }, function () { msg.textContent = 'Не вдалося отримати місце (немає дозволу). Оберіть магазин вручну.'; },
+  { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 });
+});
+</script>
+{% endif %}
+{% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }}{% if not stores %} <a href="/silpo">Перейти до «Сільпо»</a>{% endif %}</div>{% endif %}
+{% if is_demo %}
+<div class="note" style="margin-bottom:14px">Це <b>демо</b>: товари й ціни вигадані.{% if not link %} <a href="/silpo">Підключіть «Сільпо»</a>, щоб бачити справжні акції магазинів поруч.{% endif %}</div>
+{% elif stores %}
+<div class="card" style="margin-bottom:14px">
+  <p class="lead" style="margin:0 0 6px">Акції {{ stores|length }} {{ 'магазину' if stores|length == 1 else 'магазинів' }} «Сільпо»{% if p.lat is not none %} у радіусі {{ p.radius_km|round(1) }} км{% endif %}: <a href="/list?refresh=1">оновити</a></p>
+  {% for st in stores %}<div class="meta">• {{ st.title }}{% if st.km is defined %} — {{ st.km }} км{% endif %}</div>{% endfor %}
+  {% if p.lat is not none %}<form method="post" action="/location/clear" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt small" type="submit">Видалити збережене місце</button></form>{% endif %}
+</div>
+{% endif %}
 {% if p.diets %}<p class="hint">Фільтри: {% for d in p.diets %}{{ DIET_LABELS[d] }}{% if not loop.last %}, {% endif %}{% endfor %} — за назвою товару, склад перевіряйте на упаковці.</p>{% endif %}
 
 {% if sl.items %}

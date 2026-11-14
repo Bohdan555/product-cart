@@ -9,7 +9,9 @@ BRANCHES = {"branches": [
     {"branchId": "b1", "city": "Київ", "address": "вул. Івана Франка, 1", "latitude": "50.44", "longitude": "30.51"},
     {"branchId": "b2", "city": "Львів", "address": "пр. Свободи, 5"},
     {"branchId": "b3", "city": "Київ", "address": ""},
-], "meta": {"total": 3}}
+    {"branchId": "b4", "city": "Київ", "address": "вул. Хрещатик, 2", "latitude": "50.445", "longitude": "30.515"},
+    {"branchId": "b5", "city": "Київ", "address": "просп. Перемоги, 99", "latitude": "50.46", "longitude": "30.40"},
+], "meta": {"total": 5}}
 
 PRODUCTS = {
     "cinotyzhyky": [
@@ -57,7 +59,7 @@ def run(coro):
 def test_branches_filter():
     call = FakeMCP()
     kyiv = run(silpo.list_branches(call, city="Київ"))
-    assert [b["id"] for b in kyiv] == ["b1"]  # без адреси відкидаємо
+    assert sorted(b["id"] for b in kyiv) == ["b1", "b4", "b5"]  # без адреси відкидаємо
     assert run(silpo.list_branches(call, query="Франка"))[0]["title"] == "Київ, вул. Івана Франка, 1"
 
 

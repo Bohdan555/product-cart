@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
@@ -28,6 +29,7 @@ from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
 HERE = Path(__file__).parent
 COOKIE = "pc_session"
 OFFERS_TTL = timedelta(hours=6)
+MAX_NEARBY = 4  # щонайбільше магазинів поруч в одному списку
 LIKE_TAGS = ["dairy", "meat", "fish", "eggs", "vegetables", "fruits", "grains", "coffee", "tea", "sweets"]
 HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 
@@ -78,6 +80,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return Profile(name="Мій профіль"), False
         return Profile.from_dict(json.loads(r["data"])), bool(r["health_consent"])
 
+    def save_profile(user_id: int, p: Profile, consent: bool) -> None:
+        conn.execute("""INSERT INTO profiles (user_id, data, health_consent, updated_at) VALUES (?, ?, ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET data=excluded.data, health_consent=excluded.health_consent,
+                        updated_at=excluded.updated_at""",
+                     (user_id, json.dumps(p.to_dict(), ensure_ascii=False), int(consent), security.iso(security.now())))
+
+    def dict_store(o: Offer, st: dict) -> Offer:
+        o.store_id, o.store_name = o.store_id or st["id"], o.store_name or st.get("title")
+        return o
+
     def silpo_link(user_id: int):
         return conn.execute("SELECT * FROM silpo_links WHERE user_id=?", (user_id,)).fetchone()
 
@@ -106,24 +118,69 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return None
         return [offer_from_dict(d) for d in json.loads(r["data"])]
 
-    async def silpo_offers(user_id: int, force: bool = False) -> tuple[list[Offer], str | None]:
-        link = silpo_link(user_id)
-        if not link or not link["store_id"]:
-            return [], "Оберіть свій магазин «Сільпо»."
-        if not force and (hit := cached_offers(link["store_id"])) is not None:
-            return hit, None
-        tokens = silpo_tokens(user_id)
-        if not tokens:
-            return [], "Вхід у «Сільпо» застарів. Підключіть «Сільпо» ще раз."
-        try:
-            async with gw.session(tokens["access_token"]) as call:
-                offers = await silpo.fetch_offers(call, {"id": link["store_id"], "title": link["store_title"]})
-        except Exception as e:
-            return [], f"«Сільпо» не відповіло: {str(e)[:120]}"
+    async def silpo_branches(call) -> list[dict]:
+        """Список магазинів «Сільпо» однаковий для всіх — тримаємо в кеші на добу."""
+        raw = db.get_setting(conn, "silpo_branches")
+        if raw:
+            data = json.loads(raw)
+            if data.get("at", "") >= security.iso(security.now() - timedelta(hours=24)):
+                return data["items"]
+        items = await silpo.list_branches(call)
+        db.set_setting(conn, "silpo_branches", json.dumps({"at": security.iso(security.now()), "items": items}, ensure_ascii=False))
+        return items
+
+    def save_offers_cache(store_id: str, offers: list[Offer]) -> None:
         conn.execute("""INSERT INTO offers_cache (chain, store_id, fetched_at, data) VALUES ('silpo', ?, ?, ?)
                         ON CONFLICT(chain, store_id) DO UPDATE SET fetched_at=excluded.fetched_at, data=excluded.data""",
-                     (link["store_id"], security.iso(security.now()), json.dumps([o.to_dict() for o in offers], ensure_ascii=False)))
-        return offers, None
+                     (store_id, security.iso(security.now()), json.dumps([o.to_dict() for o in offers], ensure_ascii=False)))
+
+    async def silpo_list_input(user_id: int, p: Profile, force: bool = False):
+        """Магазини для списку та їхні акції.
+        Повертає (stores, offers, notice): stores — магазини поруч (з km) або вибраний вручну."""
+        link = silpo_link(user_id)
+        if not link:
+            return [], [], None
+        tokens = silpo_tokens(user_id)
+        if not tokens:
+            return [], [], "Вхід у «Сільпо» застарів. Підключіть «Сільпо» ще раз."
+        stores, notice = [], None
+        try:
+            async with gw.session(tokens["access_token"]) as call:
+                if p.lat is not None and p.lon is not None:
+                    near = silpo.nearest(await silpo_branches(call), p.lat, p.lon, n=50)
+                    stores = [b for b in near if b["km"] <= p.radius_km][:MAX_NEARBY]
+                    if not stores and near:
+                        stores = near[:1]
+                        notice = (f"У радіусі {p.radius_km:g} км магазинів «Сільпо» немає. "
+                                  f"Беремо найближчий — {near[0]['title']} ({near[0]['km']} км).")
+                elif link["store_id"]:
+                    stores = [{"id": link["store_id"], "title": link["store_title"]}]
+                if not stores:
+                    return [], [], None
+                offers: list[Offer] = []
+                todo = []
+                for st in stores:
+                    hit = None if force else cached_offers(st["id"])
+                    if hit is not None:
+                        offers += [dict_store(o, st) for o in hit]
+                    else:
+                        todo.append(st)
+                sem = asyncio.Semaphore(2)
+
+                async def one(st):
+                    async with sem:
+                        return st, await silpo.fetch_offers(call, st)
+
+                for res in await asyncio.gather(*(one(st) for st in todo), return_exceptions=True):
+                    if isinstance(res, Exception):
+                        notice = notice or f"Частина магазинів не відповіла: {str(res)[:100]}"
+                        continue
+                    st, got = res
+                    save_offers_cache(st["id"], got)
+                    offers += got
+        except Exception as e:
+            return stores, [], f"«Сільпо» не відповіло: {str(e)[:120]}"
+        return stores, offers, notice
 
     # ---------- сторінки ----------
     @app.get("/", response_class=HTMLResponse)
@@ -219,7 +276,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             budget_week=float(form.get("budget_week")) if form.get("budget_week") else None,
             min_discount=max(0.0, min(80.0, float(form.get("min_discount") or 10))),
             max_items=max(5, min(40, int(form.get("max_items") or 20))),
+            radius_km=max(0.3, min(5.0, float(form.get("radius_km") or 1))),
         )
+        prev, _ = load_profile(u["id"])
+        p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
         if diets and not consent:
             return render(request, "profile.html", u, p=p, consent=False, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS,
                           diets=list(DIETS), silpo=silpo_link(u["id"]), status=400, picked_diets=diets,
@@ -333,19 +393,47 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         p, _ = load_profile(u["id"])
         link = silpo_link(u["id"])
-        notice = None
-        if link and link["store_id"]:
-            offers, notice = await silpo_offers(u["id"], force=bool(refresh))
-            is_demo = False
-        else:
-            offers, is_demo = demo.load(), True
+        stores, offers, notice = await silpo_list_input(u["id"], p, force=bool(refresh)) if link else ([], [], None)
+        is_demo = not offers and not notice
+        if is_demo:
+            offers = demo.load()
+        offers = planner.merge_nearby(offers)
         matches, rejected = matcher.rank(offers, p)
         sl = planner.build(matches, p)
         analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
-                        chain=None if is_demo else "silpo", store_id=None if is_demo else link["store_id"],
-                        source="demo" if is_demo else "silpo", offers=len(offers), items=len(sl.items), error=bool(notice))
+                        chain=None if is_demo else "silpo", store_id=",".join(st["id"] for st in stores)[:200] or None,
+                        source="demo" if is_demo else "silpo", stores=len(stores), offers=len(offers),
+                        items=len(sl.items), error=bool(notice), located=p.lat is not None)
         return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
-                      is_demo=is_demo, link=link, notice=notice, need_store=bool(link and not link["store_id"]))
+                      is_demo=is_demo, link=link, notice=notice, stores=stores,
+                      need_location=bool(link and p.lat is None and not link["store_id"]))
+
+    @app.post("/location")
+    def location_save(request: Request, csrf: str = Form(""), lat: float = Form(...), lon: float = Form(...),
+                      consent: str = Form("")):
+        u, bad = need_user(request, csrf)
+        if bad:
+            return bad
+        if not consent:
+            return go("/list")
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return HTMLResponse("Неправильні координати.", status_code=400)
+        p, health = load_profile(u["id"])
+        # ~110 м точності: достатньо, щоб знайти магазини поруч, і не зберігаємо точну адресу
+        p.lat, p.lon, p.location_at = round(lat, 3), round(lon, 3), security.iso(security.now())
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "location_set")
+        return go("/list")
+
+    @app.post("/location/clear")
+    def location_clear(request: Request, csrf: str = Form("")):
+        u, bad = need_user(request, csrf)
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        p.lat = p.lon = p.location_at = None
+        save_profile(u["id"], p, health)
+        return go("/list")
 
     @app.get("/go")
     def go_offer(request: Request):

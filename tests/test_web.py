@@ -103,7 +103,7 @@ def test_silpo_connect_store_list_disconnect(client):
     row = client.app.state.conn.execute("SELECT tokens_enc FROM silpo_links").fetchone()
     assert "AT-secret-123" not in row["tokens_enc"]
 
-    assert "Оберіть свій магазин" in client.get("/list").text
+    assert "Визначити моє місце" in client.get("/list").text
     near = client.get("/silpo", params={"lat": "50.45", "lon": "30.52"}).text
     assert "Найближчі до вас" in near and "км" in near
     ip = client.get("/silpo", headers={"x-vercel-ip-latitude": "50.45", "x-vercel-ip-longitude": "30.52",
@@ -151,3 +151,28 @@ def test_analytics_clicks_and_admin_stats(tmp_path, monkeypatch, backend):
         st = __import__("productcart.web.analytics", fromlist=["stats"]).stats(app.state.conn)
         assert st["users_total"] == 2 and st["clicks_30"] == 1 and st["silpo_linked"] == 1
         assert [f["users"] for f in st["funnel"]] == [2, 1, 1, 1, 1, 1]
+
+
+
+def test_nearby_stores_within_radius(client):
+    token = register(client)
+    client.post("/profile", data={"csrf": token, "regulars": "кава зернова", "min_discount": "10", "radius_km": "1"})
+    r = client.post("/silpo/connect", data={"csrf": token})
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    client.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+    # без згоди місце не зберігаємо
+    client.post("/location", data={"csrf": token, "lat": "50.4421", "lon": "30.5123"})
+    assert "Визначити моє місце" in client.get("/list").text
+    client.post("/location", data={"csrf": token, "lat": "50.4421", "lon": "30.5123", "consent": "1"})
+    page = client.get("/list").text
+    # у радіусі 1 км — b1 (Франка) і b4 (Хрещатик), b5 (Перемоги) далеко
+    assert "вул. Івана Франка, 1" in page and "вул. Хрещатик, 2" in page and "Перемоги" not in page.split("<details")[0]
+    assert "також ще в 1 магаз. поруч" in page
+    # профіль зберігає округлене місце, повторне збереження анкети його не стирає
+    client.post("/profile", data={"csrf": token, "regulars": "кава зернова", "radius_km": "0.3"})
+    assert "Визначити моє місце" not in client.get("/list").text  # анкета не стерла збережене місце
+    client.post("/location", data={"csrf": token, "lat": "50.452", "lon": "30.530", "consent": "1"})  # ~1 км від найближчого
+    page = client.get("/list").text
+    assert "найближчий" in page  # у 300 м магазинів немає → беремо найближчий
+    client.post("/location/clear", data={"csrf": token})
+    assert "Визначити моє місце" in client.get("/list").text

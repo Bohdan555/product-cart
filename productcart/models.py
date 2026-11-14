@@ -25,6 +25,7 @@ class Offer:
     ean: str | None = None
     image: str | None = None
     source: str = ""                # звідки дані: "silpo-mcp", "feed:varus", "demo"
+    also_in: int = 0                # у скількох ще магазинах поруч є ця ж акція (заповнює merge_nearby)
     tags: set[str] = field(default_factory=set)  # заповнює catalog.enrich()
 
     @property
@@ -89,6 +90,11 @@ class Profile:
     budget_week: float | None = None                        # ₴ на тиждень для списку
     min_discount: float = 10.0                              # %, слабші знижки не показуємо
     max_items: int = 20
+    # Місце для списку «магазини поруч»: округлено до ~100 м, зберігається лише за згодою.
+    lat: float | None = None
+    lon: float | None = None
+    radius_km: float = 1.0
+    location_at: str | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "Profile":
