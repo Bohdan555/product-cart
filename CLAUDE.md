@@ -18,6 +18,8 @@
 
 ## Код
 - Python ≥ 3.11, ядро без залежностей; `mcp` 1.x лише для «Сільпо» (`pip install -e '.[silpo]'`).
+- База сайту: SQLite локально й у тестах, Postgres на хостингу (`DATABASE_URL`). Запити з `?`, сумісні з обома; тести сайту можна прогнати й на Postgres (`TEST_DATABASE_URL`).
+- Хостинг: Vercel (`api/index.py`, `vercel.json`, `docs/deploy-vercel.md`); запасний варіант — Azure App Service (`docs/deploy-azure.md`).
 - Числа, бали й фільтри рахує код, без LLM.
 - Нове джерело = модуль у `productcart/sources/`, що повертає `list[Offer]`, і тести на фікстурах (без мережі).
 - Перед комітом: `.venv/bin/python -m pytest -q`.
