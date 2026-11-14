@@ -21,7 +21,8 @@ from ..catalog import TAG_LABELS, enrich
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo
-from . import db, security
+from . import analytics, db, security
+from .analytics import verify_click
 from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
 
 HERE = Path(__file__).parent
@@ -48,13 +49,17 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     tpl.env.globals.update(uah=uah, chain_name=lambda k: CHAIN_NAMES.get(k.split(" · ")[0], k.split(" · ")[0]),
                            DIET_LABELS=DIET_LABELS, TAG_LABELS=TAG_LABELS)
     app.state.conn, app.state.gw = conn, gw
+    analytics.init(conn)
+    admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
+    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o))
 
     # ---------- допоміжне ----------
     def user_of(request: Request):
         return security.session_user(conn, request.cookies.get(COOKIE))
 
     def render(request: Request, name: str, user=None, status: int = 200, **ctx):
-        return tpl.TemplateResponse(request, name, dict(ctx, user=user), status_code=status)
+        is_admin = bool(user) and user["email"].lower() in admin_emails
+        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin), status_code=status)
 
     def go(url: str) -> RedirectResponse:
         return RedirectResponse(url, status_code=303)
@@ -149,6 +154,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         uid = conn.execute("INSERT INTO users (email, pw_hash, created_at) VALUES (?, ?, ?) RETURNING id",
                            (email, security.hash_password(password), security.iso(security.now()))).fetchone()["id"]
         token, _ = security.new_session(conn, uid)
+        analytics.track(conn, uid, "signup")
         resp = go("/profile?welcome=1")
         resp.set_cookie(COOKIE, token, max_age=security.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
@@ -163,6 +169,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if not r or not security.verify_password(password, r["pw_hash"]):
             return render(request, "auth.html", mode="login", error="Неправильний email або пароль.", email=email, status=400)
         token, _ = security.new_session(conn, r["id"])
+        analytics.track(conn, r["id"], "login")
         resp = go("/list")
         resp.set_cookie(COOKIE, token, max_age=security.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
@@ -221,6 +228,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         ON CONFLICT(user_id) DO UPDATE SET data=excluded.data, health_consent=excluded.health_consent,
                         updated_at=excluded.updated_at""",
                      (u["id"], json.dumps(p.to_dict(), ensure_ascii=False), int(consent), security.iso(security.now())))
+        analytics.track(conn, u["id"], "profile_saved", diets=len(p.diets), regulars=len(p.regulars), budget=bool(p.budget_week))
         return go("/silpo" if not silpo_link(u["id"]) else "/list")
 
     # ---------- «Сільпо» ----------
@@ -297,6 +305,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         conn.execute("""INSERT INTO silpo_links (user_id, tokens_enc, connected_at) VALUES (?, ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET tokens_enc=excluded.tokens_enc, connected_at=excluded.connected_at""",
                      (u["id"], box.seal(json.dumps(tokens)), security.iso(security.now())))
+        analytics.track(conn, u["id"], "silpo_connected")
         return go("/silpo")
 
     @app.post("/silpo/store")
@@ -305,6 +314,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return bad
         conn.execute("UPDATE silpo_links SET store_id=?, store_title=? WHERE user_id=?", (store_id, store_title[:120], u["id"]))
+        analytics.track(conn, u["id"], "store_selected", chain="silpo", store_id=store_id)
         return go("/list")
 
     @app.post("/silpo/disconnect")
@@ -331,8 +341,31 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             offers, is_demo = demo.load(), True
         matches, rejected = matcher.rank(offers, p)
         sl = planner.build(matches, p)
+        analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
+                        chain=None if is_demo else "silpo", store_id=None if is_demo else link["store_id"],
+                        source="demo" if is_demo else "silpo", offers=len(offers), items=len(sl.items), error=bool(notice))
         return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
                       is_demo=is_demo, link=link, notice=notice, need_store=bool(link and not link["store_id"]))
+
+    @app.get("/go")
+    def go_offer(request: Request):
+        """Перехід на товар мережі: рахуємо клік і перенаправляємо на підписану адресу."""
+        q = verify_click(app_secret, dict(request.query_params))
+        if not q:
+            return HTMLResponse("Посилання пошкоджене.", status_code=400)
+        u = user_of(request)
+        analytics.track(conn, u["id"] if u else None, "offer_click", chain=q["c"], store_id=q["s"] or None,
+                        product_id=q["p"], category=q["k"] or None, discount=float(q["d"] or 0))
+        return RedirectResponse(q["u"], status_code=302)
+
+    @app.get("/admin/stats", response_class=HTMLResponse)
+    def admin_stats(request: Request, days: int = 30):
+        u, bad = need_user(request)
+        if bad:
+            return bad
+        if u["email"].lower() not in admin_emails:
+            return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
+        return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
 
     @app.get("/privacy", response_class=HTMLResponse)
     def privacy(request: Request):

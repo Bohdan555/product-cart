@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Статистика — Кошик з акцій{% endblock %}
+{% block body %}
+<style>
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0 6px}
+.kpis div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.kpis b{display:block;font:700 24px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.kpis span{color:var(--muted);font-size:13px}
+.bar{display:grid;grid-template-columns:minmax(120px,38%) 1fr auto;gap:10px;align-items:center;padding:6px 0;font-size:14px}
+.bar i{display:block;height:10px;border-radius:5px;background:var(--accent);min-width:2px}
+.bar .n{font-variant-numeric:tabular-nums;color:var(--muted);min-width:56px;text-align:right}
+.days{display:grid;gap:4px}
+.day{display:grid;grid-template-columns:86px 1fr;gap:10px;align-items:center;font-size:13px}
+.day .bars{display:grid;gap:2px}
+.day i{display:block;height:6px;border-radius:3px;min-width:1px}
+.i-views{background:var(--accent)}.i-clicks{background:var(--sticker)}.i-signup{background:var(--muted)}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--muted);margin:6px 0 10px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:currentColor}
+.legend .v{color:var(--accent)}.legend .c{color:#c9a400}.legend .s{color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+</style>
+<h1>Статистика</h1>
+<p class="lead">Сукупні цифри без персональних даних. Активні — ті, хто відкривав список; переходи — натискання на товар у списку.</p>
+
+<div class="kpis">
+  <div><b>{{ st.users_total }}</b><span>користувачів (+{{ st.users_new_7 }} за 7 днів)</span></div>
+  <div><b>{{ st.wau }}</b><span>активних за 7 днів</span></div>
+  <div><b>{{ st.mau }}</b><span>активних за 30 днів</span></div>
+  <div><b>{{ st.clicks_30 }}</b><span>переходів на товари за 30 днів ({{ st.clickers_30 }} людей)</span></div>
+  <div><b>{{ st.ctr }}%</b><span>переходів на перегляд списку</span></div>
+  <div><b>{{ st.stores_chosen }} / {{ st.silpo_linked }}</b><span>обрали магазин / підключили «Сільпо»</span></div>
+</div>
+
+<h2>Воронка</h2>
+<div class="card">
+  {% for f in st.funnel %}
+  <div class="bar"><span>{{ f.label }}</span><i style="width:{{ f.pct }}%"></i><span class="n">{{ f.users }} · {{ f.pct }}%</span></div>
+  {% endfor %}
+</div>
+
+<h2>По днях</h2>
+<div class="legend"><span class="v">перегляди списку</span><span class="c">переходи на товари</span><span class="s">реєстрації</span></div>
+<div class="card days">
+  {% for d in st.days %}
+  <div class="day"><span>{{ d.day[5:] }} · {{ d.active }} акт.</span>
+    <div class="bars">
+      <i class="i-views" style="width:{{ (d.list_viewed / st.days_max * 100)|round(1) }}%" title="{{ d.list_viewed }} переглядів"></i>
+      <i class="i-clicks" style="width:{{ (d.offer_click / st.days_max * 100)|round(1) }}%" title="{{ d.offer_click }} переходів"></i>
+      <i class="i-signup" style="width:{{ (d.signup / st.days_max * 100)|round(1) }}%" title="{{ d.signup }} реєстрацій"></i>
+    </div></div>
+  {% else %}<p class="hint">Подій ще немає.</p>{% endfor %}
+</div>
+
+<h2>На що реагують (переходи за 30 днів)</h2>
+<div class="cols">
+  {% for title, rows in [("Категорії", st.top_categories), ("Мережі", st.top_chains), ("Магазини", st.top_stores), ("Глибина знижки", st.discounts)] %}
+  <div class="card"><b>{{ title }}</b>
+    {% set mx = (rows|map(attribute='n')|max) if rows else 1 %}
+    {% for r in rows %}
+    <div class="bar"><span>{{ r.name or r.label }}</span><i style="width:{{ (r.n / (mx or 1) * 100)|round(1) }}%"></i><span class="n">{{ r.n }}</span></div>
+    {% else %}<p class="hint">Переходів ще немає.</p>{% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

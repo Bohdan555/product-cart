@@ -22,7 +22,7 @@
   {% for m in items %}{% set o = m.offer %}
   <div class="item">
     <div>
-      <div class="name">{% if o.url %}<a href="{{ o.url }}" target="_blank" rel="noopener">{{ o.name }}</a>{% else %}{{ o.name }}{% endif %}</div>
+      <div class="name">{% set link_url = click_url(o) %}{% if link_url %}<a href="{{ link_url }}" target="_blank" rel="noopener">{{ o.name }}</a>{% else %}{{ o.name }}{% endif %}</div>
       <div class="why">{{ m.reasons|join(' · ') }}</div>
       <div class="meta">{% if o.promo %}{{ o.promo }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}{% set up = o.unit_price() %}{% if up %} · {{ uah(up[0]) }}/{{ up[1] }}{% endif %}</div>
     </div>

@@ -117,3 +117,37 @@ def test_silpo_connect_store_list_disconnect(client):
 
     client.post("/silpo/disconnect", data={"csrf": token})
     assert "Підключити «Сільпо»" in client.get("/silpo").text
+
+
+@pytest.mark.parametrize("backend", ["sqlite"] + (["postgres"] if PG_URL else []))
+def test_analytics_clicks_and_admin_stats(tmp_path, monkeypatch, backend):
+    monkeypatch.setenv("ADMIN_EMAILS", "owner@test.ua")
+    target = str(tmp_path / "web.db")
+    if backend == "postgres":
+        import psycopg
+        with psycopg.connect(PG_URL, autocommit=True) as pc:
+            pc.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")
+        target = PG_URL
+    app = create_app(db_path=target, app_secret="y" * 32, base_url="http://test", gateway=FakeGateway())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c, "user@test.ua")
+        c.post("/profile", data={"csrf": token, "regulars": "кава зернова", "min_discount": "10"})
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Київ, Франка"})
+        page = c.get("/list").text
+        go = re.search(r'href="(/go\?[^"]+)"', page).group(1).replace("&amp;", "&")
+        r = c.get(go)
+        assert r.status_code == 302 and r.headers["location"].startswith("https://silpo.ua/product/")
+        # підробка адреси переходу не працює (немає відкритого редіректу)
+        assert c.get(go.replace("silpo.ua", "evil.example")).status_code == 400
+        # звичайний користувач статистику не бачить
+        assert c.get("/admin/stats").status_code == 403
+        c.cookies.clear()
+        register(c, "owner@test.ua")
+        page = c.get("/admin/stats").text
+        assert "Статистика" in page and "Перейшли на товар" in page and "user@test.ua" not in page
+        st = __import__("productcart.web.analytics", fromlist=["stats"]).stats(app.state.conn)
+        assert st["users_total"] == 2 and st["clicks_30"] == 1 and st["silpo_linked"] == 1
+        assert [f["users"] for f in st["funnel"]] == [2, 1, 1, 1, 1, 1]
