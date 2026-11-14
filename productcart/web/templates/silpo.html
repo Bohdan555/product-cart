@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Сільпо — Кошик з акцій{% endblock %}
+{% block body %}
+<h1>«Сільпо»</h1>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+{% if not link %}
+<p class="lead">Підключіть свій акаунт «Сільпо», щоб ми бачили акції вашого магазину та ваші персональні пропозиції.</p>
+<div class="card stack">
+  <p style="margin:0">Вхід відбувається на сторінці «Сільпо» — телефоном і кодом. Ми не бачимо ваш пароль чи код, лише отримуємо дозвіл читати каталог і акції від вашого імені. Відключити можна будь-коли.</p>
+  <form method="post" action="/silpo/connect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn" type="submit">Підключити «Сільпо»</button></form>
+</div>
+{% else %}
+<div class="ok">«Сільпо» підключено{% if link.store_title %} · магазин: {{ link.store_title }}{% endif %}.</div>
+<h2>{{ 'Змінити магазин' if link.store_id else 'Оберіть свій магазин' }}</h2>
+<form class="card row" method="get" action="/silpo">
+  <div><label for="city">Місто</label><input id="city" type="text" name="city" value="{{ city }}" placeholder="Київ"></div>
+  <div><label for="q">Частина адреси</label><input id="q" type="text" name="q" value="{{ q }}" placeholder="Франка"></div>
+  <div style="flex:0"><label>&nbsp;</label><button class="btn" type="submit">Знайти</button></div>
+</form>
+{% if stores %}
+<div class="card stores" style="margin-top:12px">
+  {% for s in stores %}
+  <form method="post" action="/silpo/store"><input type="hidden" name="csrf" value="{{ user.csrf }}">
+    <input type="hidden" name="store_id" value="{{ s.id }}"><input type="hidden" name="store_title" value="{{ s.title }}">
+    <span>{{ s.title }}</span><button class="btn small" type="submit">Мій магазин</button></form>
+  {% endfor %}
+</div>
+{% endif %}
+<h2>Відключити</h2>
+<form method="post" action="/silpo/disconnect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt" type="submit">Відключити «Сільпо»</button></form>
+{% endif %}
+{% endblock %}
