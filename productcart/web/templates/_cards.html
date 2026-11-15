@@ -1,0 +1,26 @@
+{# Картки акцій: перша сторінка і довантаження при прокрутці (partial=1) #}
+{% for o, reasons in items %}{% set v = visual(o) %}{% set link_url = click_url(o) %}
+  {% set up = o.unit_price() %}
+  <article class="pcard" data-cat="{{ v.cat }}">
+    <div class="pimg" style="--h:{{ v.hue }}">
+      {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
+      <span class="pemoji" aria-hidden="true">{{ v.emoji }}</span>
+      <span class="pdisc">−{{ o.discount_pct|round|int }}%</span>
+      {% if o.also_in %}<span class="palso">ще в {{ o.also_in }} поруч</span>{% endif %}
+    </div>
+    <div class="pbody">
+      <h3 class="pname">{{ o.name }}</h3>
+      {% if stores and stores|length > 1 and o.store_name %}<div class="pstore">{{ o.store_name }}</div>{% endif %}
+      <div class="pprice"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</div>
+      <div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
+      {% set why = [] %}{% for r in reasons %}{% if not r.startswith(('−', 'економія', 'також')) %}{% set _ = why.append(r) %}{% endif %}{% endfor %}{% if why %}<div class="pwhy"><span>{{ why[0] }}</span></div>{% endif %}
+      {% if o.promo %}<div class="ppromo">{{ o.promo }}</div>{% endif %}
+      <div class="pacts">
+        {% if user and o.chain == 'silpo' and link %}<button type="button" class="padd" data-pid="{{ o.product_id }}" data-name="{{ o.name }}" data-w="{{ 1 if o.weighted else 0 }}">+ У кошик</button>
+        {% else %}<a class="padd" href="{{ '/silpo' if user else '/register' }}">+ У кошик</a>{% endif %}
+        {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити в «{{ chain_name(o.chain) }}»">↗</a>{% endif %}
+      </div>
+    </div>
+  </article>
+{% endfor %}
+{% if next_url %}<div class="feed-more" data-next="{{ next_url }}" aria-hidden="true"><span class="live-dot"></span></div>{% endif %}

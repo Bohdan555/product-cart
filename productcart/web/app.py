@@ -15,7 +15,7 @@ import os
 import secrets
 from datetime import timedelta
 from functools import lru_cache
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlencode
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -672,10 +672,37 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return link, stores, planner.merge_nearby(offers), notice, is_demo
 
     # ---------- список ----------
+    PAGE = 20
+    SORTS = {
+        "rank": None,
+        "disc": lambda o: -(o.discount_pct or 0),
+        "save": lambda o: -((o.old_price or o.price) - o.price),
+        "price": lambda o: o.price,
+        "unit": lambda o: (u[0] if (u := o.unit_price()) and u[1] in ("кг", "л") else 1e9),
+    }
+
+    def feed_page(items: list, sort: str, cat: str, page: int) -> tuple[list, list, bool]:
+        """Стрічка акцій: [(offer, причини)] → категорії (з усіх), сторінка після фільтра й сортування, чи є ще."""
+        cats: list[str] = []
+        for o, _ in items:
+            c = offer_visual(o)["cat"]
+            if c not in cats:
+                cats.append(c)
+        if cat:
+            items = [x for x in items if offer_visual(x[0])["cat"] == cat]
+        key = SORTS.get(sort)
+        if key:
+            items = sorted(items, key=lambda x: key(x[0]))   # стабільне: за рівності лишається порядок «для вас»
+        start = (max(1, page) - 1) * PAGE
+        return cats, items[start:start + PAGE], len(items) > start + PAGE
+
     @app.get("/list", response_class=HTMLResponse)
-    async def shopping_list(request: Request, refresh: int = 0):
+    async def shopping_list(request: Request, refresh: int = 0, sort: str = "rank", cat: str = "", page: int = 1,
+                            partial: int = 0):
+        """Акції нескінченною стрічкою: перша сторінка — уся сторінка, далі (partial=1) лише картки."""
+        sort = sort if sort in SORTS else "rank"
         u = user_of(request)
-        if u is None:   # гість: просто популярні акції — без персонального підбору й суми кошика
+        if u is None:   # гість: просто популярні акції — без персонального підбору
             p = guest_profile(request)
             offers = [o for o in planner.merge_nearby(demo.load()) if o.discount_pct]
             since = security.iso(security.now() - timedelta(days=30))
@@ -683,22 +710,32 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 "SELECT product_id, COUNT(*) AS n FROM events WHERE event='offer_click' AND ts >= ? "
                 "AND product_id IS NOT NULL GROUP BY product_id", (since,)).fetchall()}
             offers.sort(key=lambda o: (-clicks.get(o.product_id, 0), -(o.discount_pct or 0)))
-            sl = planner.ShoppingList(p)
-            sl.groups["Популярні"] = [matcher.Match(o, 0.0, []) for o in offers[:40]]
-            analytics.track(conn, None, "list_viewed", source="demo", guest=True, items=len(sl.items))
-            return render(request, "list.html", None, p=p, sl=sl, offers_total=len(offers), rejected=[],
-                          stale=False, is_demo=True, link=None, notice=None, stores=[], need_location=False, guest=True)
-        p, _ = load_profile(u["id"])
-        link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
-        matches, rejected = matcher.rank(offers, p)
-        sl = planner.build(matches, p)
-        analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
-                        chain=None if is_demo else "silpo", store_id=",".join(st["id"] for st in stores)[:200] or None,
-                        source="demo" if is_demo else "silpo", stores=len(stores), offers=len(offers),
-                        items=len(sl.items), error=bool(notice), located=p.lat is not None)
-        return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40], stale=offers_stale.get(),
-                      is_demo=is_demo, link=link, notice=notice, stores=stores,
-                      need_location=bool(link and p.lat is None and not link["store_id"]))
+            items = [(o, []) for o in offers]
+            ctx = dict(p=p, sl=None, rejected=[], stale=False, is_demo=True, link=None, notice=None, stores=[],
+                       need_location=False, guest=True)
+        else:
+            p, _ = load_profile(u["id"])
+            link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
+            matches, rejected = matcher.rank(offers, p)
+            items = [(m.offer, m.reasons) for m in matches]
+            ctx = dict(p=p, sl=planner.build(matches, p) if page == 1 and not partial else None, rejected=rejected[:40],
+                       stale=offers_stale.get(), is_demo=is_demo, link=link, notice=notice, stores=stores,
+                       need_location=bool(link and p.lat is None and not link["store_id"]), guest=False)
+        cats, chunk, more = feed_page(items, sort, cat, page)
+        q = {"sort": sort, "cat": cat}
+        next_url = f"/list?{urlencode(dict(q, page=page + 1, partial=1))}" if more else None
+        if partial:
+            return render(request, "_cards.html", u, items=chunk, next_url=next_url, **ctx)
+        if u is None:
+            analytics.track(conn, None, "list_viewed", source="demo", guest=True, items=len(items))
+        else:
+            analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
+                            chain=None if ctx["is_demo"] else "silpo",
+                            store_id=",".join(st["id"] for st in ctx["stores"])[:200] or None,
+                            source="demo" if ctx["is_demo"] else "silpo", stores=len(ctx["stores"]), offers=len(items),
+                            items=len(items), error=bool(ctx["notice"]), located=p.lat is not None)
+        return render(request, "list.html", u, items=chunk, next_url=next_url, cats=cats, sort=sort, cat=cat,
+                      total=len(items) if not cat else None, offers_total=len(items), **ctx)
 
     # ---------- меню ----------
     # Меню відкрите й без реєстрації: гість бачить демо-акції, його налаштування живуть у зашифрованій cookie.

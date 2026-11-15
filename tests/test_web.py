@@ -551,3 +551,19 @@ def test_add_deal_to_silpo_cart(tmp_path):
         c.post("/silpo/cart/add", data={"csrf": token, "pid": "p2", "name": "Кава"})
         assert shared.items["p2"] == 2 and shared.items["other"] == 1               # ще раз — +1, чуже не чіпаємо
         assert c.post("/silpo/cart/add", data={"csrf": "bad", "pid": "p2"}).status_code == 400
+
+
+def test_deals_infinite_feed(client):
+    import re as _re
+    page = client.get("/list").text
+    assert page.count('class="pcard"') == 20 and "feed-more" in page
+    nxt = _re.search(r'data-next="([^"]+)"', page).group(1).replace("&amp;", "&")
+    more = client.get(nxt).text
+    assert "<html" not in more and 1 <= more.count('class="pcard"') <= 20
+    # сортування «найдешевші» — з сервера, по всіх акціях
+    cheap = client.get("/list?sort=price&page=1&partial=1").text
+    prices = [float(x.replace(" ", "").replace(",", ".")) for x in _re.findall(r'<div class="pprice"><b>([\d\s,]+)', cheap)]
+    assert prices == sorted(prices)
+    # категорія
+    coffee = client.get("/list?cat=Кава&partial=1").text
+    assert coffee.count('class="pcard"') >= 1 and "Кава" in coffee and "Молоко" not in coffee

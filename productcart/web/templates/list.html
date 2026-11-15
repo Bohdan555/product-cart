@@ -39,9 +39,8 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% endif %}
 
 
-{% if sl.items %}
-{% set cats = [] %}{% for m in sl.items %}{% set c = visual(m.offer).cat %}{% if c not in cats %}{% set _ = cats.append(c) %}{% endif %}{% endfor %}
-{% if not guest %}<section class="hero-sum">
+{% if items %}
+{% if sl and sl.items %}<section class="hero-sum">
   <div class="hs-main"><span class="hs-label">Разом</span><b class="hs-total">{{ uah(sl.total|round) }}</b>
     <span class="hs-items">{{ sl.items|length }} {{ plural(sl.items|length, 'товар', 'товари', 'товарів') }}</span></div>
   <div class="hs-save"><span>економія</span><b>−{{ uah(sl.saving|round) }}</b></div>
@@ -49,99 +48,75 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 <div class="sortbar">
   <label for="sortSel">Сортувати</label>
   <select id="sortSel">
-    <option value="rank">{{ "Популярні" if guest else "Для вас" }}</option>
-    <option value="disc">Найбільша знижка</option>
-    <option value="save">Найбільша економія, ₴</option>
-    <option value="price">Найдешевші</option>
-    <option value="unit">Ціна за кг / л</option>
+    {% for k, t in [("rank", "Популярні" if guest else "Для вас"), ("disc", "Найбільша знижка"), ("save", "Найбільша економія, ₴"), ("price", "Найдешевші"), ("unit", "Ціна за кг / л")] %}<option value="{{ k }}" {% if sort == k %}selected{% endif %}>{{ t }}</option>{% endfor %}
   </select>
 </div>
 {% if cats|length > 1 %}
 <div class="filters" role="group" aria-label="Категорії">
-  <button type="button" class="fchip on" data-cat="">Усе</button>
-  {% for c in cats %}<button type="button" class="fchip" data-cat="{{ c }}">{{ c }}</button>{% endfor %}
+  <button type="button" class="fchip{% if not cat %} on{% endif %}" data-cat="">Усе</button>
+  {% for c in cats %}<button type="button" class="fchip{% if cat == c %} on{% endif %}" data-cat="{{ c }}">{{ c }}</button>{% endfor %}
 </div>
 {% endif %}
-{% for key, items in sl.groups.items() %}
-{% if not guest %}<h2 class="store-h"><span class="chain-dot"></span>{{ chain_name(key) }}{% if ' · ' in key %} <span class="hint">{{ key.split(' · ',1)[1] }}</span>{% endif %}</h2>{% endif %}
-<div class="grid">
-  {% for m in items %}{% set o = m.offer %}{% set v = visual(o) %}{% set link_url = click_url(o) %}
-  {% set up = o.unit_price() %}
-  <article class="pcard" data-cat="{{ v.cat }}" data-rank="{{ loop.index0 }}" data-disc="{{ o.discount_pct or 0 }}" data-price="{{ o.price }}"
-           data-save="{{ ((o.old_price or o.price) - o.price)|round(2) }}" data-unit="{{ up[0] if up and up[1] in ('кг', 'л') else '' }}">
-    <div class="pimg" style="--h:{{ v.hue }}">
-      {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
-      <span class="pemoji" aria-hidden="true">{{ v.emoji }}</span>
-      <span class="pdisc">−{{ o.discount_pct|round|int }}%</span>
-      {% if o.also_in %}<span class="palso">ще в {{ o.also_in }} поруч</span>{% endif %}
-    </div>
-    <div class="pbody">
-      <h3 class="pname">{{ o.name }}</h3>
-      <div class="pprice"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</div>
-      <div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
-      {% set why = [] %}{% for r in m.reasons %}{% if not r.startswith(('−', 'економія', 'також')) %}{% set _ = why.append(r) %}{% endif %}{% endfor %}{% if why %}<div class="pwhy"><span>{{ why[0] }}</span></div>{% endif %}
-      {% if o.promo %}<div class="ppromo">{{ o.promo }}</div>{% endif %}
-      <div class="pacts">
-        {% if user and o.chain == 'silpo' and link %}<button type="button" class="padd" data-pid="{{ o.product_id }}" data-name="{{ o.name }}" data-w="{{ 1 if o.weighted else 0 }}">+ У кошик</button>
-        {% else %}<a class="padd" href="{{ '/silpo' if user else '/register' }}">+ У кошик</a>{% endif %}
-        {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити в «{{ chain_name(o.chain) }}»">↗</a>{% endif %}
-      </div>
-    </div>
-  </article>
-  {% endfor %}
+<div class="grid" id="feed">
+{% include "_cards.html" %}
 </div>
-{% endfor %}
-
 <script>
-(function () {   // «+ У кошик»: товар іде в кошик «Сільпо» без перезавантаження
-  document.querySelectorAll('.padd[data-pid]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      if (b.disabled) return;
-      var fd = new FormData(); fd.append('csrf', '{{ user.csrf if user else "" }}'); fd.append('pid', b.dataset.pid); fd.append('name', b.dataset.name); fd.append('weighted', b.dataset.w);
-      b.disabled = true; b.textContent = '…';
-      fetch('/silpo/cart/add', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json().then(function (d) { return [r.status, d]; }); })
-        .then(function (x) {
-          var d = x[1];
-          if (d.ok) { b.textContent = '✓ У кошику'; b.classList.add('done'); if (window.setCartCount) window.setCartCount(d.count); setTimeout(function () { b.disabled = false; b.textContent = '+ Ще'; }, 1500); return; }
-          if (d.go) { location.href = d.go; return; }
-          b.textContent = d.error || 'Не вдалося'; setTimeout(function () { b.disabled = false; b.textContent = '+ У кошик'; }, 2000);
-        }).catch(function () { b.disabled = false; b.textContent = '+ У кошик'; });
-    });
+(function () {
+  var feed = document.getElementById('feed'); if (!feed) return;
+  var CSRF = '{{ user.csrf if user else "" }}', KEY = 'pc-sort';
+  var sel = document.getElementById('sortSel');
+  var state = { sort: '{{ sort }}', cat: {{ cat|tojson }} }, loading = false, io = null;
+
+  // «+ У кошик»: одна обробка для всіх карток, і довантажених теж
+  feed.addEventListener('click', function (e) {
+    var b = e.target.closest('.padd[data-pid]'); if (!b || b.disabled) return;
+    var fd = new FormData(); fd.append('csrf', CSRF); fd.append('pid', b.dataset.pid); fd.append('name', b.dataset.name); fd.append('weighted', b.dataset.w);
+    b.disabled = true; b.textContent = '…';
+    fetch('/silpo/cart/add', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { b.textContent = '✓ У кошику'; b.classList.add('done'); if (window.setCartCount) window.setCartCount(d.count); setTimeout(function () { b.disabled = false; b.textContent = '+ Ще'; }, 1500); return; }
+        if (d.go) { location.href = d.go; return; }
+        b.textContent = d.error || 'Не вдалося'; setTimeout(function () { b.disabled = false; b.textContent = '+ У кошик'; }, 2000);
+      }).catch(function () { b.disabled = false; b.textContent = '+ У кошик'; });
   });
-})();
-(function () {   // сортування в межах кожного магазину; вибір запам'ятовуємо в браузері
-  var sel = document.getElementById('sortSel'); if (!sel) return;
-  var KEY = 'pc-sort';
-  function num(el, k, empty) { var v = el.dataset[k]; return v === '' || v === undefined ? empty : +v; }
-  var by = {
-    rank: function (a, b) { return num(a, 'rank') - num(b, 'rank'); },
-    disc: function (a, b) { return num(b, 'disc') - num(a, 'disc') || by.rank(a, b); },
-    save: function (a, b) { return num(b, 'save') - num(a, 'save') || by.rank(a, b); },
-    price: function (a, b) { return num(a, 'price') - num(b, 'price') || by.rank(a, b); },
-    unit: function (a, b) { return num(a, 'unit', 1e9) - num(b, 'unit', 1e9) || by.rank(a, b); }
-  };
-  function apply(k) {
-    if (!by[k]) k = 'rank';
-    sel.value = k;
-    document.querySelectorAll('.grid').forEach(function (g) {
-      Array.prototype.slice.call(g.querySelectorAll('.pcard')).sort(by[k]).forEach(function (c) { g.appendChild(c); });
-    });
+
+  // нескінченна стрічка: коли видно «ще», довантажуємо наступну сторінку
+  function watch() {
+    if (io) io.disconnect();
+    var more = feed.querySelector('.feed-more'); if (!more) return;
+    if (!('IntersectionObserver' in window)) { more.addEventListener('click', function () { load(more); }); return; }
+    io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) load(more); }, { rootMargin: '600px 0px' });
+    io.observe(more);
   }
-  sel.addEventListener('change', function () { apply(sel.value); try { localStorage.setItem(KEY, sel.value); } catch (e) {} });
-  var saved = 'rank'; try { saved = localStorage.getItem(KEY) || 'rank'; } catch (e) {}
-  apply(saved);
-})();
-document.querySelectorAll('.fchip').forEach(function (b) {
-  b.addEventListener('click', function () {
-    document.querySelectorAll('.fchip').forEach(function (x) { x.classList.toggle('on', x === b); });
-    var c = b.dataset.cat;
-    document.querySelectorAll('.pcard').forEach(function (card) { card.hidden = c && card.dataset.cat !== c; });
-    document.querySelectorAll('.grid').forEach(function (g) {
-      var any = Array.prototype.some.call(g.children, function (x) { return !x.hidden; });
-      g.hidden = !any; var h = g.previousElementSibling; if (h && h.classList.contains('store-h')) h.hidden = !any;
+  function load(more) {
+    if (loading || !more.isConnected) return; loading = true;
+    fetch(more.dataset.next, { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
+      var t = document.createElement('template'); t.innerHTML = html;
+      more.replaceWith(t.content); loading = false; watch();
+    }).catch(function () { loading = false; });
+  }
+  // сортування й категорія — з сервера, з першої сторінки
+  function reload() {
+    var q = '?sort=' + encodeURIComponent(state.sort) + '&cat=' + encodeURIComponent(state.cat);
+    history.replaceState(history.state, '', '/list' + q);
+    feed.classList.add('busy');
+    fetch('/list' + q + '&page=1&partial=1', { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
+      feed.innerHTML = html; feed.classList.remove('busy'); window.scrollTo({ top: feed.offsetTop - 120 }); watch();
+    }).catch(function () { feed.classList.remove('busy'); });
+  }
+  if (sel) sel.addEventListener('change', function () { state.sort = sel.value; try { localStorage.setItem(KEY, sel.value); } catch (e) {} reload(); });
+  document.querySelectorAll('.fchip').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.fchip').forEach(function (x) { x.classList.toggle('on', x === b); });
+      state.cat = b.dataset.cat; reload();
     });
   });
-});
+  // запам'ятоване сортування, якщо в адресі його не задано
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (saved && saved !== state.sort && location.search.indexOf('sort=') < 0 && sel && sel.querySelector('option[value="' + saved + '"]')) {
+    sel.value = state.sort = saved; reload();
+  } else watch();
+})();
 </script>
 {% else %}
 <div class="card">Акцій не знайшлося. <a href="/profile">Змінити профіль</a></div>
