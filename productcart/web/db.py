@@ -71,7 +71,22 @@ class Database:
         self.is_pg = url_or_path.startswith(("postgres://", "postgresql://"))
         self._conn = None
         self._open()
-        self.executescript(TABLES.format(pk="SERIAL PRIMARY KEY" if self.is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"))
+        self.ensure_schema("db", TABLES.format(pk="SERIAL PRIMARY KEY" if self.is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"))
+
+    def ensure_schema(self, name: str, script: str) -> None:
+        """Створює таблиці лише раз на версію схеми. Холодний старт на Vercel тоді робить 1 запит замість ~20."""
+        import hashlib
+        version = hashlib.sha1(script.encode()).hexdigest()[:12]
+        key = f"schema:{name}"
+        try:
+            r = self.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+            if r and r["value"] == version:
+                return
+        except Exception:
+            pass   # таблиці settings ще немає — створимо нижче
+        self.executescript(script)
+        self.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                     (key, version))
 
     def _open(self):
         if self.is_pg:

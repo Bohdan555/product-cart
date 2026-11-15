@@ -42,7 +42,7 @@ FUNNEL = [("signup", "Зареєструвалися"), ("profile_saved", "За�
 
 
 def init(conn) -> None:
-    conn.executescript(SCHEMA.format(pk="SERIAL PRIMARY KEY" if conn.is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"))
+    conn.ensure_schema("analytics", SCHEMA.format(pk="SERIAL PRIMARY KEY" if conn.is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"))
 
 
 # Turbo завантажує сторінки наперед (при наведенні/дотику) — такі запити не рахуємо як перегляди
