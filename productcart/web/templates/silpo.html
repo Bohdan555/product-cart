@@ -44,6 +44,8 @@ document.getElementById('near-btn').addEventListener('click', function () {
   {% endfor %}
 </div>
 {% endif %}
+<h2>Кошик</h2>
+<p><a class="btn alt" href="/silpo/cart">Мій кошик у «Сільпо»</a></p>
 <h2>Відключити</h2>
 <form method="post" action="/silpo/disconnect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt" type="submit">Відключити «Сільпо»</button></form>
 {% endif %}

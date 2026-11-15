@@ -640,6 +640,26 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.pantry_buy = [k for k in p.pantry_buy if k != key] if key in p.pantry_buy else p.pantry_buy + [key]
         return menu_done(u, p, health, "/menu#list")
 
+    # ---------- перегляд кошика «Сільпо» ----------
+    @app.get("/silpo/cart", response_class=HTMLResponse)
+    async def silpo_cart_view(request: Request):
+        u, bad = need_user(request)
+        if bad:
+            return bad
+        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        if not tokens:
+            return go("/silpo")
+        cart, err = None, None
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                cart = await silpo_cart.current_cart(await get_call())
+        except Exception as e:
+            e = root_error(e)
+            log.warning("Сільпо: перегляд кошика: %s: %s", type(e).__name__, str(e)[:800])
+            err = f"«Сільпо» не відповіло: {str(e)[:150]}"
+        analytics.track(conn, u["id"], "silpo_cart_viewed", items=cart.count if cart else 0)
+        return render(request, "silpo_cart.html", u, cart=cart, error=err)
+
     # ---------- кошик «Сільпо» з меню ----------
     @app.post("/menu/silpo-cart", response_class=HTMLResponse)
     async def menu_silpo_cart(request: Request):

@@ -393,3 +393,16 @@ details.more[open] summary{margin-bottom:10px}
 .clist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .clist li{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:6px 0;font-size:15px}
 .clist b{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* перегляд кошика «Сільпо» */
+.scsum{grid-template-columns:1fr}
+.warnbox{background:var(--sticker);color:var(--sticker-ink);margin:0 0 12px}
+.sclist{display:grid;gap:0;padding:6px 14px;margin-bottom:14px}
+.scrow{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.scrow:last-child{border-bottom:0}
+.scrow img,.scimg{width:52px;height:52px;border-radius:10px;object-fit:contain;background:#fff;display:block}
+.scmain{min-width:0;display:grid;gap:2px}
+.scmain small{color:var(--muted);font-size:13px}
+.scprice{display:grid;justify-items:end;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scprice s{color:var(--muted);font-size:12px}
+.scrow.odd{background:var(--bad-soft);margin:0 -14px;padding-left:14px;padding-right:14px}
+.oddtxt{color:var(--bad)!important;font-weight:600}

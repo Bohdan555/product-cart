@@ -328,3 +328,31 @@ def test_menu_to_silpo_cart(tmp_path):
         assert r.status_code == 200 and "Перейти до оплати" in r.text and "https://silpo.ua/pay/c1" in r.text
         assert shared.items["other"] == 1 and len(shared.items) > 1
         assert c.post("/menu/silpo-cart", data={"csrf": "bad"}).status_code == 400
+
+
+def test_silpo_cart_view(tmp_path):
+    from test_silpo_cart import CartMCP
+    shared = CartMCP(existing={"other": 1, "huge": 56.3})
+
+    class Combined(FakeMCP):
+        async def __call__(self, name, args):
+            if "cart" in name:
+                return await shared(name, args)
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Combined()
+
+    app = create_app(db_path=str(tmp_path / "v.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c)
+        assert c.get("/silpo/cart").headers["location"] == "/silpo"       # без «Сільпо» — на підключення
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        page = c.get("/silpo/cart").text
+        assert "товар other" in page and "У кошику 2 товари" in page and "https://silpo.ua/pay/c1" in page
+        assert "Підозріло багато" in page                                 # 56,3 шт штучного — підсвічуємо
+        assert "Мій кошик у «Сільпо»" in c.get("/silpo").text

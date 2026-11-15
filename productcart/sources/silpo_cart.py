@@ -52,6 +52,8 @@ class CartState:
     slot_end: str | None
     products: dict[str, float] = field(default_factory=dict)   # productId → quantity
     line_ids: dict[str, str] = field(default_factory=dict)     # productId → id рядка кошика (для зміни кількості)
+    lines: list[dict] = field(default_factory=list)            # для показу: name, quantity, weighted, price, total…
+    validations: list[str] = field(default_factory=list)
     names: dict[str, str] = field(default_factory=dict)
     total: float | None = None
     checkout: str | None = None
@@ -122,10 +124,25 @@ def parse_cart(data: Any) -> CartState:
                 st.names[str(pid)] = p.get("name") or ""
                 if p.get("id") and p.get("productId"):
                     st.line_ids[str(pid)] = str(p["id"])
+                st.lines.append({"name": p.get("name") or "товар", "ratio": p.get("ratio") or p.get("displayRatio"),
+                                 "quantity": _num(p.get("quantity")) or 0, "weighted": bool(p.get("weighted")),
+                                 "price": _num(p.get("price")), "old": _num(p.get("oldPrice")),
+                                 "total": _num(_first(p, "total", "subTotal")), "image": p.get("image"),
+                                 "slug": p.get("slug"), "stock": _num(p.get("stock"))})
     calc = _first(cart, "calculation") or {}
     st.total = _num(_first(calc, "total", "totalAfterDiscounts"))
+    for v in _first(calc, "validations") or []:
+        msg, c = v.get("message") or "", v.get("context") or {}
+        if v.get("level") == "error":
+            st.validations.append(VALIDATION_TEXT.get(msg, msg).format(**{k: c.get(k, "") for k in ("orderCostMin",)}))
     st.checkout = _find(data, "checkoutWebLink", "webLink")
     return st
+
+
+VALIDATION_TEXT = {
+    "order.cost.min": "Мінімальна сума замовлення в «Сільпо» — {orderCostMin} ₴. Додайте товарів, щоб оформити.",
+    "product.offer.not_found": "Деяких товарів немає в цьому магазині — «Сільпо» прибере їх при оформленні.",
+}
 
 
 def _step(p: dict) -> float:

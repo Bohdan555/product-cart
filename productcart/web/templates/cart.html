@@ -24,7 +24,7 @@
   <p class="hint">Ціни й наявність остаточно рахує «Сільпо»: у кошику можуть бути інші ціни, якщо він прив'язаний до іншого магазину. Перевірте кошик перед оплатою.</p>
   <div class="row">
     <a class="btn" href="{{ res.checkout or 'https://silpo.ua/cart' }}" target="_blank" rel="noopener">{{ 'Перейти до оплати в «Сільпо»' if res.checkout else 'Відкрити кошик у «Сільпо»' }}</a>
-    <a class="btn alt" href="/menu#list">До меню</a>
+    <a class="btn alt" href="/silpo/cart">Переглянути кошик</a>
   </div>
 </div>
 {% endif %}
