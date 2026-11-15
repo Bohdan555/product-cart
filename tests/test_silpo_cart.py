@@ -131,3 +131,24 @@ def test_menu_lines_map_to_sane_cart_quantities():
         if w.product_id:
             q = sc.quantity_for(w)
             assert sc.sane(q, w.weighted), (w, q)
+
+
+class EditMCP(CartMCP):
+    async def __call__(self, name, args):
+        if name == "silpo_remove_cart_products":
+            self.calls.append((name, args))
+            for p in args["products"]:
+                self.items.pop(p["id"].removeprefix("line-"))
+            return {"success": True}
+        return await super().__call__(name, args)
+
+
+def test_set_quantity_and_remove():
+    mcp = EditMCP(existing={"meat": 56.3, "eggs": 2})
+    cart = run(sc.current_cart(mcp))
+    run(sc.set_quantity(mcp, cart, "line-meat", 0.5))
+    assert mcp.items["meat"] == 0.5
+    run(sc.remove_line(mcp, cart, "line-eggs"))
+    assert "eggs" not in mcp.items and mcp.items["meat"] == 0.5
+    with pytest.raises(sc.CartError):
+        run(sc.set_quantity(mcp, cart, "line-nope", 1))

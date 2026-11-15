@@ -13,7 +13,7 @@ import os
 import secrets
 from datetime import timedelta
 from functools import lru_cache
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -642,7 +642,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     # ---------- перегляд кошика «Сільпо» ----------
     @app.get("/silpo/cart", response_class=HTMLResponse)
-    async def silpo_cart_view(request: Request):
+    async def silpo_cart_view(request: Request, error: str = "", changed: str = ""):
         u, bad = need_user(request)
         if bad:
             return bad
@@ -658,7 +658,41 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: перегляд кошика: %s: %s", type(e).__name__, str(e)[:800])
             err = f"«Сільпо» не відповіло: {str(e)[:150]}"
         analytics.track(conn, u["id"], "silpo_cart_viewed", items=cart.count if cart else 0)
-        return render(request, "silpo_cart.html", u, cart=cart, error=err)
+        return render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed)
+
+    @app.post("/silpo/cart/change")
+    async def silpo_cart_change(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return bad
+        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        if not tokens:
+            return go("/silpo")
+        line_id, action = str(form.get("line", "")), str(form.get("action", ""))
+        try:
+            qty = float(str(form.get("quantity", "0")).replace(",", "."))
+        except ValueError:
+            return HTMLResponse("Неправильна кількість.", status_code=400)
+        if action not in ("set", "remove") or not line_id or not (0 <= qty <= 50):
+            return HTMLResponse("Неправильна дія з кошиком.", status_code=400)
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                call = await get_call()
+                cart = await silpo_cart.current_cart(call)
+                if cart is None:
+                    return go("/silpo/cart")
+                if action == "remove" or qty == 0:
+                    await silpo_cart.remove_line(call, cart, line_id)
+                else:
+                    await silpo_cart.set_quantity(call, cart, line_id, round(qty, 3))
+        except Exception as e:
+            e = root_error(e)
+            log.warning("Сільпо: зміна кошика: %s: %s", type(e).__name__, str(e)[:800])
+            msg = str(e) if isinstance(e, silpo_cart.CartError) else f"«Сільпо» не прийняло зміну: {str(e)[:150]}"
+            return go("/silpo/cart?error=" + quote(msg))
+        analytics.track(conn, u["id"], "silpo_cart_changed", action=action)
+        return go(f"/silpo/cart?changed={quote(line_id)}#l-{quote(line_id)}")
 
     # ---------- кошик «Сільпо» з меню ----------
     @app.post("/menu/silpo-cart", response_class=HTMLResponse)

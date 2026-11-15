@@ -124,7 +124,7 @@ def parse_cart(data: Any) -> CartState:
                 st.names[str(pid)] = p.get("name") or ""
                 if p.get("id") and p.get("productId"):
                     st.line_ids[str(pid)] = str(p["id"])
-                st.lines.append({"name": p.get("name") or "товар", "ratio": p.get("ratio") or p.get("displayRatio"),
+                st.lines.append({"line_id": str(p.get("id") or ""), "product_id": str(pid), "name": p.get("name") or "товар", "ratio": p.get("ratio") or p.get("displayRatio"),
                                  "quantity": _num(p.get("quantity")) or 0, "weighted": bool(p.get("weighted")),
                                  "price": _num(p.get("price")), "old": _num(p.get("oldPrice")),
                                  "total": _num(_first(p, "total", "subTotal")), "image": p.get("image"),
@@ -423,3 +423,45 @@ async def build(call: Call, wants: list[Want], branch: dict | None = None) -> di
     after = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
     return {"placed": placed, "missing": missing, "had": before, "total": after.total,
             "checkout": after.checkout, "count": after.count, "created": created}
+
+
+# ---------- зміна кошика зі сторінки «Мій кошик» ----------
+
+async def set_quantity(call: Call, cart: CartState, line_id: str, quantity: float) -> None:
+    line = next((l for l in cart.lines if l["line_id"] == line_id), None)
+    if line is None:
+        raise CartError("Цього товару вже немає в кошику — оновіть сторінку.")
+    schema = await tool_schema(call, "silpo_update_cart_products")
+    log.info("Сільпо: схема silpo_update_cart_products: %s", str(schema)[:1200])
+    props = _item_props(schema)
+    id_key = next((k for k in ("id", "cartProductId", "lineItemId", "itemId") if k in props), "id")
+    item = {id_key: line_id, "quantity": quantity}
+    if "productId" in props:
+        item["productId"] = line["product_id"]
+    res = await call("silpo_update_cart_products", {"shoppingCartId": cart.cart_id, "products": [item]})
+    log.info("Сільпо: update_cart_products → %s", str(res)[:400])
+
+
+async def remove_line(call: Call, cart: CartState, line_id: str) -> None:
+    line = next((l for l in cart.lines if l["line_id"] == line_id), None)
+    if line is None:
+        return
+    schema = await tool_schema(call, "silpo_remove_cart_products")
+    log.info("Сільпо: схема silpo_remove_cart_products: %s", str(schema)[:1200])
+    props = schema.get("properties") or {}
+    args: dict = {"shoppingCartId": cart.cart_id}
+    if "products" in props or not props:
+        ip = _item_props(schema)
+        if "productId" in ip and not any(k in ip for k in ("id", "cartProductId", "lineItemId", "itemId")):
+            args["products"] = [{"productId": line["product_id"], "companyId": cart.company_id or "",
+                                 "branchId": cart.branch_id or ""}]
+        else:
+            key = next((k for k in ("id", "cartProductId", "lineItemId", "itemId") if k in ip), "id")
+            args["products"] = [{key: line_id}]
+    elif "productIds" in props:
+        args["productIds"] = [line["product_id"]]
+    else:
+        key = next((k for k in ("ids", "cartProductIds", "lineItemIds", "itemIds") if k in props), "ids")
+        args[key] = [line_id]
+    res = await call("silpo_remove_cart_products", args)
+    log.info("Сільпо: remove_cart_products → %s", str(res)[:400])

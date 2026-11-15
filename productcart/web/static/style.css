@@ -406,3 +406,16 @@ details.more[open] summary{margin-bottom:10px}
 .scprice s{color:var(--muted);font-size:12px}
 .scrow.odd{background:var(--bad-soft);margin:0 -14px;padding-left:14px;padding-right:14px}
 .oddtxt{color:var(--bad)!important;font-weight:600}
+.scrow{align-items:start}
+.scctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+.qform{display:inline-flex;align-items:center;gap:4px;background:var(--chip);border-radius:12px;padding:3px}
+.qform button{border:0;background:var(--card);color:var(--ink);width:34px;height:32px;border-radius:9px;font:700 18px/1 var(--body);cursor:pointer}
+.qform .qsave{width:auto;padding:0 10px;font-size:13px;background:var(--accent);color:var(--accent-ink)}
+.qval{min-width:64px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px}
+.rm{border:0;background:none;color:var(--muted);font:600 13px/1 var(--body);text-decoration:underline;cursor:pointer;padding:6px}
+.rm:hover{color:var(--bad)}
+.scrow.dirty .qval{color:var(--accent)}
+.scrow.busy{opacity:.5;pointer-events:none}
+.scrow.fresh{animation:freshRow 1.6s ease}
+@keyframes freshRow{0%{background:var(--soft)}100%{background:transparent}}
+.fixform{margin:4px 0 0}

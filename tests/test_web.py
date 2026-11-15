@@ -356,3 +356,33 @@ def test_silpo_cart_view(tmp_path):
         assert "товар other" in page and "У кошику 2 товари" in page and "https://silpo.ua/pay/c1" in page
         assert "Підозріло багато" in page                                 # 56,3 шт штучного — підсвічуємо
         assert "Мій кошик у «Сільпо»" in c.get("/silpo").text
+
+
+def test_silpo_cart_edit(tmp_path):
+    from test_silpo_cart import EditMCP
+    shared = EditMCP(existing={"meat": 56.3, "eggs": 2})
+
+    class Combined(FakeMCP):
+        async def __call__(self, name, args):
+            if "cart" in name:
+                return await shared(name, args)
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Combined()
+
+    app = create_app(db_path=str(tmp_path / "e.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c)
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        assert "Прибрати" in c.get("/silpo/cart").text
+        r = c.post("/silpo/cart/change", data={"csrf": token, "line": "line-meat", "action": "set", "quantity": "0,5"})
+        assert r.status_code == 303 and shared.items["meat"] == 0.5
+        c.post("/silpo/cart/change", data={"csrf": token, "line": "line-eggs", "action": "remove", "quantity": "0"})
+        assert "eggs" not in shared.items
+        assert c.post("/silpo/cart/change", data={"csrf": token, "line": "x", "action": "set", "quantity": "999"}).status_code == 400
+        assert c.post("/silpo/cart/change", data={"csrf": "bad", "line": "x", "action": "remove"}).status_code == 400
