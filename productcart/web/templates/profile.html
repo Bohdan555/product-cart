@@ -1,46 +1,266 @@
 {% extends "base.html" %}
 {% block title %}Профіль — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>{{ 'Вітаємо! Розкажіть про себе' if welcome else 'Профіль' }}</h1>
-<p class="lead">За цим профілем ми відбираємо акції. Змінити його можна будь-коли.</p>
-<form class="stack" method="post" action="/profile">
+{% set EMO = {"dairy": "🥛", "meat": "🥩", "fish": "🐟", "eggs": "🥚", "vegetables": "🥦", "fruits": "🍎", "grains": "🌾",
+              "coffee": "☕", "tea": "🍵", "sweets": "🍫", "alcohol": "🍷", "pork": "🐖", "household": "🧴"} %}
+{% set DIET_EMO = {"no_gluten": "🌾", "no_lactose": "🥛", "vegetarian": "🥕", "vegan": "🌱", "no_pork": "🐖",
+                   "no_alcohol": "🍷", "no_sugar": "🍬"} %}
+{% set taste_tags = (like_tags + hide_tags)|unique|list %}
+{% set chosen_diets = picked_diets or p.diets %}
+<form class="wiz{% if not welcome %} edit{% endif %}" id="wiz" method="post" action="/profile" novalidate>
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
-  {% if error %}<div class="err">{{ error }}</div>{% endif %}
-  <div class="card stack">
-    <div class="row">
-      <div><label for="name">Назва профілю</label><input id="name" type="text" name="name" value="{{ p.name }}"></div>
-      <div><label for="household">Скільки людей у сім'ї</label><input id="household" type="number" name="household" min="1" max="12" value="{{ p.household }}"></div>
-      <div><label for="city">Місто</label><input id="city" type="text" name="city" value="{{ p.city or '' }}" placeholder="Київ"></div>
-    </div>
-    <div><label for="regulars">Що купуєте щотижня <span class="hint">· через кому: ці товари шукаємо першими</span></label>
-      <textarea id="regulars" name="regulars" placeholder="молоко, яйця, хліб, кава зернова">{{ p.regulars|join(', ') }}</textarea></div>
+  <div class="wiz-top">
+    <h1>{{ 'Вітаємо! Давайте знайомитись' if welcome else 'Ваш профіль' }}</h1>
+    <p class="lead">Шість коротких кроків — і акції та меню підбиратимуться під вас. Змінити все можна будь-коли.</p>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <div class="wiz-prog" aria-hidden="true"><i id="wizBar"></i></div>
+    <ol class="wiz-dots" id="wizDots">
+      {% for t in ['Сім\'я', 'Смак', 'Обмеження', 'Щотижня', 'Гроші', 'Готово'] %}<li><button type="button" data-go="{{ loop.index0 }}">{{ t }}</button></li>{% endfor %}
+    </ol>
   </div>
 
-  <div class="card stack">
-    <div><label>Обмеження в харчуванні</label>
-      <div class="chips no">{% for d in diets %}<label><input type="checkbox" name="diets" value="{{ d }}" {% if d in (picked_diets or p.diets) %}checked{% endif %}> {{ DIET_LABELS[d] }}</label>{% endfor %}</div></div>
-    <label class="consent"><input type="checkbox" name="health_consent" value="1" {% if consent %}checked{% endif %}>
-      <span>Погоджуюся, щоб мої обмеження в харчуванні використовували лише для підбору акцій. Це дані про здоров'я; ми не передаємо їх нікому, а видалити їх можна, знявши позначки.</span></label>
+  <!-- 1. Сім'я -->
+  <section class="wstep card" data-step="0">
+    <p class="kicker">Крок 1 з 6</p>
+    <h2>Скільки вас удома?</h2>
+    <p class="hint">Порції в меню та кількість продуктів рахуємо на всіх.</p>
+    <div class="people" id="people" aria-hidden="true"></div>
+    <div class="bigstep">
+      <button type="button" data-step-btn="-1" aria-label="Менше людей">−</button>
+      <input id="household" type="number" name="household" min="1" max="12" value="{{ p.household }}" inputmode="numeric" aria-label="Скільки людей">
+      <button type="button" data-step-btn="1" aria-label="Більше людей">+</button>
+    </div>
+    <p class="react" id="peopleTxt"></p>
+    <div><label for="city">Ваше місто <span class="hint">· щоб показати магазини поруч</span></label>
+      <input id="city" type="text" name="city" value="{{ p.city or '' }}" placeholder="Київ" list="cities" autocomplete="address-level2">
+      <datalist id="cities">{% for c in ['Київ', 'Львів', 'Одеса', 'Дніпро', 'Харків', 'Вінниця', 'Запоріжжя', 'Івано-Франківськ', 'Полтава', 'Черкаси', 'Житомир', 'Рівне', 'Луцьк', 'Тернопіль', 'Хмельницький', 'Чернігів', 'Суми', 'Ужгород', 'Біла Церква', 'Бровари', 'Ірпінь', 'Буча'] %}<option value="{{ c }}">{% endfor %}</datalist></div>
+  </section>
+
+  <!-- 2. Смак -->
+  <section class="wstep card" data-step="1">
+    <p class="kicker">Крок 2 з 6</p>
+    <h2>Що вам до смаку?</h2>
+    <p class="hint">Торкніться раз — <b>люблю</b>, ще раз — <b>не показувати</b>, втретє — байдуже.</p>
+    <div class="tiles" id="taste">
+      {% for t in taste_tags %}{% set st = 'like' if t in p.likes else ('hide' if t in p.dislikes else '') %}
+      <button type="button" class="tile3" data-tag="{{ t }}" data-state="{{ st }}" data-can-like="{{ 1 if t in like_tags else 0 }}" data-can-hide="{{ 1 if t in hide_tags else 0 }}">
+        <span class="te" aria-hidden="true">{{ EMO.get(t, '•') }}</span><span class="tl">{{ TAG_LABELS[t] }}</span><span class="ts"></span>
+        {% if t in like_tags %}<input type="checkbox" name="likes" value="{{ t }}" hidden {% if st == 'like' %}checked{% endif %}>{% endif %}
+        {% if t in hide_tags %}<input type="checkbox" name="dislikes" value="{{ t }}" hidden {% if st == 'hide' %}checked{% endif %}>{% endif %}
+      </button>{% endfor %}
+    </div>
+    <p class="react" id="tasteTxt"></p>
+  </section>
+
+  <!-- 3. Обмеження -->
+  <section class="wstep card" data-step="2">
+    <p class="kicker">Крок 3 з 6</p>
+    <h2>Є обмеження в харчуванні?</h2>
+    <p class="hint">Такі товари не потраплять у список, а страви з ними — у меню. Нічого немає — просто йдіть далі.</p>
+    <div class="tiles" id="diets">
+      {% for d in diets %}
+      <label class="tile2"><input type="checkbox" name="diets" value="{{ d }}" {% if d in chosen_diets %}checked{% endif %}>
+        <span class="te" aria-hidden="true">{{ DIET_EMO.get(d, '•') }}</span><span class="tl">{{ DIET_LABELS[d] }}</span></label>
+      {% endfor %}
+    </div>
+    <label class="consent" id="consentBox"><input type="checkbox" name="health_consent" value="1" {% if consent %}checked{% endif %}>
+      <span>Погоджуюся, щоб мої обмеження в харчуванні використовували лише для підбору акцій і меню. Це дані про здоров'я; ми не передаємо їх нікому, а видалити їх можна, знявши позначки.</span></label>
     <p class="hint">Товари відсіюємо за назвою та категорією. Склад перевіряйте на упаковці.</p>
-  </div>
+  </section>
 
-  <div class="card stack">
-    <div><label>Що любите</label>
-      <div class="chips yes">{% for t in like_tags %}<label><input type="checkbox" name="likes" value="{{ t }}" {% if t in p.likes %}checked{% endif %}> {{ TAG_LABELS[t] }}</label>{% endfor %}</div></div>
-    <div><label>Не показувати</label>
-      <div class="chips no">{% for t in hide_tags %}<label><input type="checkbox" name="dislikes" value="{{ t }}" {% if t in p.dislikes %}checked{% endif %}> {{ TAG_LABELS[t] }}</label>{% endfor %}</div></div>
-    <div class="row">
-      <div><label for="brands_like">Улюблені бренди</label><input id="brands_like" type="text" name="brands_like" value="{{ p.brands_like|join(', ') }}"></div>
-      <div><label for="brands_avoid">Бренди, які не купуєте</label><input id="brands_avoid" type="text" name="brands_avoid" value="{{ p.brands_avoid|join(', ') }}"></div>
+  <!-- 4. Щотижня -->
+  <section class="wstep card" data-step="3">
+    <p class="kicker">Крок 4 з 6</p>
+    <h2>Що купуєте майже щотижня?</h2>
+    <p class="hint">Ці товари шукаємо в акціях першими. Торкніться підказки або впишіть своє й натисніть Enter.</p>
+    <div class="taginput" data-for="regulars">
+      <input type="hidden" name="regulars" id="regulars" value="{{ p.regulars|join(', ') }}">
+      <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="напр. кава зернова" aria-label="Додати товар" enterkeyhint="done"></div>
+      <div class="sugg">{% for s in ['молоко', 'яйця', 'хліб', 'сир твердий', 'йогурт', 'масло вершкове', 'курятина', 'фарш', 'банани', 'яблука', 'картопля', 'помідори', 'гречка', 'макарони', 'кава зернова', 'чай', 'вода мінеральна', 'сметана', 'ковбаса', 'шоколад'] %}<button type="button" data-add="{{ s }}">+ {{ s }}</button>{% endfor %}</div>
     </div>
-  </div>
+    <details class="more"{% if p.brands_like or p.brands_avoid %} open{% endif %}><summary>Бренди <span class="hint">· необов'язково</span></summary>
+      <div class="stack">
+        <div class="taginput" data-for="brands_like"><label>Улюблені бренди <span class="hint">· піднімемо їх вище</span></label>
+          <input type="hidden" name="brands_like" value="{{ p.brands_like|join(', ') }}">
+          <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="напр. Галичина" aria-label="Додати улюблений бренд"></div></div>
+        <div class="taginput" data-for="brands_avoid"><label>Не купую <span class="hint">· сховаємо зі списку</span></label>
+          <input type="hidden" name="brands_avoid" value="{{ p.brands_avoid|join(', ') }}">
+          <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="бренд" aria-label="Додати бренд, який не купуєте"></div></div>
+      </div>
+    </details>
+  </section>
 
-  <div class="card row">
-    <div><label for="budget_week">Бюджет на тиждень, ₴ <span class="hint">· необов'язково</span></label><input id="budget_week" type="number" name="budget_week" min="0" step="10" value="{{ p.budget_week|int if p.budget_week else '' }}"></div>
-    <div><label for="min_discount">Мінімальна знижка, %</label><input id="min_discount" type="number" name="min_discount" min="0" max="80" value="{{ p.min_discount|int }}"></div>
-    <div><label for="radius_km">Радіус магазинів, км</label><input id="radius_km" type="number" name="radius_km" min="0.3" max="5" step="0.1" value="{{ p.radius_km }}"></div>
-    <div><label for="max_items">Позицій у списку</label><input id="max_items" type="number" name="max_items" min="5" max="40" value="{{ p.max_items }}"></div>
+  <!-- 5. Гроші -->
+  <section class="wstep card" data-step="4">
+    <p class="kicker">Крок 5 з 6</p>
+    <h2>Скільки готові витрачати?</h2>
+    <div class="slider">
+      <div class="sl-h"><label for="budget">Бюджет на тиждень</label><output id="budgetOut"></output></div>
+      <input type="range" id="budget" min="0" max="6000" step="100" value="{{ p.budget_week|int if p.budget_week else 0 }}">
+      <input type="hidden" name="budget_week" id="budget_week" value="{{ p.budget_week|int if p.budget_week else '' }}">
+      <div class="sl-s"><span>без ліміту</span><span>6 000 ₴</span></div>
+    </div>
+    <div class="slider">
+      <div class="sl-h"><label for="min_discount">Показувати знижки від</label><output id="discOut"></output></div>
+      <input type="range" id="min_discount" name="min_discount" min="0" max="50" step="5" value="{{ p.min_discount|int }}">
+      <div class="sl-s"><span>будь-які</span><span>від 50%</span></div>
+    </div>
+    <details class="more"><summary>Ще налаштування</summary>
+      <div class="stack">
+        <div class="slider">
+          <div class="sl-h"><label for="radius_km">Магазини в радіусі</label><output id="radOut"></output></div>
+          <input type="range" id="radius_km" name="radius_km" min="0.5" max="5" step="0.5" value="{{ p.radius_km }}">
+        </div>
+        <div class="slider">
+          <div class="sl-h"><label for="max_items">Позицій у списку акцій</label><output id="itemsOut"></output></div>
+          <input type="range" id="max_items" name="max_items" min="5" max="40" step="1" value="{{ p.max_items }}">
+        </div>
+      </div>
+    </details>
+    <p class="react" id="moneyTxt"></p>
+  </section>
+
+  <!-- 6. Готово -->
+  <section class="wstep card" data-step="5">
+    <p class="kicker">Крок 6 з 6</p>
+    <h2>Ось ваш кошик</h2>
+    <div class="summary" id="summary"></div>
+    <div><label for="name">Назва профілю <span class="hint">· як до вас звертатись</span></label>
+      <input id="name" type="text" name="name" value="{{ p.name }}" maxlength="60"></div>
+  </section>
+
+  <div class="wiz-nav">
+    <button type="button" class="btn alt" id="wizBack">Назад</button>
+    <button type="button" class="btn" id="wizNext">Далі</button>
+    <button type="submit" class="btn" id="wizSave">{{ 'Готово — до акцій' if welcome else 'Зберегти профіль' }}</button>
   </div>
-  <div><button class="btn" type="submit">Зберегти профіль</button></div>
 </form>
+
+<script>
+(function () {
+  var form = document.getElementById('wiz');
+  form.classList.add('js');
+  var steps = [].slice.call(form.querySelectorAll('.wstep'));
+  var dots = [].slice.call(document.querySelectorAll('#wizDots button'));
+  var cur = 0;
+  var hasError = {{ 'true' if error else 'false' }};
+  var LABEL = {{ TAG_LABELS|tojson }}, DIETL = {{ DIET_LABELS|tojson }};
+
+  function show(i) {
+    cur = Math.max(0, Math.min(steps.length - 1, i));
+    steps.forEach(function (s, k) { s.hidden = k !== cur; });
+    dots.forEach(function (d, k) { d.classList.toggle('on', k === cur); d.classList.toggle('done', k < cur); d.setAttribute('aria-current', k === cur ? 'step' : 'false'); });
+    document.getElementById('wizBar').style.width = ((cur + 1) / steps.length * 100) + '%';
+    document.getElementById('wizBack').hidden = cur === 0;
+    document.getElementById('wizNext').hidden = cur === steps.length - 1;
+    if (cur === steps.length - 1) summary();
+    var h = steps[cur].querySelector('h2'); if (h && window.scrollY > form.offsetTop) form.scrollIntoView({ behavior: 'smooth' });
+  }
+  document.getElementById('wizNext').onclick = function () { show(cur + 1); };
+  document.getElementById('wizBack').onclick = function () { show(cur - 1); };
+  dots.forEach(function (d) { d.onclick = function () { show(+d.dataset.go); }; });
+
+  // 1. Сім'я
+  var hh = document.getElementById('household');
+  var FACES = ['🧑', '👩', '👨', '👧', '👦', '👵', '👴', '🧒', '👩‍🦰', '🧔', '👱', '👶'];
+  function people() {
+    var n = Math.max(1, Math.min(12, parseInt(hh.value, 10) || 1)); hh.value = n;
+    var box = document.getElementById('people'); box.innerHTML = '';
+    for (var k = 0; k < n; k++) { var s = document.createElement('span'); s.textContent = FACES[k]; s.style.animationDelay = (k * 40) + 'ms'; box.appendChild(s); }
+    document.getElementById('peopleTxt').textContent = n === 1 ? 'Готуємо на одного — без зайвих залишків.' : 'Порції рахуємо на ' + n + '.';
+  }
+  form.querySelectorAll('[data-step-btn]').forEach(function (b) { b.onclick = function () { hh.value = (parseInt(hh.value, 10) || 1) + (+b.dataset.stepBtn); people(); }; });
+  hh.addEventListener('input', people);
+
+  // 2. Смак: люблю → не показувати → байдуже
+  function tasteText() {
+    var like = [], hide = [];
+    form.querySelectorAll('.tile3').forEach(function (t) { if (t.dataset.state === 'like') like.push(LABEL[t.dataset.tag]); if (t.dataset.state === 'hide') hide.push(LABEL[t.dataset.tag]); });
+    document.getElementById('tasteTxt').textContent = like.length || hide.length
+      ? (like.length ? 'Більше: ' + like.join(', ') + '. ' : '') + (hide.length ? 'Сховаємо: ' + hide.join(', ') + '.' : '')
+      : 'Поки байдуже до всього — покажемо найвигідніше.';
+  }
+  form.querySelectorAll('.tile3').forEach(function (t) {
+    var like = t.querySelector('input[name=likes]'), hide = t.querySelector('input[name=dislikes]');
+    var order = [''].concat(like ? ['like'] : []).concat(hide ? ['hide'] : []);
+    function paint() {
+      var st = t.dataset.state;
+      if (like) like.checked = st === 'like'; if (hide) hide.checked = st === 'hide';
+      t.querySelector('.ts').textContent = st === 'like' ? '♥' : st === 'hide' ? '✕' : '';
+      t.setAttribute('aria-label', LABEL[t.dataset.tag] + ': ' + (st === 'like' ? 'люблю' : st === 'hide' ? 'не показувати' : 'байдуже'));
+    }
+    t.onclick = function () { t.dataset.state = order[(order.indexOf(t.dataset.state) + 1) % order.length]; paint(); t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); tasteText(); };
+    paint();
+  });
+
+  // 3. Обмеження: згода потрібна, лише коли щось вибрано
+  var consentBox = document.getElementById('consentBox');
+  function diets() { consentBox.hidden = !form.querySelector('#diets input:checked'); }
+  form.querySelectorAll('#diets input').forEach(function (i) { i.addEventListener('change', diets); });
+
+  // 4. Поля-теги
+  form.querySelectorAll('.taginput').forEach(function (w) {
+    var hidden = w.querySelector('input[type=hidden]'), typed = w.querySelector('.tagtyped'), box = w.querySelector('.tags-in');
+    var items = hidden.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    function sync() {
+      hidden.value = items.join(', ');
+      box.innerHTML = '';
+      items.forEach(function (it, k) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'chipx'; b.setAttribute('aria-label', 'Прибрати: ' + it);
+        b.textContent = it; var x = document.createElement('span'); x.textContent = '✕'; x.setAttribute('aria-hidden', 'true'); b.appendChild(x);
+        b.onclick = function () { items.splice(k, 1); sync(); };
+        box.appendChild(b);
+      });
+      w.querySelectorAll('[data-add]').forEach(function (s) { s.hidden = items.indexOf(s.dataset.add) >= 0; });
+    }
+    function add(v) { v = (v || '').trim().toLowerCase(); if (v && items.indexOf(v) < 0 && items.length < 30) items.push(v); sync(); }
+    typed.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(typed.value); typed.value = ''; } else if (e.key === 'Backspace' && !typed.value && items.length) { items.pop(); sync(); } });
+    typed.addEventListener('blur', function () { if (typed.value.trim()) { add(typed.value); typed.value = ''; } });
+    w.querySelectorAll('[data-add]').forEach(function (s) { s.onclick = function () { add(s.dataset.add); }; });
+    w.querySelector('.tagbox').onclick = function (e) { if (e.target === this) typed.focus(); };
+    sync();
+  });
+
+  // 5. Гроші
+  var budget = document.getElementById('budget'), bw = document.getElementById('budget_week');
+  var disc = document.getElementById('min_discount'), rad = document.getElementById('radius_km'), items = document.getElementById('max_items');
+  function fmt(n) { return Math.round(n).toLocaleString('uk-UA').replace(/ /g, ' '); }
+  function money() {
+    var b = +budget.value; bw.value = b ? b : '';
+    document.getElementById('budgetOut').textContent = b ? fmt(b) + ' ₴' : 'без ліміту';
+    document.getElementById('discOut').textContent = +disc.value ? 'від ' + disc.value + '%' : 'будь-які';
+    document.getElementById('radOut').textContent = String(rad.value).replace('.', ',') + ' км';
+    document.getElementById('itemsOut').textContent = items.value;
+    var n = Math.max(1, parseInt(hh.value, 10) || 1);
+    document.getElementById('moneyTxt').textContent = b ? 'Це близько ' + fmt(b / n / 7) + ' ₴ на людину в день.' : 'Без ліміту — просто покажемо, де найвигідніше.';
+    [budget, disc, rad, items].forEach(function (r) { r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min) * 100) + '%'); });
+  }
+  [budget, disc, rad, items].forEach(function (r) { r.addEventListener('input', money); });
+
+  // 6. Підсумок
+  function summary() {
+    var n = +hh.value, rows = [];
+    rows.push(['👪', n === 1 ? 'Готуєте для себе' : 'Вас удома: ' + n]);
+    var city = document.getElementById('city').value.trim(); if (city) rows.push(['📍', city]);
+    var like = [], hide = [];
+    form.querySelectorAll('.tile3').forEach(function (t) { if (t.dataset.state === 'like') like.push(LABEL[t.dataset.tag]); if (t.dataset.state === 'hide') hide.push(LABEL[t.dataset.tag]); });
+    if (like.length) rows.push(['♥', 'Любите: ' + like.join(', ')]);
+    if (hide.length) rows.push(['🙈', 'Не показуємо: ' + hide.join(', ')]);
+    var d = [].map.call(form.querySelectorAll('#diets input:checked'), function (i) { return DIETL[i.value]; });
+    if (d.length) rows.push(['🛡', 'Обмеження: ' + d.join(', ')]);
+    var reg = document.getElementById('regulars').value; if (reg) rows.push(['🛒', 'Щотижня: ' + reg]);
+    rows.push(['💸', (+budget.value ? 'Бюджет ' + fmt(+budget.value) + ' ₴ на тиждень' : 'Без ліміту бюджету') + ' · знижки ' + (+disc.value ? 'від ' + disc.value + '%' : 'будь-які')]);
+    var box = document.getElementById('summary'); box.innerHTML = '';
+    rows.forEach(function (r) { var div = document.createElement('div'); var i = document.createElement('span'); i.textContent = r[0]; var t = document.createElement('span'); t.textContent = r[1]; div.appendChild(i); div.appendChild(t); box.appendChild(div); });
+  }
+
+  form.addEventListener('submit', function (e) {
+    var any = form.querySelector('#diets input:checked'), ok = form.querySelector('#consentBox input').checked;
+    if (any && !ok) { e.preventDefault(); show(2); consentBox.classList.add('shake'); setTimeout(function () { consentBox.classList.remove('shake'); }, 600); }
+  });
+
+  people(); tasteText(); diets(); money();
+  show(hasError ? 2 : 0);
+})();
+</script>
 {% endblock %}
