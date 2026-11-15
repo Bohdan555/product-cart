@@ -28,7 +28,8 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% endif %}
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }}{% if not stores %} <a href="/silpo">Перейти до «Сільпо»</a>{% endif %}</div>{% endif %}
 {% if is_demo %}
-<div class="note" style="margin-bottom:14px">Демо-ціни{% if not link %} · <a href="/silpo">Підключити «Сільпо»</a>{% endif %}</div>
+{% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
+{% else %}<div class="note" style="margin-bottom:14px">Демо-ціни{% if not link %} · <a href="/silpo">Підключити «Сільпо»</a>{% endif %}</div>{% endif %}
 {% elif stores %}
 <details class="stores-sum">
   <summary>{{ stores|length }} {{ plural(stores|length, 'магазин', 'магазини', 'магазинів') }} «Сільпо» · <a href="/list?refresh=1">оновити</a></summary>

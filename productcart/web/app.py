@@ -624,9 +624,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     # ---------- список ----------
     @app.get("/list", response_class=HTMLResponse)
     async def shopping_list(request: Request, refresh: int = 0):
-        u, bad = need_user(request)
-        if bad:
-            return bad
+        u = user_of(request)
+        if u is None:   # гість: демо-акції під налаштування з cookie гостя
+            p = guest_profile(request)
+            offers = planner.merge_nearby(demo.load())
+            matches, rejected = matcher.rank(offers, p)
+            sl = planner.build(matches, p)
+            analytics.track(conn, None, "list_viewed", source="demo", guest=True, items=len(sl.items))
+            return render(request, "list.html", None, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
+                          stale=False, is_demo=True, link=None, notice=None, stores=[], need_location=False, guest=True)
         p, _ = load_profile(u["id"])
         link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
         matches, rejected = matcher.rank(offers, p)

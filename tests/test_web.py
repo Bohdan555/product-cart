@@ -72,7 +72,7 @@ def test_register_validation_and_login(client):
 
 
 def test_pages_require_login(client):
-    for path in ("/list", "/profile", "/silpo"):
+    for path in ("/profile", "/silpo"):
         assert client.get(path).headers["location"] == "/login"
 
 
@@ -490,3 +490,8 @@ def test_turbo_and_fonts_cached(client):
     assert "/static/vendor/turbo-8.0.12.js" in html and "fonts.googleapis" not in html
     assert "immutable" in client.get("/static/fonts/golos-text-cyrillic-wght-normal.woff2").headers["cache-control"]
     assert "app;dur=" in client.get("/login").headers["server-timing"]
+
+
+def test_guest_sees_demo_deals(client):
+    r = client.get("/list")
+    assert r.status_code == 200 and "Демо-ціни" in r.text and 'href="/register">Увійти' in r.text and "pcard" in r.text
