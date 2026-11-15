@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import contextlib
 import json
 import os
 import secrets
@@ -50,7 +52,17 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     app = FastAPI(title="Кошик з акцій", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+
+    @app.middleware("http")
+    async def cache_static(request: Request, call_next):
+        # статика (фото страв, стилі) кешується браузером і CDN Vercel, а не віддається функцією щоразу
+        resp = await call_next(request)
+        if request.url.path.startswith("/static/") and resp.status_code == 200:
+            resp.headers["Cache-Control"] = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800"
+        return resp
     tpl = Jinja2Templates(directory=HERE / "templates")
+    css_v = hashlib.sha1((HERE / "static" / "style.css").read_bytes()).hexdigest()[:10]
+    tpl.env.globals.update(css_v=css_v)
     tpl.env.globals.update(uah=uah, chain_name=lambda k: CHAIN_NAMES.get(k.split(" · ")[0], k.split(" · ")[0]),
                            DIET_LABELS=DIET_LABELS, TAG_LABELS=TAG_LABELS)
     app.state.conn, app.state.gw = conn, gw
@@ -138,14 +150,28 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return None
         return [offer_from_dict(d) for d in json.loads(r["data"])]
 
-    async def silpo_branches(call) -> list[dict]:
-        """Список магазинів «Сільпо» однаковий для всіх — тримаємо в кеші на добу."""
+    @contextlib.asynccontextmanager
+    async def lazy_silpo(access_token: str):
+        """Дає get_call(): з'єднання з «Сільпо» відкривається при першому виклику, а не одразу."""
+        async with contextlib.AsyncExitStack() as stack:
+            opened: list = []
+
+            async def get_call():
+                if not opened:
+                    opened.append(await stack.enter_async_context(gw.session(access_token)))
+                return opened[0]
+
+            yield get_call
+
+    async def silpo_branches(get_call) -> list[dict]:
+        """Список магазинів «Сільпо» однаковий для всіх — тримаємо в кеші на добу.
+        get_call() відкриває з'єднання з «Сільпо» лише тоді, коли кеш застарів."""
         raw = db.get_setting(conn, "silpo_branches")
         if raw:
             data = json.loads(raw)
             if data.get("at", "") >= security.iso(security.now() - timedelta(hours=24)):
                 return data["items"]
-        items = await silpo.list_branches(call)
+        items = await silpo.list_branches(await get_call())
         db.set_setting(conn, "silpo_branches", json.dumps({"at": security.iso(security.now()), "items": items}, ensure_ascii=False))
         return items
 
@@ -165,9 +191,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return [], [], "Вхід у «Сільпо» застарів. Підключіть «Сільпо» ще раз."
         stores, notice = [], None
         try:
-            async with gw.session(tokens["access_token"]) as call:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
                 if p.lat is not None and p.lon is not None:
-                    near = silpo.nearest(await silpo_branches(call), p.lat, p.lon, n=50)
+                    near = silpo.nearest(await silpo_branches(get_call), p.lat, p.lon, n=50)
                     stores = [b for b in near if b["km"] <= p.radius_km][:MAX_NEARBY]
                     if not stores and near:
                         stores = near[:1]
@@ -185,7 +211,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         offers += [dict_store(o, st) for o in hit]
                     else:
                         todo.append(st)
-                sem = asyncio.Semaphore(2)
+                call = await get_call() if todo else None
+                sem = asyncio.Semaphore(4)
 
                 async def one(st):
                     async with sem:
@@ -349,11 +376,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 err = "Вхід у «Сільпо» застарів. Підключіть ще раз."
             else:
                 try:
-                    async with gw.session(tokens["access_token"]) as call:
+                    async with lazy_silpo(tokens["access_token"]) as get_call:
                         if near_mode:
-                            stores = silpo.nearest(await silpo.list_branches(call), lat, lon, n=6)
+                            stores = silpo.nearest(await silpo_branches(get_call), lat, lon, n=6)
                         else:
-                            stores = (await silpo.list_branches(call, city or None, q or None))[:40]
+                            stores = (await silpo.list_branches(await get_call(), city or None, q or None))[:40]
                 except Exception as e:
                     err = f"«Сільпо» не відповіло: {str(e)[:120]}"
                 if not stores and not err:

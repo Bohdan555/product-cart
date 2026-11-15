@@ -7,7 +7,7 @@
 (див. docs/data-sources.md). Сервер може змінювати формат, тому мапінг толерантний до варіантів полів.
 """
 from __future__ import annotations
-
+import asyncio
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -162,29 +162,37 @@ def normalize_product(p: dict, *, branch: dict | None = None, promo: str | None 
     return enrich(offer)
 
 
-async def fetch_offers(call: Call, branch: dict, max_promotions: int = 12, page: int = 100, max_pages: int = 5) -> list[Offer]:
-    """Усі акційні товари магазину: список акцій → товари кожної акції (з пагінацією), без дублів."""
+async def fetch_offers(call: Call, branch: dict, max_promotions: int = 12, page: int = 100, max_pages: int = 5,
+                       parallel: int = 3) -> list[Offer]:
+    """Усі акційні товари магазину: список акцій → товари кожної акції (з пагінацією), без дублів.
+    Акції завантажуємо паралельно (до `parallel` одночасно), порядок результатів зберігаємо."""
     ctx = await branch_context(call, branch["id"])
     data = await call("silpo_get_promotions", ctx) or {}
     promotions = _list(data.get("promotions"), data.get("items"))
     if not promotions:
         log.warning("Сільпо: акцій не знайдено для магазину %s", branch.get("title"))
-    seen: dict[str, Offer] = {}
-    for promo in promotions[:max_promotions]:
+    sem = asyncio.Semaphore(max(1, parallel))
+
+    async def promo_items(promo: dict) -> list[Offer]:
         code, title = promo.get("code"), promo.get("title") or promo.get("name") or promo.get("code")
+        out: list[Offer] = []
         if not code:
-            continue
-        for n in range(max_pages):
-            args = dict(ctx, promotionCode=code, inStock=True, limit=page, offset=n * page, sortBy="promotion")
-            res = await call("silpo_get_products", args) or {}
-            items = _list(res.get("products"), res.get("items"))
-            for p in items:
-                o = normalize_product(p, branch=branch, promo=title)
-                if o and o.product_id not in seen:
-                    seen[o.product_id] = o
-            total = int((res.get("meta") or {}).get("total") or res.get("total") or 0)
-            if len(items) < page or (total and (n + 1) * page >= total):
-                break
+            return out
+        async with sem:
+            for n in range(max_pages):
+                args = dict(ctx, promotionCode=code, inStock=True, limit=page, offset=n * page, sortBy="promotion")
+                res = await call("silpo_get_products", args) or {}
+                items = _list(res.get("products"), res.get("items"))
+                out += [o for o in (normalize_product(p, branch=branch, promo=title) for p in items) if o]
+                total = int((res.get("meta") or {}).get("total") or res.get("total") or 0)
+                if len(items) < page or (total and (n + 1) * page >= total):
+                    break
+        return out
+
+    seen: dict[str, Offer] = {}
+    for batch in await asyncio.gather(*(promo_items(p) for p in promotions[:max_promotions])):
+        for o in batch:
+            seen.setdefault(o.product_id, o)
     return list(seen.values())
 
 

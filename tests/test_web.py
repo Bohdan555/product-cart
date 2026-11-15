@@ -230,3 +230,9 @@ def test_landing_and_guest_menu(client):
     assert "pc_guest" not in client.cookies
     assert "Це приклад на демо-цінах" not in client.get("/menu").text
     assert 'value="5"' in client.get("/profile").text or "<b>5</b>" in client.get("/menu").text
+
+
+def test_static_is_cacheable(client):
+    r = client.get("/static/style.css")
+    assert r.status_code == 200 and "s-maxage" in r.headers["cache-control"]
+    assert "/static/style.css?v=" in client.get("/").text

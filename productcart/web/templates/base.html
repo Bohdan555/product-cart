@@ -3,7 +3,7 @@
 <title>{% block title %}Кошик з акцій{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600;700;800&display=swap">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={{ css_v }}">
 </head><body{% if user %} class="authed"{% endif %}><div class="wrap{% block wrapcls %}{% endblock %}">
 <header class="top">
   <a class="logo" href="/"><i>%</i>Кошик з акцій</a>
