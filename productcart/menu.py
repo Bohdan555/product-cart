@@ -343,7 +343,8 @@ class Menu:
 
 
 def allowed(rec: Recipe, profile: Profile, max_minutes: int) -> bool:
-    return rec.minutes <= max_minutes and not (recipe_tags(rec) & profile.excluded_tags())
+    return (rec.minutes <= max_minutes and not (recipe_tags(rec) & profile.excluded_tags())
+            and rec.id not in profile.dish_dislikes)
 
 
 def _cost(key: str, need: float, src: Source) -> tuple[int, float, float, float, float]:
@@ -382,6 +383,7 @@ class _Ctx:
     def __init__(self, offers: list[Offer], profile: Profile, max_minutes: int):
         self.sources = source_map(offers)
         self.likes = set(profile.likes)
+        self.dish_likes = set(profile.dish_likes)
         self.regular_stems = [w[:-1] if len(w) > 4 else w for r in profile.regulars for w in _tokens(r)]
         self.pool = [r for r in RECIPES if allowed(r, profile, max_minutes)]
         self.people = max(1, profile.household)
@@ -396,7 +398,7 @@ class _Ctx:
         fresh = [k for k in r.ingredients if INGREDIENTS[k][4]]
         shared = [k for k in fresh if any(k in o.ingredients for o in others)]
         overlap = len(shared) / len(fresh) if fresh else 0
-        pref = len(recipe_tags(r) & self.likes) + 0.5 * len(self._regs(r))
+        pref = len(recipe_tags(r) & self.likes) + 0.5 * len(self._regs(r)) + (2.0 if r.id in self.dish_likes else 0)
         same = sum(1 for o in others if o.protein == r.protein)
         penalty = 2.0 if same >= 2 else (0.6 if same else 0)
         return 2.0 * pref + 6.0 * (saving / cost if cost else 0) + 0.4 * n_promo + 1.5 * overlap - penalty
@@ -412,6 +414,8 @@ class _Ctx:
             d.saving += q / _per(k) * (src.regular_unit_price - src.unit_price)
         d.used, d.saving = round(d.used, 2), round(d.saving, 2)
         d.promo_keys = [k for k in r.ingredients if self.sources[k].offer]
+        if r.id in self.dish_likes:
+            d.why.append("Ви позначили: смачно")
         liked = sorted(recipe_tags(r) & self.likes)
         if liked:
             d.why.append("Вам подобається: " + ", ".join(TAG_LABELS.get(t, t).lower() for t in liked))

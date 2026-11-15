@@ -421,3 +421,45 @@ def test_silpo_cart_clear_and_count(tmp_path):
         assert c.get("/silpo/cart/count").json() == {"n": 0}
         assert "Кошик очищено" in c.get("/silpo/cart?cleared=1").text
         assert c.post("/silpo/cart/clear", data={"csrf": "bad"}).status_code == 400
+
+
+def test_profile_wizard_extras(tmp_path):
+    from productcart.sources import silpo as S
+
+    class Hist(FakeMCP):
+        async def __call__(self, name, args):
+            if name == "silpo_get_my_online_orders":
+                return {"orders": [{"items": [{"name": "Молоко Яготинське 2,6% 900г", "quantity": 1, "brand": "Яготинське"},
+                                              {"name": "Яйця курячі С1 10шт", "quantity": 1}]} for _ in range(3)]}
+            if name == "silpo_get_my_offline_orders":
+                return {"receipts": [{"products": [{"name": "Банани", "price": 50}, {"name": "Пакет-майка", "price": 2}]}]}
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Hist()
+
+    app = create_app(db_path=str(tmp_path / "w.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c)
+        page = c.get("/profile").text
+        assert "Підключіть «Сільпо» — і ми заповнимо" in page and 'id="swipe"' in page and 'id="live"' in page
+        assert c.get("/profile/silpo-hints").status_code == 409
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        assert "Заповнити за мене" in c.get("/profile").text
+        h = c.get("/profile/silpo-hints").json()
+        assert h["household"] == 3 and h["diets"] == ["no_gluten", "vegetarian"]
+        assert h["regulars"][:2] == ["молоко", "яйця курячі"] and "пакет-майка" not in h["regulars"]
+        assert h["brands"] == ["Яготинське"] and h["orders"] == 4
+        # живий підсумок: без згоди, нічого не зберігає
+        d = c.post("/profile/preview", data={"csrf": token, "household": "2", "dislikes": "meat", "dish_dislikes": "plov"}).json()
+        assert d["matched"] >= 1 and d["per_portion"] and d["dishes"] >= 1
+        assert c.post("/profile/preview", data={"csrf": "bad"}).status_code == 400
+        # «не моє» прибирає страву з меню
+        c.post("/profile", data={"csrf": token, "household": "2", "dish_dislikes": "syrnyky,omelette", "dish_likes": "plov"})
+        menu_page = c.get("/menu").text
+        assert "Сирники" not in menu_page and "Омлет" not in menu_page
+    assert S.generic_name("Сир твердий Гауда 45%") == "сир твердий"

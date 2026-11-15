@@ -264,3 +264,89 @@ async def profile_hints(call: Call) -> dict:
     except Exception as e:
         log.warning("family: %s", e)
     return hints
+
+
+# ---------- історія покупок → «що купуєте щотижня» ----------
+
+_GENERIC_2 = {"крупа", "філе", "сир", "йогурт", "масло", "кава", "чай", "вода", "сік", "ковбаса", "олія", "соус",
+              "хліб", "батон", "печиво", "цукерки", "сметана", "кефір", "молоко", "яйця", "борошно", "фарш"}
+_SKIP = {"пакет", "пакетик", "доставка", "сертифікат", "бонус"}
+
+
+def generic_name(name: str) -> str | None:
+    """«Молоко Яготинське 2,6% 900г» → «молоко»; «Сир твердий Гауда 45%» → «сир твердий»; «Крупа гречана …» → «крупа гречана»."""
+    words = [w.strip("«»\"'(),.") for w in (name or "").replace("’", "'").split()]
+    words = [w for w in words if w and not any(ch.isdigit() for ch in w) and w not in ("%", "г", "кг", "мл", "л", "шт")]
+    if not words:
+        return None
+    first = words[0].lower()
+    if first.split("-")[0] in _SKIP or len(first) < 3:
+        return None
+    if first in _GENERIC_2 and len(words) > 1 and words[1][:1].islower() and len(words[1]) > 3:
+        return f"{first} {words[1].lower()}"
+    return first
+
+
+def _product_dicts(x, out: list):
+    """Усі словники, схожі на товар у чеку/замовленні (мають назву), з будь-якої вкладеності."""
+    if isinstance(x, dict):
+        name = x.get("name") or x.get("title") or x.get("productName")
+        if isinstance(name, str) and (x.get("quantity") is not None or x.get("price") is not None or x.get("productId")):
+            out.append(x)
+        for v in x.values():
+            if isinstance(v, (dict, list)):
+                _product_dicts(v, out)
+    elif isinstance(x, list):
+        for v in x:
+            _product_dicts(v, out)
+
+
+def _orders(data) -> list:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for k in ("orders", "items", "receipts", "cheques", "checks", "results", "data"):
+            if isinstance(data.get(k), list):
+                return data[k]
+    return [data] if data else []
+
+
+async def purchase_hints(call: Call, top: int = 12) -> dict:
+    """Що людина купує регулярно — з онлайн-замовлень і чеків «Сільпо». Повертаємо як пропозицію."""
+    from collections import Counter
+    names: Counter = Counter()
+    brands: Counter = Counter()
+    n_orders = 0
+    for tool in ("silpo_get_my_online_orders", "silpo_get_my_offline_orders"):
+        data = None
+        for args in ({"limit": 20}, {}):
+            try:
+                data = await call(tool, args)
+                break
+            except Exception as e:
+                log.warning("Сільпо: %s(%s): %s", tool, args, str(e)[:300])
+        if not data:
+            continue
+        log.info("Сільпо: %s → %s", tool, str(data)[:1200])
+        for order in _orders(data)[:30]:
+            prods: list = []
+            _product_dicts(order, prods)
+            if not prods:
+                continue
+            n_orders += 1
+            seen, seen_b = set(), set()
+            for p in prods:
+                g = generic_name(p.get("name") or p.get("title") or p.get("productName") or "")
+                if g and g not in seen:
+                    seen.add(g)
+                    names[g] += 1
+                b = p.get("brand") or p.get("brandName") or p.get("trademark")
+                if isinstance(b, dict):
+                    b = b.get("name") or b.get("title")
+                if isinstance(b, str) and b.strip() and b.lower() not in seen_b:
+                    seen_b.add(b.lower())
+                    brands[b.strip()] += 1
+    need = 2 if n_orders >= 3 else 1
+    return {"orders": n_orders,
+            "regulars": [n for n, c in names.most_common(40) if c >= need][:top],
+            "brands": [b for b, c in brands.most_common(20) if c >= max(2, need)][:6]}

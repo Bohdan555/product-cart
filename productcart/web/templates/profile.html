@@ -13,6 +13,14 @@
     <h1>{{ 'Вітаємо! Давайте знайомитись' if welcome else 'Ваш профіль' }}</h1>
     <p class="lead">Шість коротких кроків — і акції та меню підбиратимуться під вас. Змінити все можна будь-коли.</p>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    {% if silpo %}
+    <div class="autofill" id="autofill">
+      <button type="button" class="btn" id="fillBtn"><span aria-hidden="true">✨</span> Заповнити за мене з «Сільпо»</button>
+      <small class="hint" id="fillTxt">Візьмемо склад сім'ї, обмеження та що ви купуєте найчастіше. Ви все перевірите перед збереженням.</small>
+    </div>
+    {% else %}
+    <a class="autofill-alt" href="/silpo">✨ Підключіть «Сільпо» — і ми заповнимо анкету за вас з історії покупок →</a>
+    {% endif %}
     <div class="wiz-prog" aria-hidden="true"><i id="wizBar"></i></div>
     <ol class="wiz-dots" id="wizDots">
       {% for t in ['Сім\'я', 'Смак', 'Обмеження', 'Щотижня', 'Гроші', 'Готово'] %}<li><button type="button" data-go="{{ loop.index0 }}">{{ t }}</button></li>{% endfor %}
@@ -40,6 +48,19 @@
   <section class="wstep card" data-step="1">
     <p class="kicker">Крок 2 з 6</p>
     <h2>Що вам до смаку?</h2>
+    <p class="hint">Оцініть кілька страв — так меню вгадає краще.</p>
+    <input type="hidden" name="dish_likes" id="dish_likes" value="{{ p.dish_likes|join(',') }}">
+    <input type="hidden" name="dish_dislikes" id="dish_dislikes" value="{{ p.dish_dislikes|join(',') }}">
+    <div class="swipe" id="swipe" data-dishes='{{ dishes|tojson }}' data-photos='{{ photos|list|tojson }}'>
+      <div class="deck" id="deck" aria-live="polite"></div>
+      <div class="swipe-act">
+        <button type="button" class="sw-no" id="swNo"><span aria-hidden="true">👎</span> Не моє</button>
+        <button type="button" class="sw-skip" id="swSkip">Пропустити</button>
+        <button type="button" class="sw-yes" id="swYes"><span aria-hidden="true">😋</span> Смачно</button>
+      </div>
+      <p class="react" id="swipeTxt"></p>
+    </div>
+    <details class="more" id="tasteMore"><summary>Ще за категоріями продуктів</summary>
     <p class="hint">Торкніться раз — <b>люблю</b>, ще раз — <b>не показувати</b>, втретє — байдуже.</p>
     <div class="tiles" id="taste">
       {% for t in taste_tags %}{% set st = 'like' if t in p.likes else ('hide' if t in p.dislikes else '') %}
@@ -50,6 +71,7 @@
       </button>{% endfor %}
     </div>
     <p class="react" id="tasteTxt"></p>
+    </details>
   </section>
 
   <!-- 3. Обмеження -->
@@ -129,6 +151,7 @@
       <input id="name" type="text" name="name" value="{{ p.name }}" maxlength="60"></div>
   </section>
 
+  <div class="live" id="live" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="liveTxt">Рахуємо, що вийде під ваш профіль…</span></div>
   <div class="wiz-nav">
     <button type="button" class="btn alt" id="wizBack">Назад</button>
     <button type="button" class="btn" id="wizNext">Далі</button>
@@ -214,6 +237,7 @@
       w.querySelectorAll('[data-add]').forEach(function (s) { s.hidden = items.indexOf(s.dataset.add) >= 0; });
     }
     function add(v) { v = (v || '').trim().toLowerCase(); if (v && items.indexOf(v) < 0 && items.length < 30) items.push(v); sync(); }
+    w._add = add;
     typed.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(typed.value); typed.value = ''; } else if (e.key === 'Backspace' && !typed.value && items.length) { items.pop(); sync(); } });
     typed.addEventListener('blur', function () { if (typed.value.trim()) { add(typed.value); typed.value = ''; } });
     w.querySelectorAll('[data-add]').forEach(function (s) { s.onclick = function () { add(s.dataset.add); }; });
@@ -248,6 +272,10 @@
     if (hide.length) rows.push(['🙈', 'Не показуємо: ' + hide.join(', ')]);
     var d = [].map.call(form.querySelectorAll('#diets input:checked'), function (i) { return DIETL[i.value]; });
     if (d.length) rows.push(['🛡', 'Обмеження: ' + d.join(', ')]);
+    var dl = document.getElementById('dish_likes').value, dd = document.getElementById('dish_dislikes').value;
+    function titles(v) { return v.split(',').filter(Boolean).map(function (id) { var d = DISHES.filter(function (x) { return x.id === id; })[0]; return d ? d.title.toLowerCase() : id; }).join(', '); }
+    if (dl) rows.push(['😋', 'Смачно: ' + titles(dl)]);
+    if (dd) rows.push(['👎', 'Не пропонуємо: ' + titles(dd)]);
     var reg = document.getElementById('regulars').value; if (reg) rows.push(['🛒', 'Щотижня: ' + reg]);
     rows.push(['💸', (+budget.value ? 'Бюджет ' + fmt(+budget.value) + ' ₴ на тиждень' : 'Без ліміту бюджету') + ' · знижки ' + (+disc.value ? 'від ' + disc.value + '%' : 'будь-які')]);
     var box = document.getElementById('summary'); box.innerHTML = '';
@@ -259,7 +287,114 @@
     if (any && !ok) { e.preventDefault(); show(2); consentBox.classList.add('shake'); setTimeout(function () { consentBox.classList.remove('shake'); }, 600); }
   });
 
-  people(); tasteText(); diets(); money();
+  // ---------- свайп страв ----------
+  var sw = document.getElementById('swipe'), DISHES = JSON.parse(sw.dataset.dishes), PH = JSON.parse(sw.dataset.photos);
+  var likesIn = document.getElementById('dish_likes'), hatesIn = document.getElementById('dish_dislikes');
+  var likes = likesIn.value ? likesIn.value.split(',') : [], hates = hatesIn.value ? hatesIn.value.split(',') : [];
+  var queue = DISHES.filter(function (d) { return likes.indexOf(d.id) < 0 && hates.indexOf(d.id) < 0; }), deck = document.getElementById('deck');
+  function swipeTxt() {
+    var left = queue.length;
+    document.getElementById('swipeTxt').textContent = (likes.length || hates.length ? 'Смачно: ' + likes.length + ' · Не моє: ' + hates.length + '. ' : '') +
+      (left ? 'Ще ' + left + ' ' + (left === 1 ? 'страва' : left < 5 ? 'страви' : 'страв') + '.' : 'Готово! Меню врахує ваш смак.');
+  }
+  function card(d, top) {
+    var c = document.createElement('div'); c.className = 'dcard' + (top ? ' top' : '');
+    c.innerHTML = (PH.indexOf(d.id) >= 0 ? '<img src="/static/dishes/' + d.id + '.jpg" alt="" draggable="false">' : '<span class="demo-emoji">' + d.emoji + '</span>') +
+      '<div class="dcap"><b></b><small>' + d.minutes + ' хв</small></div><span class="stamp yes">СМАЧНО</span><span class="stamp no">НЕ МОЄ</span>';
+    c.querySelector('b').textContent = d.title;
+    return c;
+  }
+  function renderDeck() {
+    deck.innerHTML = '';
+    if (!queue.length) {
+      deck.innerHTML = '<div class="dcard done"><span class="demo-emoji">🍽️</span><div class="dcap"><b>Дякуємо!</b><small>Змінити оцінки — «Почати знову»</small></div></div>';
+      document.getElementById('swNo').hidden = document.getElementById('swYes').hidden = true;
+      var sk = document.getElementById('swSkip'); sk.textContent = 'Почати знову'; sk.onclick = restart;
+    } else {
+      if (queue[1]) deck.appendChild(card(queue[1], false));
+      var top = card(queue[0], true); deck.appendChild(top); drag(top);
+    }
+    swipeTxt();
+  }
+  function decide(kind) {
+    var d = queue[0]; if (!d) return;
+    var top = deck.querySelector('.dcard.top');
+    if (kind === 'yes') likes.push(d.id); else if (kind === 'no') hates.push(d.id);
+    likesIn.value = likes.join(','); hatesIn.value = hates.join(',');
+    if (top) { top.classList.add('fly-' + kind); }
+    queue.shift();
+    setTimeout(renderDeck, top ? 220 : 0);
+    form.dispatchEvent(new Event('change'));
+  }
+  function restart() {
+    likes = []; hates = []; likesIn.value = hatesIn.value = ''; queue = DISHES.slice();
+    document.getElementById('swNo').hidden = document.getElementById('swYes').hidden = false;
+    var sk = document.getElementById('swSkip'); sk.textContent = 'Пропустити'; sk.onclick = function () { decide('skip'); };
+    renderDeck(); form.dispatchEvent(new Event('change'));
+  }
+  function drag(el) {
+    var x0 = null, dx = 0;
+    el.addEventListener('pointerdown', function (e) { x0 = e.clientX; el.setPointerCapture(e.pointerId); el.style.transition = 'none'; });
+    el.addEventListener('pointermove', function (e) {
+      if (x0 === null) return; dx = e.clientX - x0;
+      el.style.transform = 'translateX(' + dx + 'px) rotate(' + dx / 18 + 'deg)';
+      el.classList.toggle('lean-yes', dx > 40); el.classList.toggle('lean-no', dx < -40);
+    });
+    function end() {
+      if (x0 === null) return; x0 = null; el.style.transition = '';
+      if (dx > 90) decide('yes'); else if (dx < -90) decide('no'); else { el.style.transform = ''; el.classList.remove('lean-yes', 'lean-no'); }
+      dx = 0;
+    }
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  document.getElementById('swYes').onclick = function () { decide('yes'); };
+  document.getElementById('swNo').onclick = function () { decide('no'); };
+  document.getElementById('swSkip').onclick = function () { decide('skip'); };
+  renderDeck();
+
+  // ---------- «Заповнити за мене» ----------
+  var fillBtn = document.getElementById('fillBtn');
+  if (fillBtn) fillBtn.onclick = function () {
+    var txt = document.getElementById('fillTxt');
+    fillBtn.disabled = true; fillBtn.lastChild.textContent = ' Читаємо «Сільпо»…';
+    fetch('/profile/silpo-hints', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      fillBtn.disabled = false; fillBtn.lastChild.textContent = ' Заповнити ще раз';
+      if (d.error) { txt.textContent = d.error; return; }
+      var got = [];
+      if (d.household) { hh.value = d.household; people(); got.push('сім\'я з ' + d.household); }
+      (d.diets || []).forEach(function (k) { var i = form.querySelector('#diets input[value="' + k + '"]'); if (i && !i.checked) { i.checked = true; } });
+      if ((d.diets || []).length) { diets(); got.push('обмеження: ' + d.diets.length); }
+      var reg = form.querySelector('.taginput[data-for="regulars"]');
+      if ((d.regulars || []).length && reg && reg._add) { d.regulars.forEach(reg._add); got.push('щотижня: ' + d.regulars.slice(0, 4).join(', ') + (d.regulars.length > 4 ? '…' : '')); }
+      var br = form.querySelector('.taginput[data-for="brands_like"]');
+      if ((d.brands || []).length && br && br._add) { d.brands.forEach(br._add); got.push('бренди: ' + d.brands.join(', ')); }
+      txt.textContent = got.length ? 'Заповнили з «Сільпо»: ' + got.join(' · ') + '. Перевірте кроки й приберіть зайве.'
+        : (d.orders ? 'У «Сільпо» знайшли ' + d.orders + ' покупок, але регулярних товарів поки не видно.' : '«Сільпо» не дало історії покупок — заповніть, будь ласка, вручну.');
+      if ((d.diets || []).length) txt.textContent += ' Обмеження з «Сільпо» потребують вашої згоди на кроці 3.';
+      form.dispatchEvent(new Event('change'));
+    }).catch(function () { fillBtn.disabled = false; fillBtn.lastChild.textContent = ' Заповнити за мене з «Сільпо»'; txt.textContent = 'Не вдалося зв\'язатися з «Сільпо». Спробуйте ще раз.'; });
+  };
+
+  // ---------- живий підсумок ----------
+  var liveTimer, liveSeq = 0;
+  function live() {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(function () {
+      var my = ++liveSeq; document.getElementById('live').classList.add('busy');
+      fetch('/profile/preview', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if (my !== liveSeq || d.list === undefined) return;
+          var parts = ['акцій для вас: ' + d.matched];
+          if (d.per_portion) parts.push('меню ≈ ' + d.per_portion + ' ₴ за порцію');
+          var sv = Math.max(d.list_saving || 0, d.menu_saving || 0); if (sv > 0) parts.push('економія ~' + sv + ' ₴');
+          document.getElementById('liveTxt').textContent = 'Під ваш профіль: ' + parts.join(' · ') + (d.demo ? ' (демо-ціни)' : '');
+          document.getElementById('live').classList.remove('busy');
+        }).catch(function () {});
+    }, 500);
+  }
+  form.addEventListener('input', live); form.addEventListener('change', live); form.addEventListener('click', function (e) { if (e.target.closest('.tile3,[data-step-btn],[data-add],.chipx')) live(); });
+
+  people(); tasteText(); diets(); money(); live();
   show(hasError ? 2 : 0);
 })();
 </script>

@@ -394,8 +394,67 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return bad
         p, consent = load_profile(u["id"])
-        return render(request, "profile.html", u, p=p, consent=consent, welcome=welcome, like_tags=LIKE_TAGS,
-                      hide_tags=HIDE_TAGS, diets=list(DIETS), silpo=silpo_link(u["id"]))
+        return profile_page(request, u, p, consent, welcome=welcome)
+
+    def profile_page(request: Request, u, p: Profile, consent: bool, status: int = 200, **extra):
+        photos = menu_photos()
+        dishes = sorted(menu.RECIPES, key=lambda r: (r.id not in photos, r.minutes))   # спершу ті, що з фото
+        return render(request, "profile.html", u, p=p, consent=consent, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS,
+                      diets=list(DIETS), silpo=silpo_link(u["id"]), status=status, photos=photos,
+                      dishes=[{"id": r.id, "title": r.title, "emoji": r.emoji, "minutes": r.minutes} for r in dishes[:12]],
+                      **extra)
+
+    @app.get("/profile/silpo-hints")
+    async def profile_silpo_hints(request: Request):
+        """«Заповнити за мене»: склад сім'ї, обмеження й регулярні покупки з «Сільпо» — як пропозиція в анкету."""
+        u, bad = need_user(request)
+        if bad:
+            return JSONResponse({"error": "Увійдіть, щоб заповнити профіль."}, status_code=401)
+        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        if not tokens:
+            return JSONResponse({"error": "Спершу підключіть «Сільпо».", "connect": "/silpo"}, status_code=409)
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                call = await get_call()
+                hints = await silpo.profile_hints(call)
+                buys = await silpo.purchase_hints(call)
+        except Exception as e:
+            e = root_error(e)
+            log.warning("Сільпо: підказки профілю: %s: %s", type(e).__name__, str(e)[:800])
+            return JSONResponse({"error": f"«Сільпо» не відповіло: {str(e)[:120]}"}, status_code=502)
+        analytics.track(conn, u["id"], "profile_silpo_fill", orders=buys["orders"], regulars=len(buys["regulars"]),
+                        diets=len(hints["diets"]), household=bool(hints["household"]))
+        return JSONResponse({"household": hints["household"], "diets": hints["diets"], "regulars": buys["regulars"],
+                             "brands": buys["brands"], "orders": buys["orders"]})
+
+    @app.post("/profile/preview")
+    async def profile_preview(request: Request):
+        """Живий підсумок анкети: скільки акцій підходить і яке вийде меню. Лише кеш акцій або демо — без запитів до «Сільпо»."""
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return JSONResponse({}, status_code=400)
+        prev, _ = load_profile(u["id"])
+        p, diets, consent = profile_from_form(form, prev)
+        p.diets = diets   # для прев'ю згода не потрібна: нічого не зберігаємо
+        offers, demo_used = [], False
+        link = silpo_link(u["id"])
+        if link:
+            ids = [link["store_id"]] if link["store_id"] else []
+            if not ids and prev.lat is not None and branches_mem:
+                ids = [b["id"] for b in silpo.nearest(branches_mem[0]["items"], prev.lat, prev.lon, n=50)
+                       if b["km"] <= p.radius_km][:MAX_NEARBY]
+            for sid in ids:
+                offers += cached_offers(sid) or []
+        if not offers:
+            offers, demo_used = demo.load(), True
+        offers = planner.merge_nearby(offers)
+        matches, _ = matcher.rank(offers, p)
+        sl = planner.build(matches, p)
+        m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes)
+        return JSONResponse({"offers": len(offers), "matched": len(matches), "list": len(sl.items),
+                             "list_saving": round(sl.saving), "per_portion": round(m.per_portion) if m.dishes else None,
+                             "menu_saving": round(m.saving), "dishes": len(m.dishes), "demo": demo_used})
 
     @app.post("/profile")
     async def profile_save(request: Request):
@@ -404,34 +463,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return bad
 
-        def lst(key):
-            return [x.strip() for x in str(form.get(key, "")).replace(";", ",").replace("\n", ",").split(",") if x.strip()]
-
-        diets = [d for d in form.getlist("diets") if d in DIETS]
-        consent = bool(form.get("health_consent"))
-        p = Profile(
-            name=str(form.get("name") or "Мій профіль")[:60],
-            household=max(1, min(12, int(form.get("household") or 1))),
-            diets=diets if consent else [],
-            likes=[t for t in form.getlist("likes") if t in TAG_LABELS],
-            dislikes=[t for t in form.getlist("dislikes") if t in TAG_LABELS],
-            regulars=lst("regulars")[:30],
-            brands_like=lst("brands_like")[:20],
-            brands_avoid=lst("brands_avoid")[:20],
-            city=str(form.get("city") or "")[:60] or None,
-            budget_week=float(form.get("budget_week")) if form.get("budget_week") else None,
-            min_discount=max(0.0, min(80.0, float(form.get("min_discount") or 10))),
-            max_items=max(5, min(40, int(form.get("max_items") or 20))),
-            radius_km=max(0.3, min(5.0, float(form.get("radius_km") or 1))),
-        )
         prev, _ = load_profile(u["id"])
-        p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
-        for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy"):
-            setattr(p, k, getattr(prev, k))
+        p, diets, consent = profile_from_form(form, prev)
         if diets and not consent:
-            return render(request, "profile.html", u, p=p, consent=False, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS,
-                          diets=list(DIETS), silpo=silpo_link(u["id"]), status=400, picked_diets=diets,
-                          error="Обмеження в харчуванні — це дані про здоров'я. Щоб ми їх врахували, позначте згоду.")
+            return profile_page(request, u, p, False, status=400, picked_diets=diets,
+                                error="Обмеження в харчуванні — це дані про здоров'я. Щоб ми їх врахували, позначте згоду.")
         conn.execute("""INSERT INTO profiles (user_id, data, health_consent, updated_at) VALUES (?, ?, ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET data=excluded.data, health_consent=excluded.health_consent,
                         updated_at=excluded.updated_at""",
@@ -873,6 +909,45 @@ def offer_visual(o: Offer) -> dict:
 
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
+    """Анкета профілю → Profile. Повертає також вибрані обмеження й чи є згода (без згоди обмеження не зберігаємо)."""
+    def lst(key):
+        return [x.strip() for x in str(form.get(key, "")).replace(";", ",").replace("\n", ",").split(",") if x.strip()]
+
+    def num(key, default, cast=float):
+        try:
+            return cast(form.get(key)) if form.get(key) not in (None, "") else default
+        except (TypeError, ValueError):
+            return default
+
+    recipe_ids = {r.id for r in menu.RECIPES}
+    diets = [d for d in form.getlist("diets") if d in DIETS]
+    consent = bool(form.get("health_consent"))
+    p = Profile(
+        name=str(form.get("name") or "Мій профіль")[:60],
+        household=max(1, min(12, num("household", 1, int))),
+        diets=diets if consent else [],
+        likes=[t for t in form.getlist("likes") if t in TAG_LABELS],
+        dislikes=[t for t in form.getlist("dislikes") if t in TAG_LABELS],
+        regulars=lst("regulars")[:30],
+        brands_like=lst("brands_like")[:20],
+        brands_avoid=lst("brands_avoid")[:20],
+        city=str(form.get("city") or "")[:60] or None,
+        budget_week=num("budget_week", None) or None,
+        min_discount=max(0.0, min(80.0, num("min_discount", 10.0))),
+        max_items=max(5, min(40, num("max_items", 20, int))),
+        radius_km=max(0.3, min(5.0, num("radius_km", 1.0))),
+        dish_likes=[x for x in lst("dish_likes") if x in recipe_ids][:30],
+        dish_dislikes=[x for x in lst("dish_dislikes") if x in recipe_ids][:30],
+    )
+    p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
+    for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy"):
+        setattr(p, k, getattr(prev, k))
+    if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
+        p.menu = [x for x in p.menu if x not in p.dish_dislikes]
+    return p, diets, consent
 
 
 def root_error(e: BaseException) -> BaseException:
