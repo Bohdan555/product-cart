@@ -23,7 +23,7 @@
   {% if res.missing %}<div class="note"><b>Не знайшли в магазині кошика:</b> {{ res.missing|map(attribute='name')|join(', ') }}. Додайте їх у «Сільпо» вручну або купіть деінде.</div>{% endif %}
   <p class="hint">Ціни й наявність остаточно рахує «Сільпо»: у кошику можуть бути інші ціни, якщо він прив'язаний до іншого магазину. Перевірте кошик перед оплатою.</p>
   <div class="row">
-    <a class="btn" href="{{ res.checkout or 'https://silpo.ua/cart' }}" target="_blank" rel="noopener">{{ 'Перейти до оплати в «Сільпо»' if res.checkout else 'Відкрити кошик у «Сільпо»' }}</a>
+    <a class="btn" href="/silpo/cart">До кошика й оплати</a>
     <a class="btn alt" href="/silpo/cart">Переглянути кошик</a>
   </div>
 </div>

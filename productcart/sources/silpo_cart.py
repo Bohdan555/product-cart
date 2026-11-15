@@ -57,6 +57,7 @@ class CartState:
     names: dict[str, str] = field(default_factory=dict)
     total: float | None = None
     checkout: str | None = None
+    checkout_mobile: str | None = None
     raw: dict = field(default_factory=dict)
 
     @property
@@ -136,6 +137,7 @@ def parse_cart(data: Any) -> CartState:
         if v.get("level") == "error":
             st.validations.append(VALIDATION_TEXT.get(msg, msg).format(**{k: c.get(k, "") for k in ("orderCostMin",)}))
     st.checkout = _find(data, "checkoutWebLink", "webLink")
+    st.checkout_mobile = _find(data, "checkoutMobileLink", "mobileLink")
     return st
 
 
@@ -204,7 +206,12 @@ async def current_cart(call: Call) -> CartState | None:
             return None
         log.warning("Сільпо: get_my_shopping_cart без id: %s", str(mine)[:500])
         return None
-    return parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cid}) or {})
+    data = await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cid}) or {}
+    cart = parse_cart(data)
+    log.info("Сільпо: кошик %s: позицій %d, сума %s, ключі %s, web-посилання %s, mobile-посилання %s, перевірки %s",
+             cart.cart_id, cart.count, cart.total, sorted(data)[:15] if isinstance(data, dict) else type(data).__name__,
+             (cart.checkout or "")[:40], (cart.checkout_mobile or "")[:40], cart.validations)
+    return cart
 
 
 async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[tuple[Want, str, float, str, bool]], list[Want]]:

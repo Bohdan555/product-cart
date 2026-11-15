@@ -35,6 +35,7 @@ HERE = Path(__file__).parent
 log = logging.getLogger("productcart.web")
 COOKIE = "pc_session"
 GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
+CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy")
 OFFERS_TTL = timedelta(hours=6)
@@ -82,8 +83,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     def render(request: Request, name: str, user=None, status: int = 200, **ctx):
         is_admin = bool(user) and user["email"].lower() in admin_emails
-        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled),
-                                    status_code=status)
+        n = request.cookies.get(CART_COOKIE, "")
+        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled,
+                                                        cart_n=int(n) if n.isdigit() else None), status_code=status)
 
     def go(url: str) -> RedirectResponse:
         return RedirectResponse(url, status_code=303)
@@ -123,6 +125,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def keep_guest(resp, p: Profile):
         data = json.dumps({k: getattr(p, k) for k in GUEST_KEYS}, ensure_ascii=False)
         resp.set_cookie(GUEST_COOKIE, box.seal(data), max_age=30 * 86400, httponly=True, samesite="lax", secure=secure)
+        return resp
+
+    def remember_cart(resp, n: int):
+        """Кількість товарів у кошику «Сільпо» для значка в шапці — оновлюється, коли ми читаємо кошик."""
+        resp.set_cookie(CART_COOKIE, str(max(0, int(n))), max_age=7 * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
 
     def dict_store(o: Offer, st: dict) -> Offer:
@@ -372,6 +379,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         security.drop_session(conn, u["token"])
         resp = go("/")
         resp.delete_cookie(COOKIE)
+        resp.delete_cookie(CART_COOKIE)
         return resp
 
     # ---------- профіль ----------
@@ -658,7 +666,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: перегляд кошика: %s: %s", type(e).__name__, str(e)[:800])
             err = f"«Сільпо» не відповіло: {str(e)[:150]}"
         analytics.track(conn, u["id"], "silpo_cart_viewed", items=cart.count if cart else 0)
-        return render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed)
+        resp = render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed)
+        return remember_cart(resp, cart.count if cart else 0) if not err else resp
 
     @app.post("/silpo/cart/change")
     async def silpo_cart_change(request: Request):
@@ -740,7 +749,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                           error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
         analytics.track(conn, u["id"], "silpo_cart_built", placed=len(res["placed"]), missing=len(res["missing"]),
                         had=res["had"], total=res["total"], checkout=bool(res["checkout"]))
-        return render(request, "cart.html", u, res=res, **ctx)
+        return remember_cart(render(request, "cart.html", u, res=res, **ctx), res["count"])
 
     @app.get("/photos", response_class=HTMLResponse)
     def photo_credits(request: Request):

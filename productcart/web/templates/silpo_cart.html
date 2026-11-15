@@ -51,11 +51,7 @@
   </div>
   {% endfor %}
 </div>
-<div class="row">
-  <a class="btn" href="{{ cart.checkout or 'https://silpo.ua/cart' }}" target="_blank" rel="noopener">{{ 'Перейти до оплати в «Сільпо»' if cart.checkout else 'Відкрити в «Сільпо»' }}</a>
-  <a class="btn alt" href="/menu#list">До меню</a>
-</div>
-<p class="hint">Остаточні ціни, знижки й доставку рахує «Сільпо» при оформленні.</p>
+{% include "_checkout.html" %}
 {% endif %}
 <script>
 (function () {

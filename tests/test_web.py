@@ -325,7 +325,9 @@ def test_menu_to_silpo_cart(tmp_path):
         assert "вже 1 товар" in r.text and 'name="confirm"' in r.text   # попередження про наявний кошик
         assert shared.items == {"other": 1}                            # до підтвердження нічого не змінено
         r = c.post("/menu/silpo-cart", data={"csrf": token, "bought": "", "confirm": "1"})
-        assert r.status_code == 200 and "Перейти до оплати" in r.text and "https://silpo.ua/pay/c1" in r.text
+        assert r.status_code == 200 and "До кошика й оплати" in r.text and "pc_cart_n" in c.cookies
+        cart_page = c.get("/silpo/cart").text
+        assert "Оплатити на сайті «Сільпо»" in cart_page and "https://silpo.ua/pay/c1" in cart_page and "hcart" in cart_page
         assert shared.items["other"] == 1 and len(shared.items) > 1
         assert c.post("/menu/silpo-cart", data={"csrf": "bad"}).status_code == 400
 
