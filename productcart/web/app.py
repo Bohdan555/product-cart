@@ -62,6 +62,24 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
     @app.middleware("http")
+    async def timing(request: Request, call_next):
+        # Server-Timing: загальний час, база (кількість і час), регіон функції
+        stats = [0, 0.0]
+        token = db.db_stats.set(stats)
+        t = time.perf_counter()
+        try:
+            resp = await call_next(request)
+        finally:
+            db.db_stats.reset(token)
+        total = (time.perf_counter() - t) * 1000
+        resp.headers["Server-Timing"] = (f'app;dur={total:.0f}, db;dur={stats[1] * 1000:.0f};desc="{stats[0]} queries", '
+                                         f'region;desc="{os.environ.get("VERCEL_REGION", "local")}"')
+        if total > 800 and not request.url.path.startswith("/static/"):
+            log.warning("Повільно: %s %s — %.0f мс, база %d запитів / %.0f мс", request.method, request.url.path,
+                        total, stats[0], stats[1] * 1000)
+        return resp
+
+    @app.middleware("http")
     async def cache_static(request: Request, call_next):
         # статика (фото страв, стилі) кешується браузером і CDN Vercel, а не віддається функцією щоразу
         resp = await call_next(request)

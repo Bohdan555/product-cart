@@ -56,6 +56,13 @@ CREATE TABLE IF NOT EXISTS offers_cache (
 """
 
 
+import contextvars
+import time as _time
+
+# Заміри для Server-Timing: скільки запитів до бази і скільки часу вони зайняли в поточному HTTP-запиті
+db_stats: contextvars.ContextVar[list | None] = contextvars.ContextVar("db_stats", default=None)
+
+
 class Database:
     """Тонка обгортка: execute(sql, params) → курсор з fetchone()/fetchall(); рядки доступні як r["поле"]."""
 
@@ -96,6 +103,17 @@ class Database:
                 self.execute(stmt.strip())
 
     def execute(self, sql: str, params: tuple | list = ()):
+        st = db_stats.get()
+        if st is None:
+            return self._execute(sql, params)
+        t = _time.perf_counter()
+        try:
+            return self._execute(sql, params)
+        finally:
+            st[0] += 1
+            st[1] += _time.perf_counter() - t
+
+    def _execute(self, sql: str, params: tuple | list = ()):
         if not self.is_pg:
             return self._conn.execute(sql, params)
         import psycopg
