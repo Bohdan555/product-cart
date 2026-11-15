@@ -236,3 +236,62 @@ def test_static_is_cacheable(client):
     r = client.get("/static/style.css")
     assert r.status_code == 200 and "s-maxage" in r.headers["cache-control"]
     assert "/static/style.css?v=" in client.get("/").text
+
+
+class FakeGoogle:
+    enabled = True
+
+    def __init__(self, email="g@gmail.com", verified=True):
+        self.email, self.verified = email, verified
+
+    def authorize_url(self, state, challenge):
+        return f"https://accounts.google.test/auth?state={state}&code_challenge={challenge}"
+
+    def exchange(self, code, verifier):
+        assert code == "g-code" and len(verifier) >= 43
+        return {"email": self.email, "email_verified": self.verified, "sub": "123"}
+
+
+def google_client(tmp_path, **kw):
+    app = create_app(db_path=str(tmp_path / "g.db"), app_secret="x" * 32, base_url="http://test",
+                     gateway=FakeGateway(), google=FakeGoogle(**kw))
+    return TestClient(app, follow_redirects=False)
+
+
+def google_login(c, code="g-code"):
+    r = c.get("/auth/google")
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    return c.get(f"/auth/google/callback?code={code}&state={state}")
+
+
+def test_google_signup_login_and_guards(tmp_path):
+    with google_client(tmp_path) as c:
+        assert "Увійти через Google" in c.get("/login").text
+        c.post("/menu/settings", data={"people": "4"})           # гість налаштував меню
+        r = google_login(c)
+        assert r.status_code == 303 and r.headers["location"] == "/profile?welcome=1"
+        assert "<b>4</b>" in c.get("/menu").text                  # налаштування гостя збереглись
+        c.cookies.clear()
+        assert google_login(c).headers["location"] == "/list"      # повторний вхід — той самий профіль
+        c.cookies.clear()
+        r = c.post("/login", data={"email": "g@gmail.com", "password": "whatever1"})
+        assert r.status_code == 400 and "через Google" in r.text   # паролем у Google-профіль не зайти
+        # підроблений state
+        c.get("/auth/google")
+        assert c.get("/auth/google/callback?code=g-code&state=evil").status_code == 400
+        assert c.get("/auth/google/callback?error=access_denied").status_code == 400
+
+
+def test_google_links_existing_and_rejects_unverified(tmp_path):
+    with google_client(tmp_path, email="a@b.ua") as c:
+        register(c)
+        c.cookies.clear()
+        assert google_login(c).headers["location"] == "/list"
+    with google_client(tmp_path / "x", email="n@b.ua", verified=False) as c:
+        (tmp_path / "x").mkdir(exist_ok=True)
+        assert google_login(c).status_code == 400
+
+
+def test_google_hidden_without_keys(client):
+    assert "Google" not in client.get("/login").text
+    assert client.get("/auth/google").headers["location"] == "/login"

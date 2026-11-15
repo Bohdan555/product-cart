@@ -23,3 +23,19 @@
 
 ## Статистика
 Сторінка `/admin/stats` (і пункт меню «Статистика») доступна лише акаунтам, чиї email перелічені в змінній `ADMIN_EMAILS` (через кому): **Settings → Environment Variables → `ADMIN_EMAILS`**, потім Redeploy. Там: користувачі, активні за 7 і 30 днів, воронка, перегляди й переходи по днях, категорії, мережі, магазини й глибина знижок, на які реагують. Лише сукупні числа, без персональних даних.
+
+## Вхід через Google
+
+Кнопка «Увійти через Google» з'являється, коли задані `GOOGLE_CLIENT_ID` і `GOOGLE_CLIENT_SECRET`.
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → створити проєкт (або взяти наявний).
+2. **APIs & Services → OAuth consent screen**: тип *External*, назва «Кошик з акцій», email підтримки,
+   посилання на `/privacy`. Доступи (scopes): лише `openid` і `email`. Опублікувати (*Publish app*) —
+   для цих доступів перевірка Google не потрібна.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**: тип *Web application*.
+   *Authorized redirect URIs*: `https://my-product-cart-ua.vercel.app/auth/google/callback`
+   (для локального запуску ще `http://127.0.0.1:8000/auth/google/callback`).
+4. Vercel → Project → Settings → Environment Variables (Production): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+   Після цього — новий деплой.
+
+Сайт бере з Google лише email і ознаку, що його підтверджено. Якщо профіль з таким email уже є — вхід у нього.

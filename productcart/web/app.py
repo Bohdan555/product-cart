@@ -28,11 +28,13 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo
 from . import analytics, db, security
 from .analytics import verify_click
+from .google_oauth import GoogleAuth
 from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
 
 HERE = Path(__file__).parent
 log = logging.getLogger("productcart.web")
 COOKIE = "pc_session"
+GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy")
 OFFERS_TTL = timedelta(hours=6)
@@ -42,7 +44,8 @@ HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 
 
 def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None,
-               gateway: SilpoGateway | None = None, secure_cookies: bool | None = None) -> FastAPI:
+               gateway: SilpoGateway | None = None, secure_cookies: bool | None = None,
+               google: GoogleAuth | None = None) -> FastAPI:
     app_secret = app_secret or os.environ.get("APP_SECRET", "")
     vercel_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")  # Vercel задає сам, без https://
     base_url = (base_url or os.environ.get("BASE_URL")
@@ -51,6 +54,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     box = security.TokenBox(app_secret)
     gw = gateway or SilpoGateway(conn, redirect_uri=f"{base_url}/auth/silpo/callback")
     secure = base_url.startswith("https://") if secure_cookies is None else secure_cookies
+    google = google or GoogleAuth(redirect_uri=f"{base_url}/auth/google/callback")
 
     app = FastAPI(title="Кошик з акцій", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -78,7 +82,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     def render(request: Request, name: str, user=None, status: int = 200, **ctx):
         is_admin = bool(user) and user["email"].lower() in admin_emails
-        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin), status_code=status)
+        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled),
+                                    status_code=status)
 
     def go(url: str) -> RedirectResponse:
         return RedirectResponse(url, status_code=303)
@@ -277,16 +282,66 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             err = "Цей email уже зареєстровано. Увійдіть."
         if err:
             return render(request, "auth.html", mode="register", error=err, email=email, status=400)
+        uid = new_user(request, email, security.hash_password(password), "password")
+        return signed_in(uid, "/profile?welcome=1")
+
+    def new_user(request: Request, email: str, pw_hash: str, method: str) -> int:
         uid = conn.execute("INSERT INTO users (email, pw_hash, created_at) VALUES (?, ?, ?) RETURNING id",
-                           (email, security.hash_password(password), security.iso(security.now()))).fetchone()["id"]
-        token, _ = security.new_session(conn, uid)
-        analytics.track(conn, uid, "signup")
-        if request.cookies.get(GUEST_COOKIE):
+                           (email, pw_hash, security.iso(security.now()))).fetchone()["id"]
+        analytics.track(conn, uid, "signup", method=method)
+        if request.cookies.get(GUEST_COOKIE):  # налаштування меню, зроблені до реєстрації, переходять у профіль
             g = guest_profile(request)
             save_profile(uid, Profile(name="Мій профіль", **{k: getattr(g, k) for k in GUEST_KEYS}), False)
-        resp = go("/profile?welcome=1")
+        return uid
+
+    def signed_in(uid: int, url: str):
+        token, _ = security.new_session(conn, uid)
+        resp = go(url)
         resp.delete_cookie(GUEST_COOKIE)
         resp.set_cookie(COOKIE, token, max_age=security.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=secure)
+        return resp
+
+    # ---------- вхід через Google ----------
+    @app.get("/auth/google")
+    def google_start(request: Request):
+        if not google.enabled:
+            return go("/login")
+        verifier, challenge = pkce_pair()
+        state = secrets.token_urlsafe(24)
+        resp = go(google.authorize_url(state, challenge))
+        resp.set_cookie(GOOGLE_COOKIE, box.seal(json.dumps({"state": state, "verifier": verifier})),
+                        max_age=600, httponly=True, samesite="lax", secure=secure)
+        return resp
+
+    @app.get("/auth/google/callback", response_class=HTMLResponse)
+    def google_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+        def fail(msg: str):
+            resp = render(request, "auth.html", mode="login", error=msg, status=400)
+            resp.delete_cookie(GOOGLE_COOKIE)
+            return resp
+
+        blob = request.cookies.get(GOOGLE_COOKIE)
+        raw = box.open(blob) if blob else None
+        pending = json.loads(raw) if raw else {}
+        if error:
+            return fail("Вхід через Google скасовано." if error == "access_denied" else f"Google повернув помилку: {error[:80]}")
+        if not code or not pending or not secrets.compare_digest(state, pending.get("state", "")):
+            return fail("Вхід через Google застарів. Спробуйте ще раз.")
+        try:
+            info = google.exchange(code, pending["verifier"])
+        except Exception as e:
+            log.warning("Google: обмін коду не вдався: %s", str(e)[:300])
+            return fail("Google не відповів. Спробуйте ще раз або увійдіть з паролем.")
+        email = str(info.get("email") or "").strip().lower()
+        if not email or info.get("email_verified") not in (True, "true"):
+            return fail("Google не підтвердив вашу адресу email. Увійдіть з паролем.")
+        r = conn.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+        if r:
+            analytics.track(conn, r["id"], "login", method="google")
+            resp = signed_in(r["id"], "/list")
+        else:
+            resp = signed_in(new_user(request, email, "google", "google"), "/profile?welcome=1")
+        resp.delete_cookie(GOOGLE_COOKIE)
         return resp
 
     @app.get("/login", response_class=HTMLResponse)
@@ -296,6 +351,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     @app.post("/login")
     def login(request: Request, email: str = Form(...), password: str = Form(...)):
         r = conn.execute("SELECT id, pw_hash FROM users WHERE email=?", (email.strip().lower(),)).fetchone()
+        if r and r["pw_hash"] == "google":
+            return render(request, "auth.html", mode="login", email=email, status=400,
+                          error="Цей профіль створено через Google. Натисніть «Увійти через Google».")
         if not r or not security.verify_password(password, r["pw_hash"]):
             return render(request, "auth.html", mode="login", error="Неправильний email або пароль.", email=email, status=400)
         token, _ = security.new_session(conn, r["id"])

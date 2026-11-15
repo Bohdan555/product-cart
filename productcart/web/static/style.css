@@ -305,3 +305,9 @@ form.inline{display:inline;margin:0}
 #menuroot{transition:opacity .15s}
 #menuroot.busy .msum,#menuroot.busy .days,#menuroot.busy .mlist{opacity:.55;transition:opacity .2s .15s}
 button.pending{opacity:.6}
+/* вхід через Google */
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;font:600 16px/1 var(--body);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 18px;text-decoration:none}
+.gbtn:hover{border-color:var(--muted)}
+.gbtn svg{width:20px;height:20px}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
