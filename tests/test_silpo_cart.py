@@ -17,7 +17,7 @@ class CartMCP:
         if name == "silpo_get_my_shopping_cart":
             return {"cartId": "c1"} if self.has_cart else {"exists": False}
         if name == "silpo_get_shopping_cart_by_id":
-            prods = [{"productId": k, "name": f"товар {k}", "quantity": v} for k, v in self.items.items()]
+            prods = [{"id": f"line-{k}", "productId": k, "name": f"товар {k}", "quantity": v} for k, v in self.items.items()]
             return {"cart": {"id": "c1", "deliveryType": "SelfPickup", "timeslot": {"start": "s", "end": "e"},
                              "shipments": [{"companyId": "co", "branchId": "b1", "products": prods}],
                              "calculation": {"total": 123.4}}, "checkoutWebLink": "https://silpo.ua/pay/c1"}
@@ -29,11 +29,17 @@ class CartMCP:
                             {"id": "sm-small", "name": "Сметана 15% 200г", "price": 40, "displayRatio": "200г", "stock": 0}],
             }
             return {"queries": [{"query": q, "products": catalog.get(q, [])} for q in args["products"]]}
-        if name == "silpo_add_or_update_cart_products":
+        if name == "silpo_add_cart_products":
             assert args["shoppingCartId"] == "c1"
             for p in args["products"]:
-                assert p["companyId"] == "co" and p["branchId"] == "b1"
+                assert p["companyId"] == "co" and p["branchId"] == "b1" and p["productId"] not in self.items
                 self.items[p["productId"]] = p["quantity"]
+            return {"success": True}
+        if name == "silpo_update_cart_products":
+            for p in args["products"]:
+                pid = p["id"].removeprefix("line-")
+                assert pid in self.items
+                self.items[pid] = p["quantity"]
             return {"success": True}
         raise AssertionError(name)
 
@@ -62,6 +68,7 @@ def test_build_adds_to_existing_without_removing():
     assert [w.key for w in res["missing"]] == ["tofu"]
     assert res["had"] == 2 and res["checkout"] == "https://silpo.ua/pay/c1" and res["total"] == 123.4
     assert not any(n in ("silpo_clear_shopping_cart", "silpo_remove_cart_products") for n, _ in mcp.calls)
+    assert {n for n, _ in mcp.calls} >= {"silpo_add_cart_products", "silpo_update_cart_products"}
 
 
 def test_no_cart_and_no_way_to_create():

@@ -103,6 +103,7 @@ class SilpoGateway:
                 async def call(name: str, args: dict | None = None):
                     return _unwrap(await s.call_tool(name, args or {}))
 
+                call.session = s  # type: ignore[attr-defined]  # щоб прочитати схеми інструментів
                 yield call
 
 

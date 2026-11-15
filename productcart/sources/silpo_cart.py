@@ -51,6 +51,7 @@ class CartState:
     slot_start: str | None
     slot_end: str | None
     products: dict[str, float] = field(default_factory=dict)   # productId → quantity
+    line_ids: dict[str, str] = field(default_factory=dict)     # productId → id рядка кошика (для зміни кількості)
     names: dict[str, str] = field(default_factory=dict)
     total: float | None = None
     checkout: str | None = None
@@ -119,6 +120,8 @@ def parse_cart(data: Any) -> CartState:
             if pid:
                 st.products[str(pid)] = (_num(p.get("quantity")) or 0) + st.products.get(str(pid), 0)
                 st.names[str(pid)] = p.get("name") or ""
+                if p.get("id") and p.get("productId"):
+                    st.line_ids[str(pid)] = str(p["id"])
     calc = _first(cart, "calculation") or {}
     st.total = _num(_first(calc, "total", "totalAfterDiscounts"))
     st.checkout = _find(data, "checkoutWebLink", "webLink")
@@ -210,8 +213,31 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[
     return found, missing
 
 
+_schemas: dict[str, dict] = {}
+
+
+async def tool_schema(call: Call, name: str) -> dict:
+    """Схема інструмента з tools/list (кешуємо в процесі). Порожня, якщо сесія недоступна."""
+    if not _schemas:
+        session = getattr(call, "session", None)
+        if session is not None:
+            try:
+                tools = (await session.list_tools()).tools
+                _schemas.update({t.name: t.inputSchema or {} for t in tools})
+                log.info("Сільпо: кошикові інструменти: %s", sorted(n for n in _schemas if "cart" in n))
+            except Exception as e:
+                log.warning("Сільпо: tools/list: %s", str(e)[:300])
+    return _schemas.get(name, {})
+
+
+def _item_props(schema: dict) -> dict:
+    items = ((schema.get("properties") or {}).get("products") or {}).get("items") or {}
+    return items.get("properties") or {}
+
+
 async def add_to_cart(call: Call, cart: CartState, found: list[tuple[Want, str, float, str, bool]]) -> list[Placed]:
-    """Додає, не видаляючи наявного: кількість = те, що вже лежить, + наша."""
+    """Додає, не видаляючи наявного. Нове — silpo_add_cart_products; те, що вже лежить, —
+    silpo_update_cart_products за id рядка кошика, кількість = наявна + наша."""
     merged: dict[str, Placed] = {}
     for w, pid, qty, name, weighted in found:
         if pid in merged:
@@ -220,12 +246,36 @@ async def add_to_cart(call: Call, cart: CartState, found: list[tuple[Want, str, 
             merged[pid] = Placed(w.key, name, pid, qty, weighted)
     if not merged:
         return []
-    products = [{"productId": pl.product_id, "companyId": cart.company_id or "",
-                 "branchId": cart.branch_id or "", "quantity": round(cart.products.get(pl.product_id, 0) + pl.quantity, 3)}
-                for pl in merged.values()]
-    log.info("Сільпо: add_or_update %d позицій у кошик %s", len(products), cart.cart_id)
-    res = await call("silpo_add_or_update_cart_products", {"shoppingCartId": cart.cart_id, "products": products})
-    log.info("Сільпо: add_or_update → %s", str(res)[:600])
+    new = [pl for pl in merged.values() if pl.product_id not in cart.products]
+    old = [pl for pl in merged.values() if pl.product_id in cart.products]
+    if new:
+        add_schema = await tool_schema(call, "silpo_add_cart_products")
+        if add_schema:
+            log.info("Сільпо: схема silpo_add_cart_products: %s", str(add_schema)[:1200])
+        products = [{"productId": pl.product_id, "companyId": cart.company_id or "", "branchId": cart.branch_id or "",
+                     "quantity": pl.quantity} for pl in new]
+        log.info("Сільпо: add_cart_products %d позицій у кошик %s", len(products), cart.cart_id)
+        res = await call("silpo_add_cart_products", {"shoppingCartId": cart.cart_id, "products": products})
+        log.info("Сільпо: add_cart_products → %s", str(res)[:600])
+    if old:
+        upd_schema = await tool_schema(call, "silpo_update_cart_products")
+        if upd_schema:
+            log.info("Сільпо: схема silpo_update_cart_products: %s", str(upd_schema)[:1200])
+        props = _item_props(upd_schema)
+        id_key = next((k for k in ("id", "cartProductId", "lineItemId", "itemId") if k in props), "id")
+        lines = []
+        for pl in old:
+            line_id = cart.line_ids.get(pl.product_id)
+            if not line_id:
+                log.warning("Сільпо: немає id рядка кошика для %s", pl.product_id)
+                continue
+            item = {id_key: line_id, "quantity": round(cart.products[pl.product_id] + pl.quantity, 3)}
+            if "productId" in props:
+                item["productId"] = pl.product_id
+            lines.append(item)
+        if lines:
+            res = await call("silpo_update_cart_products", {"shoppingCartId": cart.cart_id, "products": lines})
+            log.info("Сільпо: update_cart_products → %s", str(res)[:600])
     return list(merged.values())
 
 
