@@ -132,20 +132,30 @@ def _step(p: dict) -> float:
     return _num(_first(p, "addToBasketStep", "step")) or 1.0
 
 
+UNIT = {"g": "g", "г": "g", "ml": "ml", "мл": "ml", "pcs": "pcs", "шт": "pcs"}
+MAX_KG = 5.0      # запобіжник: на тиждень вечерь більше 5 кг одного вагового товару — це помилка
+MAX_PACKS = 10
+
+
 def quantity_for(want: Want, product: dict | None = None) -> float:
     """Скільки класти: штуки (упаковки) для штучного товару, кілограми — для вагового."""
+    unit = UNIT.get(want.unit, want.unit)
     weighted = bool(product.get("weighted")) if product is not None else want.weighted
     step = _step(product) if product is not None else (0.1 if weighted else 1.0)
     if weighted:
-        kg = want.need / 1000 if want.unit in ("г", "мл") else want.need * 0.15  # штуку вагового — ~150 г
+        kg = want.need / 1000 if unit in ("g", "ml") else want.need * 0.15  # штуку вагового — ~150 г
         return round(max(step, math.ceil(round(kg / step, 6)) * step), 3)
     if product is None:
         return float(max(1, want.packs))
     ratio = product.get("displayRatio") or product.get("ratio") or product.get("name") or ""
-    qty, unit = parse_pack(str(ratio))
-    if qty and unit and want.unit in ("г", "мл", "шт") and {"г": "g", "мл": "ml", "шт": "pcs"}[want.unit] == unit:
+    qty, punit = parse_pack(str(ratio))
+    if qty and punit == unit:
         return float(max(1, math.ceil(want.need / qty - 1e-9)))
     return float(max(1, math.ceil(step)))
+
+
+def sane(qty: float, weighted: bool) -> bool:
+    return 0 < qty <= (MAX_KG if weighted else MAX_PACKS)
 
 
 def pick_product(items: list[dict]) -> dict | None:
@@ -210,7 +220,14 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[
             missing.append(w)
             continue
         found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), p.get("name") or w.name, bool(p.get("weighted"))))
-    return found, missing
+    ok = []
+    for item in found:
+        if sane(item[2], item[4]):
+            ok.append(item)
+        else:
+            log.warning("Сільпо: підозріла кількість %s для «%s» (%s %s) — не кладемо", item[2], item[3], item[0].need, item[0].unit)
+            missing.append(item[0])
+    return ok, missing
 
 
 _schemas: dict[str, dict] = {}

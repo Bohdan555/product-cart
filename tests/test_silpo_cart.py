@@ -49,12 +49,13 @@ def run(c):
 
 
 def wants():
-    return [sc.Want("eggs", "Яйця C1 10 шт", 8, "шт", product_id="egg10", packs=1),
-            sc.Want("eggs2", "Яйця C1 10 шт", 8, "шт", product_id="egg10", packs=1),   # той самий товар — зливаємо
-            sc.Want("chicken", "Філе куряче", 350, "г", product_id="fillet", weighted=True),
-            sc.Want("carrot", "Морква", 80, "г"),
-            sc.Want("smetana", "Сметана", 250, "г"),
-            sc.Want("tofu", "Тофу", 200, "г")]
+    # одиниці — як у меню (INGREDIENTS): g / ml / pcs
+    return [sc.Want("eggs", "Яйця C1 10 шт", 8, "pcs", product_id="egg10", packs=1),
+            sc.Want("eggs2", "Яйця C1 10 шт", 8, "pcs", product_id="egg10", packs=1),   # той самий товар — зливаємо
+            sc.Want("chicken", "Філе куряче", 350, "g", product_id="fillet", weighted=True),
+            sc.Want("carrot", "Морква", 80, "g"),
+            sc.Want("smetana", "Сметана", 250, "g"),
+            sc.Want("tofu", "Тофу", 200, "g")]
 
 
 def test_build_adds_to_existing_without_removing():
@@ -77,7 +78,7 @@ def test_no_cart_and_no_way_to_create():
 
 
 def test_quantity_for_packs():
-    w = sc.Want("milk", "Молоко", 1500, "мл")
+    w = sc.Want("milk", "Молоко", 1500, "ml")
     assert sc.quantity_for(w, {"displayRatio": "900мл"}) == 2
     assert sc.quantity_for(w, {"displayRatio": "1шт"}) == 1    # інша одиниця — мінімальний крок
 
@@ -109,3 +110,24 @@ def test_creates_pickup_cart_when_none():
                                       "address": "вул. Франка, 1"}))
     assert res["created"].startswith("Створили кошик із самовивозом") and res["had"] == 0
     assert mcp.items["egg10"] == 2
+
+
+def test_weighted_uses_grams_from_menu_and_sanity_cap():
+    assert sc.quantity_for(sc.Want("pork", "Свинина", 375, "g", product_id="p", weighted=True)) == 0.4
+    assert sc.quantity_for(sc.Want("x", "Цибуля", 2, "pcs", product_id="p", weighted=True)) == 0.3
+    assert not sc.sane(56.3, True) and sc.sane(0.4, True) and not sc.sane(25, False)
+
+
+def test_menu_lines_map_to_sane_cart_quantities():
+    """Справжні рядки меню на демо-акціях → кількості в розумних межах."""
+    from productcart import menu, planner
+    from productcart.models import Profile
+    from productcart.sources import demo
+    offers = planner.merge_nearby(demo.load())
+    for o in offers:
+        o.chain = "silpo"
+    m = menu.plan(offers, Profile(household=4), dinners=7, max_minutes=180)
+    for w in sc.wants_from_menu(m.cart):
+        if w.product_id:
+            q = sc.quantity_for(w)
+            assert sc.sane(q, w.weighted), (w, q)
