@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 import logging
 import contextlib
 import json
@@ -17,7 +18,7 @@ from urllib.parse import quote, unquote
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -127,8 +128,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         resp.set_cookie(GUEST_COOKIE, box.seal(data), max_age=30 * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
 
-    def remember_cart(resp, n: int):
+    cart_counts: dict[int, tuple[float, int]] = {}  # user_id → (коли, скільки) — кеш для значка
+
+    def remember_cart(resp, n: int, user_id: int | None = None):
         """Кількість товарів у кошику «Сільпо» для значка в шапці — оновлюється, коли ми читаємо кошик."""
+        if user_id is not None:
+            cart_counts[user_id] = (time.monotonic(), max(0, int(n)))
         resp.set_cookie(CART_COOKIE, str(max(0, int(n))), max_age=7 * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
 
@@ -650,7 +655,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     # ---------- перегляд кошика «Сільпо» ----------
     @app.get("/silpo/cart", response_class=HTMLResponse)
-    async def silpo_cart_view(request: Request, error: str = "", changed: str = ""):
+    async def silpo_cart_view(request: Request, error: str = "", changed: str = "", cleared: int = 0):
         u, bad = need_user(request)
         if bad:
             return bad
@@ -666,8 +671,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: перегляд кошика: %s: %s", type(e).__name__, str(e)[:800])
             err = f"«Сільпо» не відповіло: {str(e)[:150]}"
         analytics.track(conn, u["id"], "silpo_cart_viewed", items=cart.count if cart else 0)
-        resp = render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed)
-        return remember_cart(resp, cart.count if cart else 0) if not err else resp
+        resp = render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed,
+                      cleared=bool(cleared))
+        return remember_cart(resp, cart.count if cart else 0, u["id"]) if not err else resp
 
     @app.post("/silpo/cart/change")
     async def silpo_cart_change(request: Request):
@@ -701,7 +707,49 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             msg = str(e) if isinstance(e, silpo_cart.CartError) else f"«Сільпо» не прийняло зміну: {str(e)[:150]}"
             return go("/silpo/cart?error=" + quote(msg))
         analytics.track(conn, u["id"], "silpo_cart_changed", action=action)
+        cart_counts.pop(u["id"], None)
         return go(f"/silpo/cart?changed={quote(line_id)}#l-{quote(line_id)}")
+
+    @app.post("/silpo/cart/clear")
+    async def silpo_cart_clear(request: Request, csrf: str = Form("")):
+        u, bad = need_user(request, csrf)
+        if bad:
+            return bad
+        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        if not tokens:
+            return go("/silpo")
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                call = await get_call()
+                cart = await silpo_cart.current_cart(call)
+                if cart is not None and cart.count:
+                    await silpo_cart.clear(call, cart)
+        except Exception as e:
+            e = root_error(e)
+            log.warning("Сільпо: очищення кошика: %s: %s", type(e).__name__, str(e)[:800])
+            return go("/silpo/cart?error=" + quote(f"«Сільпо» не очистило кошик: {str(e)[:150]}"))
+        analytics.track(conn, u["id"], "silpo_cart_cleared")
+        return remember_cart(go("/silpo/cart?cleared=1"), 0, u["id"])
+
+    @app.get("/silpo/cart/count")
+    async def silpo_cart_count(request: Request):
+        """Для значка в шапці: скільки товарів у кошику «Сільпо». Кеш на хвилину, щоб не смикати «Сільпо» щоразу."""
+        u = user_of(request)
+        if not u:
+            return JSONResponse({"n": None})
+        hit = cart_counts.get(u["id"])
+        if hit and time.monotonic() - hit[0] < 60:
+            return remember_cart(JSONResponse({"n": hit[1]}), hit[1], u["id"])
+        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        if not tokens:
+            return JSONResponse({"n": None})
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                n = await silpo_cart.count(await get_call())
+        except Exception as e:
+            log.warning("Сільпо: кількість у кошику: %s", str(root_error(e))[:300])
+            return JSONResponse({"n": None})
+        return remember_cart(JSONResponse({"n": n}), n, u["id"])
 
     # ---------- кошик «Сільпо» з меню ----------
     @app.post("/menu/silpo-cart", response_class=HTMLResponse)
@@ -749,7 +797,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                           error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
         analytics.track(conn, u["id"], "silpo_cart_built", placed=len(res["placed"]), missing=len(res["missing"]),
                         had=res["had"], total=res["total"], checkout=bool(res["checkout"]))
-        return remember_cart(render(request, "cart.html", u, res=res, **ctx), res["count"])
+        return remember_cart(render(request, "cart.html", u, res=res, **ctx), res["count"], u["id"])
 
     @app.get("/photos", response_class=HTMLResponse)
     def photo_credits(request: Request):

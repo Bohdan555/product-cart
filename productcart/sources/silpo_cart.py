@@ -472,3 +472,13 @@ async def remove_line(call: Call, cart: CartState, line_id: str) -> None:
         args[key] = [line_id]
     res = await call("silpo_remove_cart_products", args)
     log.info("Сільпо: remove_cart_products → %s", str(res)[:400])
+
+
+async def clear(call: Call, cart: CartState) -> None:
+    res = await call("silpo_clear_shopping_cart", {"shoppingCartId": cart.cart_id})
+    log.info("Сільпо: clear_shopping_cart → %s", str(res)[:300])
+
+
+async def count(call: Call) -> int:
+    cart = await current_cart(call)
+    return cart.count if cart else 0

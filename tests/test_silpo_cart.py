@@ -135,6 +135,11 @@ def test_menu_lines_map_to_sane_cart_quantities():
 
 class EditMCP(CartMCP):
     async def __call__(self, name, args):
+        if name == "silpo_clear_shopping_cart":
+            self.calls.append((name, args))
+            assert args["shoppingCartId"] == "c1"
+            self.items.clear()
+            return {"success": True}
         if name == "silpo_remove_cart_products":
             self.calls.append((name, args))
             for p in args["products"]:

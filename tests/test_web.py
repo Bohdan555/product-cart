@@ -388,3 +388,36 @@ def test_silpo_cart_edit(tmp_path):
         assert "eggs" not in shared.items
         assert c.post("/silpo/cart/change", data={"csrf": token, "line": "x", "action": "set", "quantity": "999"}).status_code == 400
         assert c.post("/silpo/cart/change", data={"csrf": "bad", "line": "x", "action": "remove"}).status_code == 400
+
+
+def test_silpo_cart_clear_and_count(tmp_path):
+    from test_silpo_cart import EditMCP
+    shared = EditMCP(existing={"meat": 0.5, "eggs": 2, "milk": 1})
+
+    class Combined(FakeMCP):
+        async def __call__(self, name, args):
+            if "cart" in name:
+                return await shared(name, args)
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Combined()
+
+    app = create_app(db_path=str(tmp_path / "k.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        assert c.get("/silpo/cart/count").json() == {"n": None}           # гість
+        token = register(c)
+        assert c.get("/silpo/cart/count").json() == {"n": None}           # без «Сільпо»
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        assert c.get("/silpo/cart/count").json() == {"n": 3}
+        assert 'id="hcartN"' in c.get("/menu").text and ">3</b>" in c.get("/menu").text   # цифра з cookie
+        assert "Очистити кошик" in c.get("/silpo/cart").text
+        r = c.post("/silpo/cart/clear", data={"csrf": token})
+        assert r.headers["location"] == "/silpo/cart?cleared=1" and shared.items == {}
+        assert c.get("/silpo/cart/count").json() == {"n": 0}
+        assert "Кошик очищено" in c.get("/silpo/cart?cleared=1").text
+        assert c.post("/silpo/cart/clear", data={"csrf": "bad"}).status_code == 400
