@@ -45,6 +45,16 @@ document.getElementById('loc-btn').addEventListener('click', function () {
     <span class="hs-items">{{ sl.items|length }} товарів{% if p.budget_week %} · бюджет {{ uah(p.budget_week) }}{% endif %}</span></div>
   <div class="hs-save"><span>економія</span><b>−{{ uah(sl.saving) }}</b></div>
 </section>
+<div class="sortbar">
+  <label for="sortSel">Сортувати</label>
+  <select id="sortSel">
+    <option value="rank">Для вас</option>
+    <option value="disc">Найбільша знижка</option>
+    <option value="save">Найбільша економія, ₴</option>
+    <option value="price">Найдешевші</option>
+    <option value="unit">Ціна за кг / л</option>
+  </select>
+</div>
 {% if cats|length > 1 %}
 <div class="filters" role="group" aria-label="Категорії">
   <button type="button" class="fchip on" data-cat="">Усе</button>
@@ -55,7 +65,9 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 <h2 class="store-h"><span class="chain-dot"></span>{{ chain_name(key) }}{% if ' · ' in key %} <span class="hint">{{ key.split(' · ',1)[1] }}</span>{% endif %}</h2>
 <div class="grid">
   {% for m in items %}{% set o = m.offer %}{% set v = visual(o) %}{% set link_url = click_url(o) %}
-  <article class="pcard" data-cat="{{ v.cat }}">
+  {% set up = o.unit_price() %}
+  <article class="pcard" data-cat="{{ v.cat }}" data-rank="{{ loop.index0 }}" data-disc="{{ o.discount_pct or 0 }}" data-price="{{ o.price }}"
+           data-save="{{ ((o.old_price or o.price) - o.price)|round(2) }}" data-unit="{{ up[0] if up and up[1] in ('кг', 'л') else '' }}">
     <div class="pimg" style="--h:{{ v.hue }}">
       {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
       <span class="pemoji" aria-hidden="true">{{ v.emoji }}</span>
@@ -65,7 +77,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
     <div class="pbody">
       <h3 class="pname">{{ o.name }}</h3>
       <div class="pprice"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</div>
-      {% set up = o.unit_price() %}<div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
+      <div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
       <div class="pwhy">{% for r in m.reasons %}{% if not r.startswith('−') %}<span>{{ r }}</span>{% endif %}{% endfor %}</div>
       {% if o.promo %}<div class="ppromo">{{ o.promo }}</div>{% endif %}
       {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener">До {{ chain_name(o.chain) }} →</a>{% endif %}
@@ -76,6 +88,28 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% endfor %}
 {% if sl.regulars_missing %}<p class="note" style="margin-top:14px">Без акції цього тижня: {{ sl.regulars_missing|join(', ') }}.</p>{% endif %}
 <script>
+(function () {   // сортування в межах кожного магазину; вибір запам'ятовуємо в браузері
+  var sel = document.getElementById('sortSel'); if (!sel) return;
+  var KEY = 'pc-sort';
+  function num(el, k, empty) { var v = el.dataset[k]; return v === '' || v === undefined ? empty : +v; }
+  var by = {
+    rank: function (a, b) { return num(a, 'rank') - num(b, 'rank'); },
+    disc: function (a, b) { return num(b, 'disc') - num(a, 'disc') || by.rank(a, b); },
+    save: function (a, b) { return num(b, 'save') - num(a, 'save') || by.rank(a, b); },
+    price: function (a, b) { return num(a, 'price') - num(b, 'price') || by.rank(a, b); },
+    unit: function (a, b) { return num(a, 'unit', 1e9) - num(b, 'unit', 1e9) || by.rank(a, b); }
+  };
+  function apply(k) {
+    if (!by[k]) k = 'rank';
+    sel.value = k;
+    document.querySelectorAll('.grid').forEach(function (g) {
+      Array.prototype.slice.call(g.querySelectorAll('.pcard')).sort(by[k]).forEach(function (c) { g.appendChild(c); });
+    });
+  }
+  sel.addEventListener('change', function () { apply(sel.value); try { localStorage.setItem(KEY, sel.value); } catch (e) {} });
+  var saved = 'rank'; try { saved = localStorage.getItem(KEY) || 'rank'; } catch (e) {}
+  apply(saved);
+})();
 document.querySelectorAll('.fchip').forEach(function (b) {
   b.addEventListener('click', function () {
     document.querySelectorAll('.fchip').forEach(function (x) { x.classList.toggle('on', x === b); });
