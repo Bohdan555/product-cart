@@ -85,7 +85,7 @@ def test_health_consent_and_csrf(client):
     r = client.post("/profile", data=dict(data, health_consent="1"))
     assert r.status_code == 303 and r.headers["location"] == "/silpo"
     page, rejected = client.get("/list").text.split("<details")
-    assert "демо" in page and "Молоко 2,5% 900 г" not in page and "безлактозне" in page
+    assert "Демо-ціни" in page and "Молоко 2,5% 900 г" not in page and "безлактозне" in page
     assert "Молоко 2,5% 900 г — без лактози" in rejected
 
 
@@ -167,7 +167,7 @@ def test_nearby_stores_within_radius(client):
     page = client.get("/list").text
     # у радіусі 1 км — b1 (Франка) і b4 (Хрещатик), b5 (Перемоги) далеко
     assert "вул. Івана Франка, 1" in page and "вул. Хрещатик, 2" in page and "Перемоги" not in page.split("<details")[0]
-    assert "також ще в 1 магаз. поруч" in page
+    assert "ще в 1 поруч" in page
     # профіль зберігає округлене місце, повторне збереження анкети його не стирає
     client.post("/profile", data={"csrf": token, "regulars": "кава зернова", "radius_km": "0.3"})
     assert "Визначити моє місце" not in client.get("/list").text  # анкета не стерла збережене місце
@@ -188,7 +188,7 @@ def test_menu_page_and_settings(client):
     assert client.post("/menu/settings", data={"csrf": token, "max_minutes": "30"}).status_code == 303
     assert client.post("/menu/settings", data={"csrf": token, "people": "2"}).status_code == 303
     html = client.get("/menu").text
-    assert html.count('<article class="day') == 3 and 'value="30" aria-pressed="true"' in html and "Вечеря на 2" in html
+    assert html.count('<article class="day') == 3 and 'value="30" aria-pressed="true"' in html and "<b>2</b>" in html
     titles = re.findall(r'<h3 class="dt">([^<]+)</h3>', html)
     r = client.post("/menu/swap", data={"csrf": token, "i": "1"})
     assert r.status_code == 303 and r.headers["location"] == "/menu?swapped=1#d1"
@@ -197,7 +197,7 @@ def test_menu_page_and_settings(client):
     # «закінчилось» додає запас у кошик і повертається назад
     key = re.search(r'name="key" value="([a-z_]+)"', html).group(1)
     client.post("/menu/pantry", data={"csrf": token, "key": key})
-    assert "Додано, бо вдома закінчилось" in client.get("/menu").text
+    assert "Докупити:" in client.get("/menu").text
     assert client.post("/menu/pantry", data={"csrf": token, "key": "evil"}).status_code == 400
     # збереження профілю не скидає меню
     client.post("/profile", data={"csrf": token, "household": "2", "min_discount": "10"})
@@ -211,7 +211,7 @@ def test_landing_and_guest_menu(client):
     assert "прототип" not in r.text
     # гість відкриває меню без реєстрації, на демо-цінах
     r = client.get("/menu")
-    assert r.status_code == 200 and "Це приклад на демо-цінах" in r.text and "pc_guest" in client.cookies
+    assert r.status_code == 200 and "Демо-ціни" in r.text and "pc_guest" in client.cookies
     assert client.post("/menu/settings", data={"people": "4"}).headers["location"] == "/menu"
     assert client.post("/menu/settings", data={"dinners": "3"}).status_code == 303
     assert client.get("/menu").text.count('<article class="day') == 3
@@ -228,7 +228,7 @@ def test_landing_and_guest_menu(client):
     client.post("/menu/settings", data={"people": "5"})
     register(client)
     assert "pc_guest" not in client.cookies
-    assert "Це приклад на демо-цінах" not in client.get("/menu").text
+    assert 'href="/register">Увійти' not in client.get("/menu").text
     assert 'value="5"' in client.get("/profile").text or "<b>5</b>" in client.get("/menu").text
 
 
@@ -315,7 +315,7 @@ def test_menu_to_silpo_cart(tmp_path):
     app = create_app(db_path=str(tmp_path / "c.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
     with TestClient(app, follow_redirects=False) as c:
         token = register(c)
-        assert "стане кошиком" in c.get("/menu").text               # без «Сільпо» — пропозиція підключити
+        assert "Зробити кошик у «Сільпо»" in c.get("/menu").text               # без «Сільпо» — пропозиція підключити
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
         c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
@@ -444,7 +444,7 @@ def test_profile_wizard_extras(tmp_path):
     with TestClient(app, follow_redirects=False) as c:
         token = register(c)
         page = c.get("/profile").text
-        assert "Підключіть «Сільпо» — і ми заповнимо" in page and 'id="swipe"' in page and 'id="live"' in page
+        assert "Підключіть «Сільпо» — заповнимо за вас" in page and 'id="swipe"' in page and 'id="live"' in page
         assert c.get("/profile/silpo-hints").status_code == 409
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]

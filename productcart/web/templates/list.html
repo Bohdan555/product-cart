@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Мій список — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>Ваш список з акцій</h1>
+<h1>Акції для вас</h1>
 {% include "_stale.html" %}
 {% if link and p.lat is none %}
 <form class="card stack" method="post" action="/location" id="loc-form" style="margin-bottom:14px">
   <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="lat" id="loc-lat"><input type="hidden" name="lon" id="loc-lon">
-  <b>Список з магазинів поруч</b>
-  <p class="hint" style="margin:0">Зберемо акції всіх магазинів «Сільпо» в радіусі {{ p.radius_km|round(1) }} км від вас. Місце зберігаємо округленим (~100 м), щоб щотижня складати список без запитів; видалити можна будь-коли.</p>
-  <label class="consent"><input type="checkbox" name="consent" value="1" id="loc-consent" checked> <span>Погоджуюся зберегти моє приблизне місце для підбору магазинів</span></label>
+  <b>Магазини поруч</b>
+  <label class="consent"><input type="checkbox" name="consent" value="1" id="loc-consent" checked> <span>Зберегти моє приблизне місце</span></label>
   <div class="row"><button class="btn" type="button" id="loc-btn">📍 Визначити моє місце</button><span class="hint" id="loc-msg"></span></div>
-  {% if not link.store_id %}<p class="hint" style="margin:0">Або <a href="/silpo">оберіть один магазин вручну</a>.</p>{% endif %}
+  {% if not link.store_id %}<p class="hint" style="margin:0"><a href="/silpo">Вибрати магазин вручну</a></p>{% endif %}
 </form>
 <script>
 document.getElementById('loc-btn').addEventListener('click', function () {
@@ -29,22 +28,22 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% endif %}
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }}{% if not stores %} <a href="/silpo">Перейти до «Сільпо»</a>{% endif %}</div>{% endif %}
 {% if is_demo %}
-<div class="note" style="margin-bottom:14px">Це <b>демо</b>: товари й ціни вигадані.{% if not link %} <a href="/silpo">Підключіть «Сільпо»</a>, щоб бачити справжні акції магазинів поруч.{% endif %}</div>
+<div class="note" style="margin-bottom:14px">Демо-ціни{% if not link %} · <a href="/silpo">Підключити «Сільпо»</a>{% endif %}</div>
 {% elif stores %}
-<div class="card" style="margin-bottom:14px">
-  <p class="lead" style="margin:0 0 6px">Акції {{ stores|length }} {{ 'магазину' if stores|length == 1 else 'магазинів' }} «Сільпо»{% if p.lat is not none %} у радіусі {{ p.radius_km|round(1) }} км{% endif %}: <a href="/list?refresh=1">оновити</a></p>
-  {% for st in stores %}<div class="meta">• {{ st.title }}{% if st.km is defined %} — {{ st.km }} км{% endif %}</div>{% endfor %}
+<details class="stores-sum">
+  <summary>{{ stores|length }} {{ plural(stores|length, 'магазин', 'магазини', 'магазинів') }} «Сільпо» · <a href="/list?refresh=1">оновити</a></summary>
+  {% for st in stores %}<div class="meta">{{ st.title }}{% if st.km is defined %} · {{ st.km }} км{% endif %}</div>{% endfor %}
   {% if p.lat is not none %}<form method="post" action="/location/clear" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt small" type="submit">Видалити збережене місце</button></form>{% endif %}
-</div>
+</details>
 {% endif %}
-{% if p.diets %}<p class="hint">Фільтри: {% for d in p.diets %}{{ DIET_LABELS[d] }}{% if not loop.last %}, {% endif %}{% endfor %} — за назвою товару, склад перевіряйте на упаковці.</p>{% endif %}
+
 
 {% if sl.items %}
 {% set cats = [] %}{% for m in sl.items %}{% set c = visual(m.offer).cat %}{% if c not in cats %}{% set _ = cats.append(c) %}{% endif %}{% endfor %}
 <section class="hero-sum">
-  <div class="hs-main"><span class="hs-label">Ваш кошик цього тижня</span><b class="hs-total">{{ uah(sl.total) }}</b>
-    <span class="hs-items">{{ sl.items|length }} товарів{% if p.budget_week %} · бюджет {{ uah(p.budget_week) }}{% endif %}</span></div>
-  <div class="hs-save"><span>економія</span><b>−{{ uah(sl.saving) }}</b></div>
+  <div class="hs-main"><span class="hs-label">Разом</span><b class="hs-total">{{ uah(sl.total|round) }}</b>
+    <span class="hs-items">{{ sl.items|length }} {{ plural(sl.items|length, 'товар', 'товари', 'товарів') }}</span></div>
+  <div class="hs-save"><span>економія</span><b>−{{ uah(sl.saving|round) }}</b></div>
 </section>
 <div class="sortbar">
   <label for="sortSel">Сортувати</label>
@@ -79,7 +78,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
       <h3 class="pname">{{ o.name }}</h3>
       <div class="pprice"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</div>
       <div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
-      <div class="pwhy">{% for r in m.reasons %}{% if not r.startswith('−') %}<span>{{ r }}</span>{% endif %}{% endfor %}</div>
+      {% set why = [] %}{% for r in m.reasons %}{% if not r.startswith(('−', 'економія', 'також')) %}{% set _ = why.append(r) %}{% endif %}{% endfor %}{% if why %}<div class="pwhy"><span>{{ why[0] }}</span></div>{% endif %}
       {% if o.promo %}<div class="ppromo">{{ o.promo }}</div>{% endif %}
       {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener">До {{ chain_name(o.chain) }} →</a>{% endif %}
     </div>
@@ -87,7 +86,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
   {% endfor %}
 </div>
 {% endfor %}
-{% if sl.regulars_missing %}<p class="note" style="margin-top:14px">Без акції цього тижня: {{ sl.regulars_missing|join(', ') }}.</p>{% endif %}
+
 <script>
 (function () {   // сортування в межах кожного магазину; вибір запам'ятовуємо в браузері
   var sel = document.getElementById('sortSel'); if (!sel) return;
@@ -124,10 +123,10 @@ document.querySelectorAll('.fchip').forEach(function (b) {
 });
 </script>
 {% else %}
-<div class="card">Під ваш профіль акцій не знайшлося. Спробуйте знизити мінімальну знижку в <a href="/profile">профілі</a>.</div>
+<div class="card">Акцій не знайшлося. <a href="/profile">Змінити профіль</a></div>
 {% endif %}
 
-<details style="margin-top:20px"><summary>Чому інші акції не потрапили ({{ rejected|length }} з {{ offers_total }})</summary>
+<details style="margin-top:20px"><summary>Не підійшли ({{ rejected|length }})</summary>
   <div class="card" style="margin-top:8px">{% for r in rejected %}<div class="meta">✗ {{ r.offer.name }} — {{ r.reason }}</div>{% endfor %}</div>
 </details>
 {% endblock %}

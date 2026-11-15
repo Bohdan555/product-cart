@@ -4,18 +4,16 @@
 <h1>«Сільпо»</h1>
 {% if error %}<div class="err">{{ error }}</div>{% endif %}
 {% if not link %}
-<p class="lead">Підключіть свій акаунт «Сільпо», щоб ми бачили акції вашого магазину та ваші персональні пропозиції.</p>
 <div class="card stack">
-  <p style="margin:0">Вхід відбувається на сторінці «Сільпо» — телефоном і кодом. Ми не бачимо ваш пароль чи код, лише отримуємо дозвіл читати каталог і акції від вашого імені. Відключити можна будь-коли.</p>
+  <p style="margin:0">Вхід на сторінці «Сільпо» за номером телефону. Ваш код ми не бачимо.</p>
   <form method="post" action="/silpo/connect" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn" type="submit">Підключити «Сільпо»</button></form>
 </div>
 {% else %}
-<div class="ok">«Сільпо» підключено{% if link.store_title %} · магазин: {{ link.store_title }}{% endif %}.</div>
-<h2>{{ 'Змінити магазин' if link.store_id else 'Крок 2: оберіть свій магазин' }}</h2>
-{% if not link.store_id %}<p class="hint">Знайдіть магазин за містом і частиною адреси й натисніть «Мій магазин» — після цього відкриється ваш список.</p>{% endif %}
+<div class="ok">Підключено{% if link.store_title %} · {{ link.store_title }}{% endif %}</div>
+<h2>{{ 'Змінити магазин' if link.store_id else 'Оберіть магазин' }}</h2>
 <div class="row" style="margin-bottom:10px">
   <button class="btn" type="button" id="near-btn">📍 Знайти магазини поруч</button>
-  <span class="hint" id="near-msg">Браузер запитає дозвіл на геолокацію. Координати не зберігаємо.</span>
+  <span class="hint" id="near-msg"></span>
 </div>
 <script>
 document.getElementById('near-btn').addEventListener('click', function () {
@@ -44,9 +42,9 @@ document.getElementById('near-btn').addEventListener('click', function () {
   {% endfor %}
 </div>
 {% endif %}
-<h2>Кошик</h2>
-<p><a class="btn alt" href="/silpo/cart">Мій кошик у «Сільпо»</a></p>
-<h2>Відключити</h2>
-<form method="post" action="/silpo/disconnect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt" type="submit">Відключити «Сільпо»</button></form>
+<div class="row" style="margin-top:22px">
+  <a class="btn alt" href="/silpo/cart">Мій кошик у «Сільпо»</a>
+  <form method="post" action="/silpo/disconnect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt" type="submit">Відключити «Сільпо»</button></form>
+</div>
 {% endif %}
 {% endblock %}

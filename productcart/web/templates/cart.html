@@ -11,17 +11,16 @@
   <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="{{ bought }}"><input type="hidden" name="confirm" value="1">
   <h2>У вашому кошику вже {{ had }} {{ plural(had, 'товар', 'товари', 'товарів') }}</h2>
   {% if sample %}<p class="hint">{{ sample|join(', ') }}{% if had > sample|length %} та інші{% endif %}</p>{% endif %}
-  <p>Ми нічого не видалимо — лише додамо {{ wanted }} {{ plural(wanted, 'позицію', 'позиції', 'позицій') }} з меню. Якщо товар уже лежить у кошику, збільшимо його кількість.</p>
+  <p>Додамо ще {{ wanted }} {{ plural(wanted, 'позицію', 'позиції', 'позицій') }}, нічого не видаляючи.</p>
   <div class="row"><button class="btn" type="submit" id="go">Додати до кошика</button><a class="btn alt" href="/menu#list">Скасувати</a></div>
 </form>
 
 {% else %}
 <div class="card stack">
-  {% if res.created %}<div class="note">{{ res.created }}. Тип доставки й час можна змінити в «Сільпо» перед оплатою.</div>{% endif %}
+  {% if res.created %}<div class="note">{{ res.created }}</div>{% endif %}
   <div class="ok">Додано {{ res.placed|length }} {{ plural(res.placed|length, 'товар', 'товари', 'товарів') }}{% if res.had %} до {{ res.had }}, що вже були в кошику{% endif %}.{% if res.total %} Разом у кошику: <b>{{ uah(res.total) }}</b>.{% endif %}</div>
   <ul class="clist">{% for pl in res.placed %}<li><span>{{ pl.name }}</span><b>{% if pl.weighted %}{{ '%.2f'|format(pl.quantity)|replace('.', ',') }} кг{% else %}× {{ pl.quantity|int }}{% endif %}</b></li>{% endfor %}</ul>
-  {% if res.missing %}<div class="note"><b>Не знайшли в магазині кошика:</b> {{ res.missing|map(attribute='name')|join(', ') }}. Додайте їх у «Сільпо» вручну або купіть деінде.</div>{% endif %}
-  <p class="hint">Ціни й наявність остаточно рахує «Сільпо»: у кошику можуть бути інші ціни, якщо він прив'язаний до іншого магазину. Перевірте кошик перед оплатою.</p>
+  {% if res.missing %}<div class="note">Не знайшли: {{ res.missing|map(attribute='name')|join(', ') }}</div>{% endif %}
   <div class="row">
     <a class="btn" href="/silpo/cart">До кошика й оплати</a>
     <a class="btn alt" href="/silpo/cart">Переглянути кошик</a>

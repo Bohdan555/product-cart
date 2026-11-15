@@ -5,7 +5,6 @@
              "DeliveryOffice": "Доставка в офіс", "DeliveryExpress": "Експрес-доставка", "WideAssortDelivery": "Доставка"} %}
 <section class="intro">
   <h1>Мій кошик у «Сільпо»</h1>
-  <p class="lead">Так кошик виглядає зараз у вашому акаунті «Сільпо». Кількість змінюйте кнопками − і +, зайве — «Прибрати».</p>
 </section>
 
 {% if error %}
@@ -13,7 +12,7 @@
 {% elif not cart or not cart.lines %}
 {% if cleared %}<div class="ok" style="margin-bottom:12px">Кошик очищено.</div>{% endif %}
 <div class="card stack">
-  <p><b>Кошик порожній.</b> Зберіть його з меню одним натиском — ми додамо товари з акцій вашого магазину.</p>
+  <p><b>Кошик порожній</b></p>
   <p><a class="btn" href="/menu#list">До меню</a></p>
 </div>
 {% else %}
@@ -31,7 +30,7 @@
     {% if l.image %}<img src="{{ l.image }}" alt="" width="52" height="52" loading="lazy">{% else %}<span class="scimg"></span>{% endif %}
     <div class="scmain"><b>{{ l.name }}</b>
       <small>{% if l.price %}{{ uah(l.price) }}{% if l.weighted %} за кг{% elif l.ratio %} за {{ l.ratio }}{% endif %}{% endif %}{% if l.total %} · разом <b>{{ uah(l.total) }}</b>{% endif %}{% if l.old and l.price and l.old > l.price %} <s>{{ uah(l.old) }}</s>{% endif %}</small>
-      {% if odd %}<small class="oddtxt">Підозріло багато — зменшіть кількість</small>
+      {% if odd %}<small class="oddtxt">Підозріло багато</small>
       {% if l.line_id %}<form method="post" action="/silpo/cart/change" class="fixform"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="line" value="{{ l.line_id }}"><input type="hidden" name="action" value="set"><input type="hidden" name="quantity" value="{{ 0.5 if l.weighted else 1 }}"><button type="submit" class="btn small">Поставити {{ '0,5 кг' if l.weighted else '1 шт' }}</button></form>{% endif %}{% endif %}
       {% if l.line_id %}
       <div class="scctl">
@@ -57,7 +56,7 @@
 <details class="clearbox"><summary>Очистити кошик</summary>
   <form method="post" action="/silpo/cart/clear" class="stack">
     <input type="hidden" name="csrf" value="{{ user.csrf }}">
-    <p>Приберемо з кошика «Сільпо» всі {{ cart.lines|length }} {{ plural(cart.lines|length, 'товар', 'товари', 'товарів') }}, і ті, що ви додали не через нас. Повернути їх не вийде.</p>
+    <p>Прибрати всі {{ cart.lines|length }} {{ plural(cart.lines|length, 'товар', 'товари', 'товарів') }}?</p>
     <div><button type="submit" class="btn danger">Так, очистити кошик</button></div>
   </form>
 </details>

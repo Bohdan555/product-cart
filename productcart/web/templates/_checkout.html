@@ -1,17 +1,17 @@
 {# Оплата: посилання дає «Сільпо». Сайт «Сільпо» відкриває кошик лише тим, хто там увійшов тим самим номером. #}
 <section class="card stack pay">
-  <h2>Оплата в «Сільпо»</h2>
+  <h2>Оплата</h2>
   {% if cart.checkout or cart.checkout_mobile %}
   <div class="row">
     {% if cart.checkout_mobile %}<a class="btn" href="{{ cart.checkout_mobile }}" rel="noopener">Оплатити в застосунку «Сільпо»</a>{% endif %}
     {% if cart.checkout %}<a class="btn{% if cart.checkout_mobile %} alt{% endif %}" href="{{ cart.checkout }}" target="_blank" rel="noopener">Оплатити на сайті «Сільпо»</a>{% endif %}
   </div>
   {% else %}
-  <p>«Сільпо» ще не дало посилання на оплату{% if cart.validations %}: спершу виправте те, що вище жовтим{% endif %}. Кошик уже лежить у вашому акаунті — його видно в застосунку «Сільпо» і на silpo.ua.</p>
+  <p>Кошик уже у вашому «Сільпо» — оформіть його в застосунку або на сайті.</p>
   <div class="row">
     <a class="btn" href="https://silpo.ua/cart" target="_blank" rel="noopener">Відкрити кошик на silpo.ua</a>
   </div>
   {% endif %}
-  <p class="hint"><b>Сайт «Сільпо» просить увійти?</b> Увійдіть тим самим номером телефону, яким підключали «Сільпо» тут, — кошик спільний. У застосунку «Сільпо» він уже є в розділі «Кошик». Остаточні ціни, знижки й доставку рахує «Сільпо» при оформленні.</p>
+  <p class="hint">«Сільпо» просить увійти? Тим самим номером, що й тут.</p>
 </section>
 <p><a class="btn alt" href="/menu#list">До меню</a></p>
