@@ -282,65 +282,94 @@
   var likesIn = document.getElementById('dish_likes'), hatesIn = document.getElementById('dish_dislikes');
   var likes = likesIn.value ? likesIn.value.split(',') : [], hates = hatesIn.value ? hatesIn.value.split(',') : [];
   var queue = DISHES.filter(function (d) { return likes.indexOf(d.id) < 0 && hates.indexOf(d.id) < 0; }), deck = document.getElementById('deck');
+  var busy = false;
   function swipeTxt() {
     var left = queue.length;
-    document.getElementById('swipeTxt').textContent = (likes.length || hates.length ? 'Смачно: ' + likes.length + ' · Не моє: ' + hates.length + '. ' : '') +
-      (left ? 'Ще ' + left + ' ' + (left === 1 ? 'страва' : left < 5 ? 'страви' : 'страв') + '.' : 'Готово! Меню врахує ваш смак.');
+    document.getElementById('swipeTxt').textContent = (likes.length || hates.length ? 'Смачно: ' + likes.length + ' · Не моє: ' + hates.length + (left ? ' · ще ' + left : '') : '');
   }
-  function card(d, top) {
-    var c = document.createElement('div'); c.className = 'dcard' + (top ? ' top' : '');
+  function card(d) {
+    var c = document.createElement('div'); c.className = 'dcard';
     c.innerHTML = (PH.indexOf(d.id) >= 0 ? '<img src="/static/dishes/' + d.id + '.jpg" alt="" draggable="false">' : '<span class="demo-emoji">' + d.emoji + '</span>') +
       '<div class="dcap"><b></b><small>' + d.minutes + ' хв</small></div><span class="stamp yes">СМАЧНО</span><span class="stamp no">НЕ МОЄ</span>';
     c.querySelector('b').textContent = d.title;
     return c;
   }
-  function renderDeck() {
-    deck.innerHTML = '';
-    if (!queue.length) {
-      deck.innerHTML = '<div class="dcard done"><span class="demo-emoji">🍽️</span><div class="dcap"><b>Дякуємо!</b><small>Змінити оцінки — «Почати знову»</small></div></div>';
-      document.getElementById('swNo').hidden = document.getElementById('swYes').hidden = true;
-      var sk = document.getElementById('swSkip'); sk.textContent = 'Почати знову'; sk.onclick = restart;
-    } else {
-      if (queue[1]) deck.appendChild(card(queue[1], false));
-      var top = card(queue[0], true); deck.appendChild(top); drag(top);
+  function doneCard() {
+    var c = document.createElement('div'); c.className = 'dcard top done';
+    c.innerHTML = '<span class="demo-emoji">🍽️</span><div class="dcap"><b>Готово!</b><small>Меню врахує ваш смак</small></div>';
+    return c;
+  }
+  // колода: зверху queue[0] (.top), під нею queue[1]; після рішення верхня відлітає, нижня підіймається
+  function fill() {
+    var cards = deck.querySelectorAll('.dcard:not(.gone)');
+    if (!cards.length) {
+      if (!queue.length) { deck.appendChild(doneCard()); setButtons(false); return; }
+      var t = card(queue[0]); t.classList.add('top'); deck.appendChild(t); drag(t);
+    }
+    if (queue[1] && deck.querySelectorAll('.dcard:not(.gone)').length < 2) {
+      var u = card(queue[1]); deck.insertBefore(u, deck.firstChild);
     }
     swipeTxt();
   }
-  function decide(kind) {
-    var d = queue[0]; if (!d) return;
-    var top = deck.querySelector('.dcard.top');
+  function setButtons(on) {
+    document.getElementById('swNo').hidden = document.getElementById('swYes').hidden = !on;
+    var sk = document.getElementById('swSkip'); sk.textContent = on ? 'Пропустити' : 'Почати знову';
+    sk.onclick = on ? function () { decide('skip'); } : restart;
+  }
+  function decide(kind, fromX) {
+    var top = deck.querySelector('.dcard.top:not(.gone)'), d = queue[0];
+    if (!top || !d || busy) return;
+    busy = true;
     if (kind === 'yes') likes.push(d.id); else if (kind === 'no') hates.push(d.id);
     likesIn.value = likes.join(','); hatesIn.value = hates.join(',');
-    if (top) { top.classList.add('fly-' + kind); }
     queue.shift();
-    setTimeout(renderDeck, top ? 220 : 0);
+    top.classList.add('gone', 'lean-' + (kind === 'skip' ? 'x' : kind));
+    var x = kind === 'yes' ? 1 : kind === 'no' ? -1 : 0;
+    top.style.transition = 'transform .28s ease-out, opacity .28s ease-out';
+    top.style.transform = x ? 'translateX(' + (x * (deck.offsetWidth + 120)) + 'px) rotate(' + (x * 18) + 'deg)' : 'translateY(-40px) scale(.96)';
+    top.style.opacity = '0';
+    var next = deck.querySelector('.dcard:not(.gone):not(.top)');
+    if (next) { next.classList.add('top'); drag(next); }
+    setTimeout(function () { top.remove(); busy = false; fill(); }, 280);
+    swipeTxt();
     form.dispatchEvent(new Event('change'));
   }
   function restart() {
     likes = []; hates = []; likesIn.value = hatesIn.value = ''; queue = DISHES.slice();
-    document.getElementById('swNo').hidden = document.getElementById('swYes').hidden = false;
-    var sk = document.getElementById('swSkip'); sk.textContent = 'Пропустити'; sk.onclick = function () { decide('skip'); };
-    renderDeck(); form.dispatchEvent(new Event('change'));
+    deck.innerHTML = ''; setButtons(true); fill(); form.dispatchEvent(new Event('change'));
   }
   function drag(el) {
-    var x0 = null, dx = 0;
-    el.addEventListener('pointerdown', function (e) { x0 = e.clientX; el.setPointerCapture(e.pointerId); el.style.transition = 'none'; });
+    if (el._drag) return; el._drag = true;
+    var x0 = null, y0 = 0, dx = 0, locked = null, trail = [];
+    el.addEventListener('pointerdown', function (e) {
+      if (!el.classList.contains('top') || el.classList.contains('gone')) return;
+      x0 = e.clientX; y0 = e.clientY; dx = 0; locked = null; trail = [[Date.now(), 0]];
+      el.style.transition = 'none';
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    });
     el.addEventListener('pointermove', function (e) {
-      if (x0 === null) return; dx = e.clientX - x0;
-      el.style.transform = 'translateX(' + dx + 'px) rotate(' + dx / 18 + 'deg)';
-      el.classList.toggle('lean-yes', dx > 40); el.classList.toggle('lean-no', dx < -40);
+      if (x0 === null) return;
+      var mx = e.clientX - x0, my = e.clientY - y0;
+      if (locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) locked = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+      if (locked !== 'x') return;
+      e.preventDefault(); dx = mx; trail.push([Date.now(), mx]); if (trail.length > 6) trail.shift();
+      el.style.transform = 'translateX(' + dx + 'px) rotate(' + dx / 16 + 'deg)';
+      el.classList.toggle('lean-yes', dx > 30); el.classList.toggle('lean-no', dx < -30);
     });
     function end() {
-      if (x0 === null) return; x0 = null; el.style.transition = '';
-      if (dx > 90) decide('yes'); else if (dx < -90) decide('no'); else { el.style.transform = ''; el.classList.remove('lean-yes', 'lean-no'); }
-      dx = 0;
+      if (x0 === null) return;
+      // швидкість за останні ~100 мс руху: швидкий короткий змах теж рахується
+      var now = Date.now(), from = trail.filter(function (p) { return now - p[0] <= 120; })[0] || trail[0];
+      var speed = Math.abs(dx - from[1]) / Math.max(16, now - from[0]);
+      x0 = null;
+      if (locked === 'x' && (Math.abs(dx) > 80 || (Math.abs(dx) > 25 && speed > 0.35))) { decide(dx > 0 ? 'yes' : 'no'); return; }
+      el.style.transition = 'transform .2s ease'; el.style.transform = ''; el.classList.remove('lean-yes', 'lean-no');
     }
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   }
   document.getElementById('swYes').onclick = function () { decide('yes'); };
   document.getElementById('swNo').onclick = function () { decide('no'); };
-  document.getElementById('swSkip').onclick = function () { decide('skip'); };
-  renderDeck();
+  setButtons(queue.length > 0); fill();
 
   // ---------- «Заповнити за мене» ----------
   var fillBtn = document.getElementById('fillBtn');

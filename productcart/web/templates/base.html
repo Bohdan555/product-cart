@@ -4,10 +4,23 @@
 <link rel="preload" href="/static/fonts/golos-text-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/unbounded-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={{ css_v }}">
+<meta name="turbo-cache-control" content="no-preview">
 <script src="/static/vendor/turbo-8.0.12.js" defer></script>
 <script>
 // Turbo: переходи без перезавантаження + попереднє завантаження при наведенні/дотику.
 // Не завантажуємо наперед те, що ходить у «Сільпо» або має побічні дії.
+// Нижня панель постійна між переходами — підсвічуємо поточну вкладку самі
+function markTab() {
+  var path = location.pathname;
+  document.querySelectorAll('.tabs a').forEach(function (a) {
+    var h = a.getAttribute('href');
+    var on = h === '/silpo/cart' ? path.indexOf('/silpo') === 0 : h === '/login' ? (path === '/login' || path === '/register') : path === h;
+    a.classList.toggle('on', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+}
+document.addEventListener('turbo:load', markTab);
+document.addEventListener('turbo:render', markTab);
 document.addEventListener('turbo:before-prefetch', function (e) {
   var href = (e.target && e.target.getAttribute('href')) || '';
   if (/^\/(silpo|auth|go|logout)|refresh=1/.test(href)) e.preventDefault();
@@ -37,7 +50,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
 <footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
 </div>
 {% set path = request.url.path %}
-<div class="tabs"><nav aria-label="Розділи">
+<div class="tabs" id="tabs-{{ 'u' if user else 'g' }}" data-turbo-permanent><nav aria-label="Розділи">
   <a href="/list" {% if path == '/list' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Акції</a>
   <a href="/menu" {% if path == '/menu' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="13" r="7"/><circle cx="12" cy="13" r="3.5"/><path d="M12 3v2" stroke-linecap="round"/></svg>Меню</a>
   <a href="/silpo/cart" {% if path.startswith('/silpo') %}class="on" aria-current="page"{% endif %}><span class="tico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg><b class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b></span>Кошик</a>

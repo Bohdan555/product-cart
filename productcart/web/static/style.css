@@ -504,3 +504,10 @@ nav.top + .hcart,.logo + .hcart{margin-left:6px}
 .padd{flex:1;display:block;text-align:center;border:0;background:var(--accent);color:var(--accent-ink);font:700 14px/1 var(--body);border-radius:10px;padding:11px 8px;cursor:pointer;text-decoration:none;min-height:40px}
 .padd.done{background:var(--soft);color:var(--accent)}
 .padd:disabled{opacity:.85;cursor:default}
+/* свайп: верхня картка не віддає жест прокрутці сторінки; картинку не можна тягнути як файл */
+.dcard.top{touch-action:pan-y}
+.dcard img{-webkit-user-drag:none;user-select:none;-webkit-touch-callout:none}
+.dcard{transition:transform .25s ease,opacity .25s ease}
+.dcard:not(.top){transform:scale(.94) translateY(10px);opacity:.7}
+.dcard.top{transform:none;opacity:1;z-index:2}
+.lean-x .stamp{opacity:0}

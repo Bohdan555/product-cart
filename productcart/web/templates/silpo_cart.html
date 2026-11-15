@@ -25,18 +25,20 @@
 {% else %}
 <section class="msum scsum" aria-label="Підсумок кошика">
   <div><span class="lbl">У кошику {{ cart.lines|length }} {{ plural(cart.lines|length, 'товар', 'товари', 'товарів') }}</span>
-    <div class="big">{% if cart.total %}{{ cart.total|round|int }}<small>₴</small>{% else %}—{% endif %}</div>
+    <div class="big">{% if cart.products_total is not none %}{{ cart.products_total|round|int }}<small>₴</small>{% elif cart.total %}{{ cart.total|round|int }}<small>₴</small>{% else %}—{% endif %}</div>
+    {% if cart.delivery %}<div class="sub">+ доставка {{ uah(cart.delivery) }} · разом {{ uah(cart.total) }}</div>{% endif %}
     <div class="sub">{{ DT.get(cart.delivery_type, cart.delivery_type or '') }}{% if cart.slot_start %} · {{ cart.slot_start[8:10] }}.{{ cart.slot_start[5:7] }}, {{ cart.slot_start[11:16] }}–{{ (cart.slot_end or '')[11:16] }} (UTC){% endif %}</div></div>
 </section>
 {% if cleared %}<div class="ok" style="margin-bottom:12px">Кошик очищено.</div>{% endif %}
 {% if notice %}<div class="err" style="margin-bottom:12px">{{ notice }}</div>{% endif %}
 {% for v in cart.validations %}<div class="note warnbox">{{ v }}</div>{% endfor %}
 <div class="card sclist">
-  {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set stp = 0.1 if l.weighted else 1 %}
-  <div class="scrow{% if odd %} odd{% endif %}{% if changed and changed == l.line_id %} fresh{% endif %}" id="l-{{ l.line_id }}">
+  {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set nostock = l.stock is not none and l.stock < l.quantity %}{% set stp = 0.1 if l.weighted else 1 %}
+  <div class="scrow{% if odd or nostock %} odd{% endif %}{% if changed and changed == l.line_id %} fresh{% endif %}" id="l-{{ l.line_id }}">
     {% if l.image %}<img src="{{ l.image }}" alt="" width="52" height="52" loading="lazy">{% else %}<span class="scimg"></span>{% endif %}
     <div class="scmain"><b>{{ l.name }}</b>
       <small>{% if l.price %}{{ uah(l.price) }}{% if l.weighted %} за кг{% elif l.ratio %} за {{ l.ratio }}{% endif %}{% endif %}{% if l.total %} · разом <b>{{ uah(l.total) }}</b>{% endif %}{% if l.old and l.price and l.old > l.price %} <s>{{ uah(l.old) }}</s>{% endif %}</small>
+      {% if nostock %}<small class="oddtxt">{% if l.stock and l.stock > 0 %}В наявності лише {{ l.stock|round(1)|string|replace('.0','') }}{% else %}Немає в наявності{% endif %}</small>{% endif %}
       {% if odd %}<small class="oddtxt">Підозріло багато</small>
       {% if l.line_id %}<form method="post" action="/silpo/cart/change" class="fixform"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="line" value="{{ l.line_id }}"><input type="hidden" name="action" value="set"><input type="hidden" name="quantity" value="{{ 0.5 if l.weighted else 1 }}"><button type="submit" class="btn small">Поставити {{ '0,5 кг' if l.weighted else '1 шт' }}</button></form>{% endif %}{% endif %}
       {% if l.line_id %}
@@ -59,6 +61,8 @@
   </div>
   {% endfor %}
 </div>
+{% set bad = [] %}{% for l in cart.lines %}{% if l.stock is not none and l.stock < l.quantity %}{% set _ = bad.append(l.name) %}{% endif %}{% endfor %}
+{% if bad %}<div class="note warnbox">Немає в наявності: {{ bad|join(', ') }}. Приберіть або зменшіть перед оплатою.</div>{% endif %}
 {% include "_checkout.html" %}
 <details class="clearbox"><summary>Очистити кошик</summary>
   <form method="post" action="/silpo/cart/clear" class="stack">

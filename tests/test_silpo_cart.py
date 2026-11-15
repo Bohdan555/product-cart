@@ -24,6 +24,9 @@ class CartMCP:
         if name == "silpo_find_products_batch":
             assert args["branchId"] == "b1" and args["deliveryType"] == "SelfPickup"
             catalog = {
+                "Яйця C1 10 шт": [{"id": "egg10", "name": "Яйця C1 10 шт", "price": 52.9, "stock": 5}],
+                "Філе куряче": [{"id": "fillet", "name": "Філе куряче", "price": 189, "weighted": True, "stock": 4}],
+                "Кава": [{"id": "p2", "name": "Кава зернова", "price": 449, "stock": 3}],
                 "Морква": [{"id": "carrot", "name": "Морква", "price": 25, "weighted": True, "addToBasketStep": 0.1, "stock": 9}],
                 "Сметана": [{"id": "sm-big", "name": "Сметана 15% 400г", "price": 60, "displayRatio": "400г", "stock": 3},
                             {"id": "sm-small", "name": "Сметана 15% 200г", "price": 40, "displayRatio": "200г", "stock": 0}],
@@ -157,3 +160,31 @@ def test_set_quantity_and_remove():
     assert "eggs" not in mcp.items and mcp.items["meat"] == 0.5
     with pytest.raises(sc.CartError):
         run(sc.set_quantity(mcp, cart, "line-nope", 1))
+
+
+class OutOfStockMCP(CartMCP):
+    async def __call__(self, name, args):
+        if name == "silpo_find_products_batch":
+            self.calls.append((name, args))
+            cat = {"Сметана Галичина 15% 350г": [{"id": "sm-promo", "name": "Сметана Галичина 15% 350г", "price": 49, "stock": 0}],
+                   "Сметана": [{"id": "sm-other", "name": "Сметана Простоквашино 20% 350г", "price": 62, "displayRatio": "350г", "stock": 7}],
+                   "Тофу Х 300г": []}
+            return {"queries": [{"query": q, "products": cat.get(q, [])} for q in args["products"]]}
+        return await super().__call__(name, args)
+
+
+def test_out_of_stock_promo_is_replaced_or_reported():
+    mcp = OutOfStockMCP()
+    wants = [sc.Want("sour_cream", "Сметана Галичина 15% 350г", 250, "g", product_id="sm-promo", generic="Сметана"),
+             sc.Want("tofu", "Тофу Х 300г", 200, "g", product_id="tofu-1")]
+    res = run(sc.build(mcp, wants))
+    assert "sm-promo" not in mcp.items and mcp.items["sm-other"] == 1          # нема в наявності → замінили
+    assert res["replaced"] == [("Сметана Галичина 15% 350г", "Сметана Простоквашино 20% 350г")]
+    assert [w.key for w in res["missing"]] == ["tofu"]                        # без заміни → «немає в наявності»
+
+
+def test_cart_totals_split_products_and_delivery():
+    st = sc.parse_cart({"cart": {"id": "c1", "shipments": [{"products": [
+        {"id": "l1", "productId": "a", "name": "A", "quantity": 2, "price": 10, "total": 20}]}],
+        "calculation": {"total": 119, "totalAfterDiscounts": 119, "productsTotal": 20, "delivery": {"total": 99}}}})
+    assert (st.products_total, st.delivery, st.total) == (20, 99, 119)

@@ -18,9 +18,10 @@
 {% else %}
 <div class="card stack">
   {% if res.created %}<div class="note">{{ res.created }}</div>{% endif %}
-  <div class="ok">Додано {{ res.placed|length }} {{ plural(res.placed|length, 'товар', 'товари', 'товарів') }}{% if res.had %} до {{ res.had }}, що вже були в кошику{% endif %}.{% if res.total %} Разом у кошику: <b>{{ uah(res.total) }}</b>.{% endif %}</div>
+  <div class="ok">Додано {{ res.placed|length }} {{ plural(res.placed|length, 'товар', 'товари', 'товарів') }}.{% if res.products_total is not none %} Товари в кошику: <b>{{ uah(res.products_total) }}</b>{% if res.delivery %} + доставка {{ uah(res.delivery) }}{% endif %}.{% elif res.total %} Разом: <b>{{ uah(res.total) }}</b>.{% endif %}</div>
+  {% if res.replaced %}<div class="note">Замінили, бо немає в наявності: {% for a, b in res.replaced %}{{ a }} → <b>{{ b }}</b>{% if not loop.last %}; {% endif %}{% endfor %}</div>{% endif %}
   <ul class="clist">{% for pl in res.placed %}<li><span>{{ pl.name }}</span><b>{% if pl.weighted %}{{ '%.2f'|format(pl.quantity)|replace('.', ',') }} кг{% else %}× {{ pl.quantity|int }}{% endif %}</b></li>{% endfor %}</ul>
-  {% if res.missing %}<div class="note">Не знайшли: {{ res.missing|map(attribute='name')|join(', ') }}</div>{% endif %}
+  {% if res.missing %}<div class="note warnbox">Немає в наявності: {{ res.missing|map(attribute='name')|join(', ') }}</div>{% endif %}
   <div class="row">
     <a class="btn" href="/silpo/cart">До кошика й оплати</a>
     <a class="btn alt" href="/silpo/cart">Переглянути кошик</a>

@@ -31,6 +31,7 @@ class Want:
     product_id: str | None = None
     packs: int = 1            # для акційного штучного товару
     weighted: bool = False
+    generic: str | None = None  # загальна назва («Морква») — шукаємо заміну, якщо акційного товару немає в наявності
 
 
 @dataclass
@@ -55,7 +56,9 @@ class CartState:
     lines: list[dict] = field(default_factory=list)            # для показу: name, quantity, weighted, price, total…
     validations: list[str] = field(default_factory=list)
     names: dict[str, str] = field(default_factory=dict)
-    total: float | None = None
+    total: float | None = None            # разом із доставкою
+    products_total: float | None = None   # лише товари
+    delivery: float | None = None
     checkout: str | None = None
     checkout_mobile: str | None = None
     raw: dict = field(default_factory=dict)
@@ -131,7 +134,12 @@ def parse_cart(data: Any) -> CartState:
                                  "total": _num(_first(p, "total", "subTotal")), "image": p.get("image"),
                                  "slug": p.get("slug"), "stock": _num(p.get("stock"))})
     calc = _first(cart, "calculation") or {}
-    st.total = _num(_first(calc, "total", "totalAfterDiscounts"))
+    st.total = _num(_first(calc, "totalAfterDiscounts", "total"))
+    st.products_total = _num(_first(calc, "productsTotal"))
+    deliv = _first(calc, "delivery")
+    st.delivery = _num(deliv.get("total")) if isinstance(deliv, dict) else _num(deliv)
+    if st.products_total is None and st.lines:   # «Сільпо» не дало суми товарів — рахуємо самі з рядків
+        st.products_total = round(sum(l["total"] or (l["price"] or 0) * l["quantity"] for l in st.lines), 2)
     for v in _first(calc, "validations") or []:
         msg, c = v.get("message") or "", v.get("context") or {}
         if v.get("level") == "error":
@@ -214,21 +222,20 @@ async def current_cart(call: Call) -> CartState | None:
     return cart
 
 
-async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[tuple[Want, str, float, str, bool]], list[Want]]:
-    """→ ([(want, productId, quantity, назва, ваговий)], не знайдено)."""
-    found: list[tuple[Want, str, float, str, bool]] = []
-    missing: list[Want] = []
-    search = [w for w in wants if not w.product_id]
-    for w in wants:
-        if w.product_id:
-            found.append((w, w.product_id, quantity_for(w), w.name, w.weighted))
-    ctx = {k: v for k, v in {"branchId": cart.branch_id, "deliveryType": cart.delivery_type,
-                             "timeslotStart": cart.slot_start, "timeslotEnd": cart.slot_end}.items() if v}
+def _stock_ok(p: dict, qty: float) -> bool:
+    if p.get("available") is False:
+        return False
+    stock = _num(p.get("stock"))
+    return stock is None or stock >= qty
+
+
+async def _search(call: Call, ctx: dict, names: list[str]) -> dict[str, list[dict]]:
+    """Пакетний пошук у магазині кошика: назва запиту (lower) → знайдені товари."""
     by_query: dict[str, list[dict]] = {}
-    for i in range(0, len(search), SEARCH_BATCH):
-        batch = search[i:i + SEARCH_BATCH]
+    names = list(dict.fromkeys(n for n in names if n))
+    for i in range(0, len(names), SEARCH_BATCH):
         try:
-            res = await call("silpo_find_products_batch", dict(ctx, products=[w.name for w in batch])) or {}
+            res = await call("silpo_find_products_batch", dict(ctx, products=names[i:i + SEARCH_BATCH])) or {}
         except Exception as e:
             log.warning("Сільпо: find_products_batch: %s", str(e)[:300])
             continue
@@ -238,12 +245,45 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[
             name = _first(q, "query", "name", "requestedName")
             if name:
                 by_query.setdefault(str(name).lower(), _first(q, "products", "items") or [])
+    return by_query
+
+
+async def resolve(call: Call, cart: CartState, wants: list[Want]) -> dict:
+    """Перевіряє наявність у магазині кошика й підбирає товари.
+    → {"found": [(want, productId, quantity, назва, ваговий)], "missing": [Want], "replaced": [(старе, нове)]}"""
+    ctx = {k: v for k, v in {"branchId": cart.branch_id, "deliveryType": cart.delivery_type,
+                             "timeslotStart": cart.slot_start, "timeslotEnd": cart.slot_end}.items() if v}
+    found, missing, replaced = [], [], []
+    swap_from: dict[str, str] = {}   # ключ рядка → назва акційного товару, якого не виявилось
+    # 1) акційні товари: чи є саме цей товар у магазині кошика і чи вистачає залишку
+    by_id_query = await _search(call, ctx, [w.name for w in wants if w.product_id])
+    search: list[Want] = []
+    for w in wants:
+        if not w.product_id:
+            search.append(w)
+            continue
+        qty = quantity_for(w)
+        same = next((p for p in by_id_query.get(w.name.lower(), []) if str(_first(p, "id", "productId")) == w.product_id), None)
+        if same is not None and _stock_ok(same, qty):
+            found.append((w, w.product_id, qty, w.name, w.weighted))
+        elif w.generic:
+            log.info("Сільпо: «%s» немає в наявності — шукаємо заміну «%s»", w.name, w.generic)
+            swap_from[w.key] = w.name
+            search.append(Want(w.key, w.generic, w.need, w.unit))
+        else:
+            missing.append(w)
+    # 2) решта — пошук за назвою: найдешевше з достатнім залишком
+    by_query = await _search(call, ctx, [w.name for w in search])
     for w in search:
-        p = pick_product(by_query.get(w.name.lower(), []))
+        cands = [p for p in by_query.get(w.name.lower(), []) if _stock_ok(p, quantity_for(w, p))]
+        p = pick_product(cands)
         if p is None:
             missing.append(w)
             continue
-        found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), p.get("name") or w.name, bool(p.get("weighted"))))
+        name = p.get("name") or w.name
+        if w.key in swap_from:
+            replaced.append((swap_from[w.key], name))
+        found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), name, bool(p.get("weighted"))))
     ok = []
     for item in found:
         if sane(item[2], item[4]):
@@ -251,7 +291,7 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[
         else:
             log.warning("Сільпо: підозріла кількість %s для «%s» (%s %s) — не кладемо", item[2], item[3], item[0].need, item[0].unit)
             missing.append(item[0])
-    return ok, missing
+    return {"found": ok, "missing": missing, "replaced": replaced}
 
 
 _schemas: dict[str, dict] = {}
@@ -328,7 +368,8 @@ def wants_from_menu(lines, bought: set[str] = frozenset()) -> list[Want]:
             continue
         o = l.source.offer
         if o is not None and o.chain == "silpo" and o.product_id:
-            out.append(Want(l.key, o.name, l.need, l.unit, product_id=o.product_id, packs=l.packs, weighted=o.weighted))
+            out.append(Want(l.key, o.name, l.need, l.unit, product_id=o.product_id, packs=l.packs, weighted=o.weighted,
+                            generic=l.name))
         else:
             out.append(Want(l.key, l.name, l.need, l.unit))
     return out
@@ -425,11 +466,13 @@ async def build(call: Call, wants: list[Want], branch: dict | None = None) -> di
     if cart is None:
         cart, created = await create_cart(call, branch)
     before = cart.count
-    found, missing = await resolve(call, cart, wants)
+    r = await resolve(call, cart, wants)
+    found, missing = r["found"], r["missing"]
     placed = await add_to_cart(call, cart, found)
     after = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
     return {"placed": placed, "missing": missing, "had": before, "total": after.total,
-            "checkout": after.checkout, "count": after.count, "created": created}
+            "checkout": after.checkout, "count": after.count, "created": created, "replaced": r["replaced"],
+            "products_total": after.products_total, "delivery": after.delivery}
 
 
 # ---------- зміна кошика зі сторінки «Мій кошик» ----------

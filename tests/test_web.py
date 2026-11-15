@@ -526,7 +526,7 @@ def test_add_deal_to_silpo_cart(tmp_path):
 
     class Combined(FakeMCP):
         async def __call__(self, name, args):
-            if "cart" in name:
+            if "cart" in name or name == "silpo_find_products_batch":
                 return await shared(name, args)
             return await super().__call__(name, args)
 
