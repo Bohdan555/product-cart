@@ -106,7 +106,12 @@ async def branch_context(call: Call, branch_id: str) -> dict:
         if slot and slot.get("start") and slot.get("end"):
             return {"branchId": branch_id, "deliveryType": slot.get("deliveryType") or "SelfPickup",
                     "timeslotStart": slot["start"], "timeslotEnd": slot["end"]}
-    return {"branchId": branch_id}
+        log.warning("Сільпо: немає слота для магазину %s, відповідь: %s", branch_id, str(data)[:400])
+    # Вільних слотів немає (вечір, усе розібрано), а акції без типу доставки й вікна «Сільпо» не віддає.
+    # Акції від слота не залежать, тож беремо умовне вікно самовивозу на завтра.
+    start = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+    return {"branchId": branch_id, "deliveryType": "SelfPickup",
+            "timeslotStart": start.isoformat(), "timeslotEnd": (start + timedelta(hours=2)).isoformat()}
 
 
 # ---------- товари ----------
@@ -168,12 +173,10 @@ def _invalid_args(e: Exception) -> bool:
 
 
 def _ctx_variants(ctx: dict) -> list[dict]:
-    """Контекст зі слота → той самий із самовивозом → лише магазин. «Сільпо» іноді не приймає тип доставки зі слота."""
+    """Контекст зі слота → той самий із самовивозом. «Сільпо» вимагає тип доставки й вікно, але може не прийняти тип зі слота."""
     out = [ctx]
     if ctx.get("deliveryType") not in (None, "SelfPickup"):
         out.append(dict(ctx, deliveryType="SelfPickup"))
-    if len(ctx) > 1:
-        out.append({"branchId": ctx["branchId"]})
     return out
 
 

@@ -117,3 +117,16 @@ def test_fetch_offers_falls_back_when_delivery_type_rejected():
     assert {o.product_id for o in offers} == {"p1", "p2", "p3", "p4"}
     ok = [a for n, a in call.calls if n == "silpo_get_products" and a.get("deliveryType") != "DeliveryHome"]
     assert ok and all(a["deliveryType"] == "SelfPickup" for a in ok)
+
+
+def test_branch_context_without_slots_still_has_window():
+    class NoSlots(FakeMCP):
+        async def __call__(self, name, args):
+            if name == "silpo_get_time_slots":
+                return {"slots": []}
+            if name == "silpo_get_promotions":
+                assert args["deliveryType"] and args["timeslotStart"] and args["timeslotEnd"]
+            return await super().__call__(name, args)
+
+    offers = run(silpo.fetch_offers(NoSlots(), {"id": "b1", "title": "Франка"}))
+    assert len(offers) == 4
