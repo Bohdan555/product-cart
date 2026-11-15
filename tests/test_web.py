@@ -72,7 +72,7 @@ def test_register_validation_and_login(client):
 
 
 def test_pages_require_login(client):
-    for path in ("/list", "/menu", "/profile", "/silpo"):
+    for path in ("/list", "/profile", "/silpo"):
         assert client.get(path).headers["location"] == "/login"
 
 
@@ -203,3 +203,30 @@ def test_menu_page_and_settings(client):
     client.post("/profile", data={"csrf": token, "household": "2", "min_discount": "10"})
     assert re.findall(r'<h3 class="dt">([^<]+)</h3>', client.get("/menu").text) == after
     assert client.get("/photos").status_code == 200
+
+
+def test_landing_and_guest_menu(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "Скласти меню" in r.text and r.text.count('class="l-plan"') == 3
+    assert "прототип" not in r.text
+    # гість відкриває меню без реєстрації, на демо-цінах
+    r = client.get("/menu")
+    assert r.status_code == 200 and "Це приклад на демо-цінах" in r.text and "pc_guest" in client.cookies
+    assert client.post("/menu/settings", data={"people": "4"}).headers["location"] == "/menu"
+    assert client.post("/menu/settings", data={"dinners": "3"}).status_code == 303
+    assert client.get("/menu").text.count('<article class="day') == 3
+    first = re.search(r'id="rec0".*?<h3[^>]*>([^<]+)<', client.get("/menu").text, re.S)
+    assert client.post("/menu/swap", data={"i": "0"}).headers["location"].startswith("/menu?swapped=0")
+    after = re.search(r'id="rec0".*?<h3[^>]*>([^<]+)<', client.get("/menu").text, re.S)
+    if first and after:
+        assert first.group(1) != after.group(1)
+    # підроблена cookie гостя не ламає сторінку
+    client.cookies.set("pc_guest", "garbage")
+    assert client.get("/menu").status_code == 200
+    # після реєстрації налаштування гостя переходять у профіль
+    client.cookies.clear()
+    client.post("/menu/settings", data={"people": "5"})
+    register(client)
+    assert "pc_guest" not in client.cookies
+    assert "Це приклад на демо-цінах" not in client.get("/menu").text
+    assert 'value="5"' in client.get("/profile").text or "<b>5</b>" in client.get("/menu").text

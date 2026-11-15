@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="/static/style.css">
-</head><body{% if user %} class="authed"{% endif %}><div class="wrap">
+</head><body{% if user %} class="authed"{% endif %}><div class="wrap{% block wrapcls %}{% endblock %}">
 <header class="top">
   <a class="logo" href="/"><i>%</i>Кошик з акцій</a>
   {% if user %}
@@ -21,7 +21,7 @@
   {% endif %}
 </header>
 {% block body %}{% endblock %}
-<footer>Кошик з акцій — прототип. <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
+<footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
 </div>
 {% if user %}{% set path = request.url.path %}
 <div class="tabs"><nav aria-label="Розділи">

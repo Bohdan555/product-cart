@@ -1,14 +1,107 @@
 {% extends "base.html" %}
+{% block title %}Кошик з акцій — вечері на тиждень з акцій «Сільпо»{% endblock %}
+{% block wrapcls %} wide{% endblock %}
 {% block body %}
-<section class="hero">
-  <h1>Список покупок з акцій — під вас</h1>
-  <p class="lead">Розкажіть, що купуєте і чого не їсте. Щотижня ми збираємо акції магазину поруч і складаємо готовий список з поясненням, чому саме ці товари.</p>
-  <div class="row"><a class="btn" href="/register">Створити профіль</a><a class="btn alt" href="/login">Увійти</a></div>
+<section class="l-hero">
+  <div>
+    <span class="l-eyebrow"><b></b>Акції «Сільпо» на цей тиждень</span>
+    <h1 class="l-h1">Вечері на тиждень <em>з акцій</em></h1>
+    <p class="l-sub">Складаємо меню з того, що зараз продається зі знижкою, і готовий список покупок до нього. Видно, скільки коштує порція і скільки ви зекономите.</p>
+    <div class="l-cta">
+      <a class="l-btn" href="/menu">Скласти меню
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <span class="l-note">Без реєстрації · безкоштовно</span>
+    </div>
+    <div class="l-proof">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>{{ recipes }} перевірених рецептів</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Залишки з понеділка йдуть у вівторок</span>
+    </div>
+  </div>
+
+  <div class="l-demo" aria-label="Приклад меню">
+    <div class="l-demo-h">
+      <div class="l-seg" role="group" aria-label="Скільки вас"><span>Скільки вас</span>
+        {% for n, m in previews %}<button type="button" data-p="{{ n }}" aria-pressed="{{ 'true' if n == 2 else 'false' }}">{{ n }}</button>{% endfor %}</div>
+      <small>Приклад на демо-цінах</small>
+    </div>
+    {% for n, m in previews %}
+    <div class="l-plan" data-for="{{ n }}" {% if n != 2 %}hidden{% endif %}>
+      <div class="l-sum">
+        <div><div class="lbl">Порція виходить</div><div class="big">≈ {{ m.per_portion|round|int }}<small>₴</small></div></div>
+        {% if m.saving >= 1 %}<div class="l-save"><span>Економія</span><b>−{{ uah(m.saving|round) }}</b></div>{% endif %}
+        <div class="line">{{ m.dishes|length }} {{ plural(m.dishes|length, 'вечеря', 'вечері', 'вечерь') }} на {{ n }} · до каси ≈ <b>{{ uah(m.total|round) }}</b></div>
+      </div>
+      <div class="l-days">
+      {% for d in m.dishes[:3] %}
+        <a class="l-day" href="/menu">
+          {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" width="76" height="76">{% else %}<span class="l-emoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+          <div class="l-dbody"><div class="l-dmeta"><b>{{ days[loop.index0] }}</b>{{ d.minutes }} хв · {{ uah(d.per_portion|round) }}/порція</div>
+            <div class="l-dt">{{ d.title }}</div>
+            {% if d.saving >= 1 %}<span class="l-dtag">−{{ uah(d.saving|round) }} завдяки акціям</span>{% endif %}</div>
+        </a>
+      {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    <div class="l-demo-f"><span>Страву можна замінити в меню</span><a href="/menu">Усе меню →</a></div>
+  </div>
 </section>
-<div class="steps">
-  <div><b>1. Профіль</b>Сім'я, обмеження в харчуванні, що купуєте щотижня, улюблені бренди, бюджет.</div>
-  <div><b>2. Магазин</b>Підключіть свій акаунт «Сільпо» і оберіть магазин поруч. Вхід відбувається на сторінці «Сільпо».</div>
-  <div><b>3. Список</b>Лише ті акції, що вам підходять, згруповані по магазинах, з економією.</div>
+
+<section class="l-blk">
+  <h2 class="l-h2">Що ви отримаєте щотижня</h2>
+  <p class="l-lead">Не просто перелік акцій. Готовий план вечерь, під який уже зібрано кошик.</p>
+  <div class="l-gets">
+    <article class="l-get">
+      <div class="l-viz"><div class="l-pics"><img src="/static/dishes/plov.jpg" alt="" loading="lazy"><img src="/static/dishes/syrnyky.jpg" alt="" loading="lazy"><img src="/static/dishes/bean-soup.jpg" alt="" loading="lazy"></div></div>
+      <h3>Меню на 3, 5 або 7 вечорів</h3>
+      <p>Страви з того, що зараз дешевше. Не подобається страва — замініть одним дотиком, решта меню лишиться.</p>
+    </article>
+    <article class="l-get">
+      <div class="l-viz">
+        <div class="l-chk on"><i></i><span>Філе куряче, 1 кг</span><em><s>189</s>139 ₴</em></div>
+        <div class="l-chk"><i></i><span>Гречка, 1 кг</span><em><s>62</s>48 ₴</em></div>
+        <div class="l-chk"><i></i><span>Печериці, 500 г</span><em>≈ 65 ₴</em></div>
+      </div>
+      <h3>Список покупок до копійки</h3>
+      <p>Що брати в акції, що за звичайною ціною, а що, мабуть, уже є вдома. Позначайте куплене прямо в магазині.</p>
+    </article>
+    <article class="l-get">
+      <div class="l-viz l-flow">
+        <b>ПН</b><span>Борщ — береться ½ капусти</span>
+        <span class="arrow">↓ решта не пропаде</span>
+        <b>ВТ</b><span>Тушкована капуста з печерицями</span>
+      </div>
+      <h3>Нічого не викидаєте</h3>
+      <p>Меню складене так, щоб відкрита пачка чи пів качана пішли в наступну страву.</p>
+    </article>
+  </div>
+</section>
+
+<section class="l-blk">
+  <h2 class="l-h2">Як це працює</h2>
+  <p class="l-lead">Перше меню побачите за хвилину. Реєстрація потрібна лише, щоб його зберегти.</p>
+  <ol class="l-how">
+    <li><div><h3>Скажіть, скільки вас</h3><p>І на скільки вечорів планувати. Можна вказати, чого не їсте.</p></div></li>
+    <li><div><h3>Подивіться меню</h3><p>Страви з акцій цього тижня, ціна порції та список покупок.</p></div></li>
+    <li><div><h3>Підключіть свій «Сільпо»</h3><p>Щоб ціни й наявність були саме вашого магазину. Це за бажанням.</p></div></li>
+  </ol>
+</section>
+
+<div class="l-trust">
+  <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><p><b>Акції з офіційного джерела</b><span>Дані «Сільпо» через їхній канал для застосунків.</span></p></div>
+  <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 7h8M8 11h2M14 11h2M8 15h2M14 15h2"/></svg><p><b>Ціни рахує програма</b><span>Без вгадувань: беремо ціни акцій і звичайні ціни.</span></p></div>
+  <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><p><b>Ваші дані не продаємо</b><span>І не передаємо третім особам.</span></p></div>
 </div>
-<p class="note">Зараз працює з «Сільпо» через їхній офіційний канал для застосунків. Інші мережі додаємо за домовленістю з ними.</p>
+
+<section class="l-final">
+  <div><h2 class="l-h2">Що на вечерю цього тижня?</h2><p>Меню з акцій складемо за хвилину.</p></div>
+  <a class="l-btn" href="/menu">Скласти меню</a>
+</section>
+
+<script>
+document.querySelectorAll(".l-seg button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".l-seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  document.querySelectorAll(".l-plan").forEach(p => p.hidden = p.dataset.for !== b.dataset.p);
+}));
+</script>
 {% endblock %}

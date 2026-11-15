@@ -29,6 +29,8 @@ from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
 
 HERE = Path(__file__).parent
 COOKIE = "pc_session"
+GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
+GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy")
 OFFERS_TTL = timedelta(hours=6)
 MAX_NEARBY = 4  # щонайбільше магазинів поруч в одному списку
 LIKE_TAGS = ["dairy", "meat", "fish", "eggs", "vegetables", "fruits", "grains", "coffee", "tea", "sweets"]
@@ -86,6 +88,23 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         ON CONFLICT(user_id) DO UPDATE SET data=excluded.data, health_consent=excluded.health_consent,
                         updated_at=excluded.updated_at""",
                      (user_id, json.dumps(p.to_dict(), ensure_ascii=False), int(consent), security.iso(security.now())))
+
+    def guest_profile(request: Request) -> Profile:
+        p = Profile(name="Гість", household=2)
+        blob = request.cookies.get(GUEST_COOKIE)
+        raw = box.open(blob) if blob else None
+        if raw:
+            try:
+                d = json.loads(raw)
+                p = Profile.from_dict({**p.to_dict(), **{k: d[k] for k in GUEST_KEYS if k in d}})
+            except (ValueError, TypeError, KeyError):
+                pass
+        return p
+
+    def keep_guest(resp, p: Profile):
+        data = json.dumps({k: getattr(p, k) for k in GUEST_KEYS}, ensure_ascii=False)
+        resp.set_cookie(GUEST_COOKIE, box.seal(data), max_age=30 * 86400, httponly=True, samesite="lax", secure=secure)
+        return resp
 
     def dict_store(o: Offer, st: dict) -> Offer:
         o.store_id, o.store_name = o.store_id or st["id"], o.store_name or st.get("title")
@@ -189,7 +208,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         if u:
             return go("/list")
-        return render(request, "index.html")
+        offers = planner.merge_nearby(demo.load())
+        analytics.track(conn, None, "landing_viewed")
+        previews = [(n, menu.plan(offers, Profile(name="Гість", household=n), dinners=5, max_minutes=60)) for n in (1, 2, 4)]
+        return render(request, "index.html", previews=previews, days=menu.DAYS, photos=menu_photos(),
+                      recipes=len(menu.RECIPES))
 
     @app.get("/register", response_class=HTMLResponse)
     def register_form(request: Request):
@@ -213,7 +236,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                            (email, security.hash_password(password), security.iso(security.now()))).fetchone()["id"]
         token, _ = security.new_session(conn, uid)
         analytics.track(conn, uid, "signup")
+        if request.cookies.get(GUEST_COOKIE):
+            g = guest_profile(request)
+            save_profile(uid, Profile(name="Мій профіль", **{k: getattr(g, k) for k in GUEST_KEYS}), False)
         resp = go("/profile?welcome=1")
+        resp.delete_cookie(GUEST_COOKIE)
         resp.set_cookie(COOKIE, token, max_age=security.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
 
@@ -416,35 +443,53 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       need_location=bool(link and p.lat is None and not link["store_id"]))
 
     # ---------- меню ----------
+    # Меню відкрите й без реєстрації: гість бачить демо-акції, його налаштування живуть у зашифрованій cookie.
+    async def menu_offers(u, p: Profile, refresh: bool = False):
+        if u:
+            return await current_offers(u["id"], p, refresh)
+        return None, [], planner.merge_nearby(demo.load()), None, True
+
+    def menu_done(u, p: Profile, health: bool, url: str):
+        if u:
+            save_profile(u["id"], p, health)
+            return go(url)
+        return keep_guest(go(url), p)
+
     @app.get("/menu", response_class=HTMLResponse)
     async def menu_page(request: Request, refresh: int = 0):
-        u, bad = need_user(request)
-        if bad:
-            return bad
-        p, health = load_profile(u["id"])
-        link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
+        u = user_of(request)
+        p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
+        link, stores, offers, notice, is_demo = await menu_offers(u, p, bool(refresh))
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
-        if m.ids != p.menu:
-            p.menu = m.ids
+        changed = m.ids != p.menu
+        p.menu = m.ids
+        if changed and u:
             save_profile(u["id"], p, health)
-        analytics.track(conn, u["id"], "menu_viewed", source="demo" if is_demo else "silpo", stores=len(stores),
-                        dishes=len(m.dishes), promo_lines=len(m.promo_lines), total=m.total, saving=m.saving)
-        return render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
-                      days=menu.DAYS, fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS,
+        analytics.track(conn, u["id"] if u else None, "menu_viewed", source="demo" if is_demo else "silpo",
+                        stores=len(stores), dishes=len(m.dishes), promo_lines=len(m.promo_lines), total=m.total,
+                        saving=m.saving, guest=not u)
+        resp = render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
+                      days=menu.DAYS, fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
                       photos=menu_photos(), swapped=request.query_params.get("swapped"))
+        return keep_guest(resp, p) if (changed and not u) else resp
 
     async def menu_form(request: Request):
+        """(form, user | None, profile, health, bad). Гість не має CSRF-токена: його захищає SameSite=Lax cookie."""
         form = await request.form()
-        u, bad = need_user(request, form.get("csrf", ""))
-        return form, u, bad
+        u = user_of(request)
+        if u is None:
+            return form, None, guest_profile(request), False, None
+        if not secrets.compare_digest(str(form.get("csrf", "")), u["csrf"]):
+            return form, u, None, False, HTMLResponse("Сторінка застаріла. Оновіть її й спробуйте ще раз.", status_code=400)
+        p, health = load_profile(u["id"])
+        return form, u, p, health, None
 
     @app.post("/menu/settings")
     async def menu_settings(request: Request):
-        form, u, bad = await menu_form(request)
+        form, u, p, health, bad = await menu_form(request)
         if bad:
             return bad
-        p, health = load_profile(u["id"])
         try:
             if form.get("people"):
                 p.household = max(1, min(12, int(form["people"])))
@@ -456,43 +501,39 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 p.menu, p.menu_skip = [], []
         except ValueError:
             return HTMLResponse("Неправильні налаштування меню.", status_code=400)
-        save_profile(u["id"], p, health)
-        analytics.track(conn, u["id"], "menu_settings", dinners=p.dinners, max_minutes=p.max_minutes, people=p.household)
-        return go("/menu")
+        analytics.track(conn, u["id"] if u else None, "menu_settings", dinners=p.dinners, max_minutes=p.max_minutes,
+                        people=p.household, guest=not u)
+        return menu_done(u, p, health, "/menu")
 
     @app.post("/menu/swap")
     async def menu_swap(request: Request):
-        form, u, bad = await menu_form(request)
+        form, u, p, health, bad = await menu_form(request)
         if bad:
             return bad
-        p, health = load_profile(u["id"])
         try:
             i = int(form.get("i", -1))
         except ValueError:
             return HTMLResponse("Неправильна страва.", status_code=400)
-        _, _, offers, _, _ = await current_offers(u["id"], p, False)
+        _, _, offers, _, _ = await menu_offers(u, p)
         current = p.menu or menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes).ids
         new = menu.swap(offers, p, current, i, max_minutes=p.max_minutes, skip=p.menu_skip)
         if new is None:
             return go("/menu#d%d" % max(i, 0))
         p.menu_skip = ([current[i]] + [x for x in p.menu_skip if x != current[i]])[:6]
         p.menu = new
-        save_profile(u["id"], p, health)
-        analytics.track(conn, u["id"], "menu_swap", dish_from=current[i], dish_to=new[i])
-        return go(f"/menu?swapped={i}#d{i}")
+        analytics.track(conn, u["id"] if u else None, "menu_swap", dish_from=current[i], dish_to=new[i], guest=not u)
+        return menu_done(u, p, health, f"/menu?swapped={i}#d{i}")
 
     @app.post("/menu/pantry")
     async def menu_pantry(request: Request):
-        form, u, bad = await menu_form(request)
+        form, u, p, health, bad = await menu_form(request)
         if bad:
             return bad
         key = str(form.get("key", ""))
         if key not in menu.PANTRY:
             return HTMLResponse("Невідомий продукт.", status_code=400)
-        p, health = load_profile(u["id"])
         p.pantry_buy = [k for k in p.pantry_buy if k != key] if key in p.pantry_buy else p.pantry_buy + [key]
-        save_profile(u["id"], p, health)
-        return go("/menu#list")
+        return menu_done(u, p, health, "/menu#list")
 
     @app.get("/photos", response_class=HTMLResponse)
     def photo_credits(request: Request):

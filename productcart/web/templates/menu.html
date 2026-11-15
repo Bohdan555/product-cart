@@ -3,7 +3,8 @@
 {% block body %}
 <section class="intro">
   <h1>Вечері на тиждень</h1>
-  <p class="lead">{% if stores %}Зібрано з акцій {{ stores|length }} {{ plural(stores|length, 'магазину', 'магазинів', 'магазинів') }} «Сільпо» поруч з вами{% elif is_demo %}Демо: ціни вигадані{% if not link %} · <a href="/silpo">підключіть «Сільпо»</a>, щоб меню складалось зі справжніх акцій поруч{% endif %}{% else %}Зібрано з акцій «Сільпо»{% endif %}</p>
+  {% if guest %}<div class="gnote"><p><b>Це приклад на демо-цінах.</b> Створіть профіль — меню збережеться, а ціни будуть з акцій вашого «Сільпо».</p><a class="btn small" href="/register">Створити профіль</a></div>
+  {% else %}<p class="lead">{% if stores %}Зібрано з акцій {{ stores|length }} {{ plural(stores|length, 'магазину', 'магазинів', 'магазинів') }} «Сільпо» поруч з вами{% elif is_demo %}Демо: ціни вигадані{% if not link %} · <a href="/silpo">підключіть «Сільпо»</a>, щоб меню складалось зі справжніх акцій поруч{% endif %}{% else %}Зібрано з акцій «Сільпо»{% endif %}</p>{% endif %}
 </section>
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
 
