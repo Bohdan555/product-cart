@@ -249,6 +249,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                     save_offers_cache(st["id"], got)
                     offers += got
         except Exception as e:
+            e = root_error(e)
+            log.warning("Сільпо: список акцій: %s: %s", type(e).__name__, str(e)[:1000])
             return stores, [], f"«Сільпо» не відповіло: {str(e)[:120]}"
         return stores, offers, notice
 
@@ -669,11 +671,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         sample = [n for n in cart.names.values() if n][:5]
                         return render(request, "cart.html", u, confirm=True, had=cart.count, sample=sample, **ctx)
                 res = await silpo_cart.build(call, wants)
-        except silpo_cart.CartError as e:
-            return render(request, "cart.html", u, error=str(e), **ctx)
         except Exception as e:
-            log.warning("Сільпо: кошик не зібрався: %s", str(e)[:500])
-            return render(request, "cart.html", u, error="«Сільпо» не відповіло. Спробуйте ще раз за хвилину.", **ctx)
+            err = root_error(e)
+            if isinstance(err, silpo_cart.CartError):
+                return render(request, "cart.html", u, error=str(err), **ctx)
+            log.warning("Сільпо: кошик не зібрався: %s: %s", type(err).__name__, str(err)[:1500])
+            return render(request, "cart.html", u, status=502, **ctx,
+                          error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
         analytics.track(conn, u["id"], "silpo_cart_built", placed=len(res["placed"]), missing=len(res["missing"]),
                         had=res["had"], total=res["total"], checkout=bool(res["checkout"]))
         return render(request, "cart.html", u, res=res, **ctx)
@@ -752,6 +756,13 @@ def offer_visual(o: Offer) -> dict:
 
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def root_error(e: BaseException) -> BaseException:
+    """anyio загортає помилки всередині з'єднання MCP у групу — дістаємо першу справжню."""
+    while isinstance(e, BaseExceptionGroup) and e.exceptions:
+        e = e.exceptions[0]
+    return e
 
 
 def plural(n: int, one: str, few: str, many: str) -> str:

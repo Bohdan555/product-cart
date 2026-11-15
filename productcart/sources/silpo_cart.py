@@ -167,6 +167,7 @@ def pick_product(items: list[dict]) -> dict | None:
 
 async def current_cart(call: Call) -> CartState | None:
     mine = await call("silpo_get_my_shopping_cart", {}) or {}
+    log.info("Сільпо: get_my_shopping_cart → %s", str(mine)[:600])
     cid = _find(mine, "cartId", "shoppingCartId") or (_first(mine, "id") if isinstance(mine, dict) else None)
     if not cid:
         if _find(mine, "exists") is False:
@@ -195,6 +196,7 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> tuple[list[
             log.warning("Сільпо: find_products_batch: %s", str(e)[:300])
             continue
         queries = _first(res, "queries", "results") if isinstance(res, dict) else res
+        log.info("Сільпо: find_products_batch → %s", str(res)[:800])
         for q in queries or []:
             name = _first(q, "query", "name", "requestedName")
             if name:
@@ -221,7 +223,9 @@ async def add_to_cart(call: Call, cart: CartState, found: list[tuple[Want, str, 
     products = [{"productId": pl.product_id, "companyId": cart.company_id or "",
                  "branchId": cart.branch_id or "", "quantity": round(cart.products.get(pl.product_id, 0) + pl.quantity, 3)}
                 for pl in merged.values()]
-    await call("silpo_add_or_update_cart_products", {"shoppingCartId": cart.cart_id, "products": products})
+    log.info("Сільпо: add_or_update %d позицій у кошик %s", len(products), cart.cart_id)
+    res = await call("silpo_add_or_update_cart_products", {"shoppingCartId": cart.cart_id, "products": products})
+    log.info("Сільпо: add_or_update → %s", str(res)[:600])
     return list(merged.values())
 
 
