@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import contextlib
 import json
 import os
@@ -30,6 +31,7 @@ from .analytics import verify_click
 from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
 
 HERE = Path(__file__).parent
+log = logging.getLogger("productcart.web")
 COOKIE = "pc_session"
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy")
@@ -220,7 +222,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
                 for res in await asyncio.gather(*(one(st) for st in todo), return_exceptions=True):
                     if isinstance(res, Exception):
-                        notice = notice or f"Частина магазинів не відповіла: {str(res)[:100]}"
+                        log.warning("Сільпо: магазин не віддав акції: %s", str(res)[:500])
+                        notice = notice or "Частина магазинів «Сільпо» зараз не відповіла — показуємо акції решти. Спробуйте оновити пізніше."
                         continue
                     st, got = res
                     save_offers_cache(st["id"], got)

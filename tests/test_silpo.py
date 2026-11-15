@@ -102,3 +102,18 @@ def test_image_urls():
     assert silpo.image_url({"image": "abc.png"}) == "https://images.silpo.ua/products/300x300/webp/abc.png"
     assert silpo.image_url({"images": [{"url": "//cdn.example/x.jpg"}]}) == "https://cdn.example/x.jpg"
     assert silpo.image_url({}) is None
+
+
+def test_fetch_offers_falls_back_when_delivery_type_rejected():
+    class Picky(FakeMCP):
+        async def __call__(self, name, args):
+            if name in ("silpo_get_promotions", "silpo_get_products") and args.get("deliveryType") == "DeliveryHome":
+                self.calls.append((name, args))
+                raise RuntimeError("MCP error -32602: Input validation error: Invalid arguments for tool: Invalid option")
+            return await super().__call__(name, args)
+
+    call = Picky()
+    offers = run(silpo.fetch_offers(call, {"id": "b1", "title": "Франка"}))
+    assert {o.product_id for o in offers} == {"p1", "p2", "p3", "p4"}
+    ok = [a for n, a in call.calls if n == "silpo_get_products" and a.get("deliveryType") != "DeliveryHome"]
+    assert ok and all(a["deliveryType"] == "SelfPickup" for a in ok)

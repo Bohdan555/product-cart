@@ -162,12 +162,42 @@ def normalize_product(p: dict, *, branch: dict | None = None, promo: str | None 
     return enrich(offer)
 
 
+def _invalid_args(e: Exception) -> bool:
+    msg = str(e)
+    return "-32602" in msg or "Invalid arguments" in msg or "validation" in msg.lower()
+
+
+def _ctx_variants(ctx: dict) -> list[dict]:
+    """Контекст зі слота → той самий із самовивозом → лише магазин. «Сільпо» іноді не приймає тип доставки зі слота."""
+    out = [ctx]
+    if ctx.get("deliveryType") not in (None, "SelfPickup"):
+        out.append(dict(ctx, deliveryType="SelfPickup"))
+    if len(ctx) > 1:
+        out.append({"branchId": ctx["branchId"]})
+    return out
+
+
+async def _call_with_ctx(call: Call, name: str, ctx: dict, extra: dict) -> tuple[Any, dict]:
+    """Викликає інструмент, спрощуючи контекст, якщо «Сільпо» відхиляє аргументи. Повертає (відповідь, робочий контекст)."""
+    err: Exception | None = None
+    for c in _ctx_variants(ctx):
+        try:
+            return await call(name, dict(c, **extra)), c
+        except Exception as e:
+            if not _invalid_args(e):
+                raise
+            log.warning("Сільпо: %s не прийняв %s: %s", name, {k: c[k] for k in c if k != "branchId"}, str(e)[:300])
+            err = e
+    raise err  # type: ignore[misc]
+
+
 async def fetch_offers(call: Call, branch: dict, max_promotions: int = 12, page: int = 100, max_pages: int = 5,
                        parallel: int = 3) -> list[Offer]:
     """Усі акційні товари магазину: список акцій → товари кожної акції (з пагінацією), без дублів.
     Акції завантажуємо паралельно (до `parallel` одночасно), порядок результатів зберігаємо."""
     ctx = await branch_context(call, branch["id"])
-    data = await call("silpo_get_promotions", ctx) or {}
+    data, ctx = await _call_with_ctx(call, "silpo_get_promotions", ctx, {})
+    data = data or {}
     promotions = _list(data.get("promotions"), data.get("items"))
     if not promotions:
         log.warning("Сільпо: акцій не знайдено для магазину %s", branch.get("title"))
@@ -180,8 +210,10 @@ async def fetch_offers(call: Call, branch: dict, max_promotions: int = 12, page:
             return out
         async with sem:
             for n in range(max_pages):
-                args = dict(ctx, promotionCode=code, inStock=True, limit=page, offset=n * page, sortBy="promotion")
-                res = await call("silpo_get_products", args) or {}
+                res, _ = await _call_with_ctx(call, "silpo_get_products", ctx,
+                                              dict(promotionCode=code, inStock=True, limit=page, offset=n * page,
+                                                   sortBy="promotion"))
+                res = res or {}
                 items = _list(res.get("products"), res.get("items"))
                 out += [o for o in (normalize_product(p, branch=branch, promo=title) for p in items) if o]
                 total = int((res.get("meta") or {}).get("total") or res.get("total") or 0)
