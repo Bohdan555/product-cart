@@ -17,6 +17,7 @@
 
 {% else %}
 <div class="card stack">
+  {% if res.created %}<div class="note">{{ res.created }}. Тип доставки й час можна змінити в «Сільпо» перед оплатою.</div>{% endif %}
   <div class="ok">Додано {{ res.placed|length }} {{ plural(res.placed|length, 'товар', 'товари', 'товарів') }}{% if res.had %} до {{ res.had }}, що вже були в кошику{% endif %}.{% if res.total %} Разом у кошику: <b>{{ uah(res.total) }}</b>.{% endif %}</div>
   <ul class="clist">{% for pl in res.placed %}<li><span>{{ pl.name }}</span><b>{% if pl.weighted %}{{ '%.2f'|format(pl.quantity)|replace('.', ',') }} кг{% else %}× {{ pl.quantity|int }}{% endif %}</b></li>{% endfor %}</ul>
   {% if res.missing %}<div class="note"><b>Не знайшли в магазині кошика:</b> {{ res.missing|map(attribute='name')|join(', ') }}. Додайте їх у «Сільпо» вручну або купіть деінде.</div>{% endif %}

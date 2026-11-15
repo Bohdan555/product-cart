@@ -64,8 +64,8 @@ def test_build_adds_to_existing_without_removing():
     assert not any(n in ("silpo_clear_shopping_cart", "silpo_remove_cart_products") for n, _ in mcp.calls)
 
 
-def test_no_cart_gives_clear_message():
-    with pytest.raises(sc.CartError, match="ще немає кошика"):
+def test_no_cart_and_no_way_to_create():
+    with pytest.raises(sc.CartError, match="створити його не вдалося"):
         run(sc.build(CartMCP(has_cart=False), wants()))
 
 
@@ -73,3 +73,32 @@ def test_quantity_for_packs():
     w = sc.Want("milk", "Молоко", 1500, "мл")
     assert sc.quantity_for(w, {"displayRatio": "900мл"}) == 2
     assert sc.quantity_for(w, {"displayRatio": "1шт"}) == 1    # інша одиниця — мінімальний крок
+
+
+class NoCartMCP(CartMCP):
+    def __init__(self):
+        super().__init__(has_cart=False)
+
+    async def __call__(self, name, args):
+        if name == "silpo_get_my_delivery_addresses":
+            self.calls.append((name, args))
+            return {"addresses": []}
+        if name == "silpo_get_time_slots":
+            self.calls.append((name, args))
+            assert args["deliveryTypes"] == ["SelfPickup"] and args["branchId"] == "b1"
+            return {"slots": [{"available": False, "start": "x", "end": "y"}, {"available": True, "start": "s", "end": "e"}]}
+        if name == "silpo_create_shopping_cart":
+            self.calls.append((name, args))
+            assert args["deliveryType"] == "SelfPickup" and args["timeslot"] == {"start": "s", "end": "e"}
+            assert args["latitude"] == 50.44 and args["addressType"] == "house"
+            self.has_cart = True
+            return {"success": True, "shoppingCartId": "c1"}
+        return await super().__call__(name, args)
+
+
+def test_creates_pickup_cart_when_none():
+    mcp = NoCartMCP()
+    res = run(sc.build(mcp, wants(), {"id": "b1", "title": "Франка", "lat": 50.44, "lon": 30.51, "city": "Київ",
+                                      "address": "вул. Франка, 1"}))
+    assert res["created"].startswith("Створили кошик із самовивозом") and res["had"] == 0
+    assert mcp.items["egg10"] == 2

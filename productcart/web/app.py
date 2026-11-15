@@ -670,7 +670,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                     if cart and cart.count:
                         sample = [n for n in cart.names.values() if n][:5]
                         return render(request, "cart.html", u, confirm=True, had=cart.count, sample=sample, **ctx)
-                res = await silpo_cart.build(call, wants)
+                branch = None
+                if stores:   # магазин для самовивозу, якщо кошика ще немає: найближчий із меню, з координатами
+                    branch = dict(stores[0])
+                    if branch.get("lat") is None:
+                        known = {b["id"]: b for b in await silpo_branches(get_call)}
+                        branch = {**known.get(branch["id"], {}), **{k: v for k, v in branch.items() if v is not None}}
+                res = await silpo_cart.build(call, wants, branch)
         except Exception as e:
             err = root_error(e)
             if isinstance(err, silpo_cart.CartError):

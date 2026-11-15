@@ -243,15 +243,99 @@ def wants_from_menu(lines, bought: set[str] = frozenset()) -> list[Want]:
     return out
 
 
-async def build(call: Call, wants: list[Want]) -> dict:
-    """Повний сценарій: кошик → пошук → додавання → перечитати суму й посилання на оплату."""
+# ---------- створення кошика, якщо його ще немає ----------
+
+HOME_TYPES = ("DeliveryHome", "WideAssortDelivery", "B2B")
+
+
+async def _slot(call: Call, branch_id: str, delivery_type: str) -> tuple[str, str]:
+    data = await call("silpo_get_time_slots", {"branchId": branch_id, "deliveryTypes": [delivery_type], "limit": 100}) or {}
+    slots = _first(data, "slots", "timeSlots", "timeslots", "items") or []
+    slot = next((x for x in slots if x.get("available", True) and _first(x, "start", "from") and _first(x, "end", "to")), None)
+    if not slot:
+        log.warning("Сільпо: немає слотів %s для %s: %s", delivery_type, branch_id, str(data)[:500])
+        raise CartError(f"немає вільних вікон ({delivery_type})")
+    return _first(slot, "start", "from"), _first(slot, "end", "to")
+
+
+async def _create(call: Call, args: dict) -> CartState:
+    log.info("Сільпо: create_shopping_cart %s", {k: v for k, v in args.items() if k not in ("latitude", "longitude")})
+    created = await call("silpo_create_shopping_cart", args) or {}
+    log.info("Сільпо: create_shopping_cart → %s", str(created)[:600])
+    cid = _find(created, "shoppingCartId", "cartId") or _first(created.get("cart") if isinstance(created, dict) else None, "id")
+    if not cid:
+        raise CartError("«Сільпо» не створило кошик")
+    return parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cid}) or {})
+
+
+async def _saved_address(call: Call) -> dict | None:
+    try:
+        data = await call("silpo_get_my_delivery_addresses", {}) or {}
+    except Exception as e:
+        log.warning("Сільпо: адреси: %s", str(e)[:300])
+        return None
+    items = _first(data, "addresses", "items", "results") if isinstance(data, dict) else data
+    return items[0] if items else None
+
+
+def _address_args(a: dict, lat: float, lon: float) -> dict:
+    out = {"addressType": _first(a, "addressType") or "house", "latitude": lat, "longitude": lon}
+    for k in ("city", "street", "house", "district"):
+        if _first(a, k):
+            out[k] = _first(a, k)
+    return out
+
+
+async def create_cart(call: Call, branch: dict | None) -> tuple[CartState, str]:
+    """Кошик в акаунті один; якщо його немає — створюємо. Спершу самовивіз із магазину покупця,
+    далі доставка на збережену в «Сільпо» адресу. → (кошик, опис для людини)."""
+    problems = []
+    saved = await _saved_address(call)
+    if branch and branch.get("id"):
+        try:
+            lat = _num(branch.get("lat")) or _num(_first(saved or {}, "latitude", "lat"))
+            lon = _num(branch.get("lon")) or _num(_first(saved or {}, "longitude", "lon"))
+            if lat is None or lon is None:
+                raise CartError("немає координат магазину")
+            start, end = await _slot(call, branch["id"], "SelfPickup")
+            addr = saved or {"city": branch.get("city"), "street": branch.get("address")}
+            cart = await _create(call, dict(_address_args(addr, lat, lon), deliveryType="SelfPickup",
+                                            branchId=branch["id"], timeslot={"start": start, "end": end}))
+            return cart, f"Створили кошик із самовивозом: {branch.get('title') or 'ваш магазин'}"
+        except Exception as e:
+            problems.append(f"самовивіз: {e}")
+            log.warning("Сільпо: кошик із самовивозом не створився: %s", str(e)[:800])
+    if saved:
+        try:
+            lat, lon = _num(_first(saved, "latitude", "lat")), _num(_first(saved, "longitude", "lon"))
+            types = await call("silpo_get_available_delivery_types", {"latitude": lat, "longitude": lon}) or {}
+            opts = _first(types, "deliveryTypes", "types", "results", "options") or []
+            opt = next((o for o in opts if _first(o, "deliveryType", "type") in HOME_TYPES and _first(o, "branchId")), None)
+            if not opt:
+                log.warning("Сільпо: типи доставки: %s", str(types)[:500])
+                raise CartError("немає доставки на збережену адресу")
+            dtype, bid = _first(opt, "deliveryType", "type"), _first(opt, "branchId")
+            start, end = await _slot(call, bid, dtype)
+            cart = await _create(call, dict(_address_args(saved, lat, lon), deliveryType=dtype, branchId=bid,
+                                            timeslot={"start": start, "end": end}))
+            return cart, "Створили кошик із доставкою на вашу адресу в «Сільпо»"
+        except Exception as e:
+            problems.append(f"доставка: {e}")
+            log.warning("Сільпо: кошик із доставкою не створився: %s", str(e)[:800])
+    raise CartError("У вашому акаунті «Сільпо» ще немає кошика, і створити його не вдалося"
+                    + (f" ({'; '.join(problems)[:200]})" if problems else "")
+                    + ". Відкрийте silpo.ua або застосунок «Сільпо», додайте будь-який товар у кошик — і натисніть кнопку ще раз.")
+
+
+async def build(call: Call, wants: list[Want], branch: dict | None = None) -> dict:
+    """Повний сценарій: кошик (або новий) → пошук → додавання → перечитати суму й посилання на оплату."""
     cart = await current_cart(call)
+    created = None
     if cart is None:
-        raise CartError("У вашому акаунті «Сільпо» ще немає кошика. Відкрийте silpo.ua або застосунок «Сільпо», "
-                        "оберіть адресу доставки чи магазин самовивозу — і натисніть кнопку ще раз.")
+        cart, created = await create_cart(call, branch)
     before = cart.count
     found, missing = await resolve(call, cart, wants)
     placed = await add_to_cart(call, cart, found)
     after = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
     return {"placed": placed, "missing": missing, "had": before, "total": after.total,
-            "checkout": after.checkout, "count": after.count}
+            "checkout": after.checkout, "count": after.count, "created": created}
