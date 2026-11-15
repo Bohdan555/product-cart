@@ -107,12 +107,12 @@
   {% if waiting %}
   <div class="group"><div class="gh"><b>Мабуть, уже є вдома</b><span>не рахуємо, поки не скажете</span></div>
   {% for l in waiting %}
-    <div class="brow static"><span class="rmain"><b>{{ l.name }}</b><small>треба {{ fmt_qty(l.need, l.unit) }} · {% if l.is_promo %}в акції {{ uah(l.cost) }}{% else %}≈ {{ uah(l.cost|round) }}{% endif %}</small></span>
+    <div class="brow static"><span class="rmain"><b>{{ l.name }}</b><small>треба {{ fmt_qty(l.need, l.unit) }} · {% if l.is_promo %}в акції: {{ l.source.offer.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ uah(l.cost) }}{% else %}≈ {{ uah(l.cost|round) }}{% endif %}</small></span>
       <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Закінчилось</button></form></div>
   {% endfor %}</div>
   {% endif %}
   {% set added = m.pantry_lines|selectattr('buy')|list %}
-  {% if added %}<p class="hint">Додано, бо вдома закінчилось: {% for l in added %}<form method="post" action="/menu/pantry" class="inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="linkbtn" title="Прибрати з кошика">{{ l.name|lower }} ✕</button></form>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  {% if added %}<div class="added"><span>Додано, бо вдома закінчилось:</span>{% for l in added %}<form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="chipx" aria-label="Прибрати з кошика: {{ l.name|lower }}">{{ l.name|lower }}<span aria-hidden="true">✕</span></button></form>{% endfor %}</div>{% endif %}
   <p class="hint">Сіль і спеції не враховані. Ціни зі знаком ≈ орієнтовні: цього тижня ці продукти не в акції. Обмеження в харчуванні враховані за назвою інгредієнтів — склад перевіряйте на упаковці.</p>
 </section>
 
