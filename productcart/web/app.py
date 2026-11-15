@@ -9,6 +9,7 @@ import json
 import os
 import secrets
 from datetime import timedelta
+from functools import lru_cache
 from urllib.parse import unquote
 from pathlib import Path
 
@@ -53,7 +54,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     app.state.conn, app.state.gw = conn, gw
     analytics.init(conn)
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
-    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual)
+    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual, plural=plural)
 
     # ---------- допоміжне ----------
     def user_of(request: Request):
@@ -280,7 +281,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         )
         prev, _ = load_profile(u["id"])
         p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
-        p.dinners, p.max_minutes, p.menu_budget = prev.dinners, prev.max_minutes, prev.menu_budget
+        for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy"):
+            setattr(p, k, getattr(prev, k))
         if diets and not consent:
             return render(request, "profile.html", u, p=p, consent=False, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS,
                           diets=list(DIETS), silpo=silpo_link(u["id"]), status=400, picked_diets=diets,
@@ -419,32 +421,83 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u, bad = need_user(request)
         if bad:
             return bad
-        p, _ = load_profile(u["id"])
+        p, health = load_profile(u["id"])
         link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
-        m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget)
+        m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
+                      keep=p.menu, pantry_buy=p.pantry_buy)
+        if m.ids != p.menu:
+            p.menu = m.ids
+            save_profile(u["id"], p, health)
         analytics.track(conn, u["id"], "menu_viewed", source="demo" if is_demo else "silpo", stores=len(stores),
                         dishes=len(m.dishes), promo_lines=len(m.promo_lines), total=m.total, saving=m.saving)
         return render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
-                      days=menu.DAYS, ingredient_unit=menu.unit_label, fmt_qty=menu.fmt_qty, pantry=menu.PANTRY)
+                      days=menu.DAYS, fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS,
+                      photos=menu_photos(), swapped=request.query_params.get("swapped"))
+
+    async def menu_form(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, form.get("csrf", ""))
+        return form, u, bad
 
     @app.post("/menu/settings")
     async def menu_settings(request: Request):
-        form = await request.form()
-        u, bad = need_user(request, form.get("csrf", ""))
+        form, u, bad = await menu_form(request)
         if bad:
             return bad
         p, health = load_profile(u["id"])
         try:
-            p.dinners = max(1, min(7, int(form.get("dinners") or 5)))
-            p.max_minutes = max(15, min(180, int(form.get("max_minutes") or 60)))
-            b = form.get("menu_budget")
-            p.menu_budget = max(0.0, float(b)) if b else None
+            if form.get("people"):
+                p.household = max(1, min(12, int(form["people"])))
+            if form.get("dinners"):
+                p.dinners = max(1, min(7, int(form["dinners"])))
+                p.menu, p.menu_skip = [], []
+            if form.get("max_minutes"):
+                p.max_minutes = max(15, min(180, int(form["max_minutes"])))
+                p.menu, p.menu_skip = [], []
         except ValueError:
             return HTMLResponse("Неправильні налаштування меню.", status_code=400)
         save_profile(u["id"], p, health)
-        analytics.track(conn, u["id"], "menu_settings", dinners=p.dinners, max_minutes=p.max_minutes,
-                        budget=bool(p.menu_budget))
+        analytics.track(conn, u["id"], "menu_settings", dinners=p.dinners, max_minutes=p.max_minutes, people=p.household)
         return go("/menu")
+
+    @app.post("/menu/swap")
+    async def menu_swap(request: Request):
+        form, u, bad = await menu_form(request)
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        try:
+            i = int(form.get("i", -1))
+        except ValueError:
+            return HTMLResponse("Неправильна страва.", status_code=400)
+        _, _, offers, _, _ = await current_offers(u["id"], p, False)
+        current = p.menu or menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes).ids
+        new = menu.swap(offers, p, current, i, max_minutes=p.max_minutes, skip=p.menu_skip)
+        if new is None:
+            return go("/menu#d%d" % max(i, 0))
+        p.menu_skip = ([current[i]] + [x for x in p.menu_skip if x != current[i]])[:6]
+        p.menu = new
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "menu_swap", dish_from=current[i], dish_to=new[i])
+        return go(f"/menu?swapped={i}#d{i}")
+
+    @app.post("/menu/pantry")
+    async def menu_pantry(request: Request):
+        form, u, bad = await menu_form(request)
+        if bad:
+            return bad
+        key = str(form.get("key", ""))
+        if key not in menu.PANTRY:
+            return HTMLResponse("Невідомий продукт.", status_code=400)
+        p, health = load_profile(u["id"])
+        p.pantry_buy = [k for k in p.pantry_buy if k != key] if key in p.pantry_buy else p.pantry_buy + [key]
+        save_profile(u["id"], p, health)
+        return go("/menu#list")
+
+    @app.get("/photos", response_class=HTMLResponse)
+    def photo_credits(request: Request):
+        return render(request, "photos.html", user_of(request), credits=menu_credits(),
+                      titles={r.id: r.title for r in menu.RECIPES})
 
     @app.post("/location")
     def location_save(request: Request, csrf: str = Form(""), lat: float = Form(...), lon: float = Form(...),
@@ -512,6 +565,27 @@ def offer_visual(o: Offer) -> dict:
         if tag in o.tags:
             return {"emoji": emoji, "hue": hue, "cat": label}
     return {"emoji": "🛒", "hue": 150, "cat": o.category or "Інше"}
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+def plural(n: int, one: str, few: str, many: str) -> str:
+    n = abs(int(n))
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+@lru_cache(maxsize=1)
+def menu_credits() -> dict:
+    """Автори фото страв (ліцензії CC вимагають їх зазначати) — показуємо на сторінці /photos."""
+    path = STATIC_DIR / "dishes" / "credits.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def menu_photos() -> set[str]:
+    return set(menu_credits())
 
 
 def offer_from_dict(d: dict) -> Offer:

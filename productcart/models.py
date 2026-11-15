@@ -99,6 +99,9 @@ class Profile:
     dinners: int = 5
     max_minutes: int = 60
     menu_budget: float | None = None
+    menu: list[str] = field(default_factory=list)          # поточне меню (id рецептів) після замін
+    menu_skip: list[str] = field(default_factory=list)     # нещодавно замінені страви — не пропонувати знову одразу
+    pantry_buy: list[str] = field(default_factory=list)    # запаси, які вдома закінчились — додати в кошик
 
     @classmethod
     def from_dict(cls, d: dict) -> "Profile":

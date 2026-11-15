@@ -36,4 +36,4 @@ testpaths = ["tests"]
 pythonpath = ["tests"]
 
 [tool.setuptools.package-data]
-productcart = ["web/templates/*.html", "web/static/*"]
+productcart = ["web/templates/*.html", "web/static/*", "web/static/dishes/*"]

@@ -181,12 +181,25 @@ def test_nearby_stores_within_radius(client):
 def test_menu_page_and_settings(client):
     token = register(client)
     r = client.get("/menu")
-    assert r.status_code == 200 and "Вечері на тиждень" in r.text and "демо" in r.text and "Що купити" in r.text
+    assert r.status_code == 200 and "Вечері на тиждень" in r.text and "Демо" in r.text and "Список покупок" in r.text
+    assert r.text.count('<article class="day') == 5 and "Як готувати" in r.text
     assert client.post("/menu/settings", data={"csrf": "bad", "dinners": "3"}).status_code == 400
-    r = client.post("/menu/settings", data={"csrf": token, "dinners": "3", "max_minutes": "30", "menu_budget": ""})
-    assert r.status_code == 303
+    assert client.post("/menu/settings", data={"csrf": token, "dinners": "3"}).status_code == 303
+    assert client.post("/menu/settings", data={"csrf": token, "max_minutes": "30"}).status_code == 303
+    assert client.post("/menu/settings", data={"csrf": token, "people": "2"}).status_code == 303
     html = client.get("/menu").text
-    assert "3 вечері · до 30 хв" in html and html.count('class="day"') == 3
-    # збереження профілю не скидає налаштувань меню
+    assert html.count('<article class="day') == 3 and 'value="30" aria-pressed="true"' in html and "Вечеря на 2" in html
+    titles = re.findall(r'<h3 class="dt">([^<]+)</h3>', html)
+    r = client.post("/menu/swap", data={"csrf": token, "i": "1"})
+    assert r.status_code == 303 and r.headers["location"] == "/menu?swapped=1#d1"
+    after = re.findall(r'<h3 class="dt">([^<]+)</h3>', client.get("/menu").text)
+    assert after[0] == titles[0] and after[1] != titles[1] and after[2] == titles[2]
+    # «закінчилось» додає запас у кошик і повертається назад
+    key = re.search(r'name="key" value="([a-z_]+)"', html).group(1)
+    client.post("/menu/pantry", data={"csrf": token, "key": key})
+    assert "Додано, бо вдома закінчилось" in client.get("/menu").text
+    assert client.post("/menu/pantry", data={"csrf": token, "key": "evil"}).status_code == 400
+    # збереження профілю не скидає меню
     client.post("/profile", data={"csrf": token, "household": "2", "min_discount": "10"})
-    assert "3 вечері · до 30 хв · 2 людини" in client.get("/menu").text
+    assert re.findall(r'<h3 class="dt">([^<]+)</h3>', client.get("/menu").text) == after
+    assert client.get("/photos").status_code == 200

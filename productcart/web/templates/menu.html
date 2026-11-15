@@ -1,67 +1,156 @@
 {% extends "base.html" %}
 {% block title %}Меню з акцій — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>Вечері на тиждень з акцій</h1>
-<p class="lead">Страви підібрані так, щоб якомога більше інгредієнтів були зараз в акції{% if stores %} у {{ stores|length }} {{ 'магазині' if stores|length == 1 else 'магазинах' }} «Сільпо» поруч{% endif %}, а відкриті упаковки доїдались.</p>
+<section class="intro">
+  <h1>Вечері на тиждень</h1>
+  <p class="lead">{% if stores %}Зібрано з акцій {{ stores|length }} {{ plural(stores|length, 'магазину', 'магазинів', 'магазинів') }} «Сільпо» поруч з вами{% elif is_demo %}Демо: ціни вигадані{% if not link %} · <a href="/silpo">підключіть «Сільпо»</a>, щоб меню складалось зі справжніх акцій поруч{% endif %}{% else %}Зібрано з акцій «Сільпо»{% endif %}</p>
+</section>
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
-{% if is_demo %}<div class="note" style="margin-bottom:14px">Це <b>демо</b>: ціни вигадані.{% if not link %} <a href="/silpo">Підключіть «Сільпо»</a>, щоб меню складалось зі справжніх акцій поруч.{% endif %}</div>{% endif %}
 
-<details class="card msettings">
-  <summary>⚙️ {{ p.dinners }} {{ 'вечеря' if p.dinners == 1 else ('вечері' if p.dinners < 5 else 'вечерь') }} · до {{ p.max_minutes }} хв · {{ m.people }} {{ 'людина' if m.people == 1 else ('людини' if m.people < 5 else 'людей') }}{% if p.menu_budget %} · бюджет {{ uah(p.menu_budget) }}{% endif %}</summary>
-  <form method="post" action="/menu/settings" class="mform">
-    <input type="hidden" name="csrf" value="{{ user.csrf }}">
-    <div><label for="dinners">Скільки вечерь</label><input id="dinners" type="number" name="dinners" min="1" max="7" value="{{ p.dinners }}"></div>
-    <div><label for="max_minutes">Час на готування, хв</label><input id="max_minutes" type="number" name="max_minutes" min="15" max="180" step="5" value="{{ p.max_minutes }}"></div>
-    <div><label for="menu_budget">Бюджет, ₴ <span class="hint">· необов'язково</span></label><input id="menu_budget" type="number" name="menu_budget" min="0" step="50" value="{{ p.menu_budget|int if p.menu_budget else '' }}"></div>
-    <button class="btn" type="submit">Перескласти меню</button>
+<div class="mctl" aria-label="Налаштування меню">
+  <form method="post" action="/menu/settings" class="ctl step">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Нас</span>
+    <button type="submit" name="people" value="{{ m.people - 1 }}" aria-label="Менше людей" {% if m.people <= 1 %}disabled{% endif %}>−</button>
+    <b>{{ m.people }}</b>
+    <button type="submit" name="people" value="{{ m.people + 1 }}" aria-label="Більше людей" {% if m.people >= 12 %}disabled{% endif %}>+</button>
   </form>
-  <p class="hint" style="margin:8px 0 0">Кількість людей і обмеження в харчуванні — у <a href="/profile">профілі</a>.</p>
-</details>
+  <form method="post" action="/menu/settings" class="ctl seg">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Вечерь</span>
+    {% for n in (3, 5, 7) %}<button type="submit" name="dinners" value="{{ n }}" aria-pressed="{{ 'true' if p.dinners == n else 'false' }}">{{ n }}</button>{% endfor %}
+  </form>
+  <form method="post" action="/menu/settings" class="ctl seg">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Готувати</span>
+    <button type="submit" name="max_minutes" value="30" aria-pressed="{{ 'true' if p.max_minutes <= 30 else 'false' }}">до 30 хв</button>
+    <button type="submit" name="max_minutes" value="60" aria-pressed="{{ 'true' if 30 < p.max_minutes <= 60 else 'false' }}">до 1 год</button>
+    <button type="submit" name="max_minutes" value="180" aria-pressed="{{ 'true' if p.max_minutes > 60 else 'false' }}">будь-як</button>
+  </form>
+</div>
 
 {% if m.dishes %}
-<section class="hero-sum">
-  <div class="hs-main"><span class="hs-label">Продукти на {{ m.dishes|length }} вечер{{ 'ю' if m.dishes|length == 1 else ('і' if m.dishes|length < 5 else 'ь') }}</span><b class="hs-total">{{ uah(m.total) }}</b>
-    <span class="hs-items">≈ {{ uah(m.per_portion) }} за порцію</span></div>
-  {% if m.saving > 0 %}<div class="hs-save"><span>економія</span><b>−{{ uah(m.saving) }}</b></div>{% endif %}
+<section class="msum" aria-label="Підсумок">
+  <div><span class="lbl">Одна порція в середньому</span><div class="big">≈ {{ m.per_portion|round|int }}<small>₴</small></div>
+    <div class="sub">Вечеря на {{ m.people }} — близько {{ uah(m.per_dinner|round) }}</div></div>
+  {% if m.saving >= 1 %}<div class="save"><span>акції</span><b>−{{ uah(m.saving|round) }}</b></div>{% endif %}
+  <div class="pay"><span>До каси <b>{{ uah(m.total|round) }}</b> · {{ m.cart|length }} {{ plural(m.cart|length, 'позиція', 'позиції', 'позицій') }}</span><a href="#list">До списку ↓</a></div>
 </section>
 
+<div class="sec-h"><h2>Меню</h2><span>натисніть страву — рецепт</span></div>
 <div class="days">
-{% for d in m.dishes %}
-  <article class="day">
-    <div class="day-ico" aria-hidden="true">{{ d.emoji }}</div>
-    <div class="day-body">
-      <div class="day-top"><span class="day-n">{{ days[loop.index0] }}</span><span class="hint">⏱ {{ d.minutes }} хв</span></div>
-      <h3 class="day-t">{{ d.title }}</h3>
-      {% if d.why %}<div class="pwhy">{% for r in d.why %}<span>{{ r }}</span>{% endfor %}</div>{% endif %}
+{% for d in m.dishes %}{% set i = loop.index0 %}
+  <article class="day{% if i == 0 %} lead{% endif %}{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}">
+    <button type="button" class="tile" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
+      {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+    </button>
+    <div class="dbody">
+      <div class="dmeta"><span class="dn">{{ days[i] }}</span><span>{{ d.minutes }} хв · {{ uah(d.per_portion|round) }} за порцію</span></div>
+      <h3 class="dt">{{ d.title }}</h3>
+      <div class="tags">
+        {% if d.saving >= 1 %}<span class="tag money">−{{ uah(d.saving|round) }} завдяки акціям</span>{% endif %}
+        {% if d.reuse %}<span class="tag reuse">Доїдає {{ d.reuse|join(', ') }} з попередніх днів</span>{% endif %}
+        {% for w in d.why %}<span class="tag reuse">{{ w }}</span>{% endfor %}
+      </div>
+      <div class="dact">
+        <button type="button" data-open="rec{{ i }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Рецепт</button>
+        <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}">
+          <button type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>Замінити</button></form>
+      </div>
     </div>
   </article>
 {% endfor %}
 </div>
 
-<h2>Що купити</h2>
-{% if m.promo_lines %}
-<h3 class="store-h"><span class="chain-dot"></span>В акції</h3>
-<ul class="buy">
-{% for l in m.promo_lines %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
-  <li>
-    <div class="buy-main"><b>{{ o.name }}</b>
-      <span class="hint">{{ l.name }} · треба {{ fmt_qty(l.need, l.unit) }}{% if l.key in pantry %} · можливо, вже є вдома{% endif %}{% if o.store_name %} · {{ o.store_name }}{% endif %}</span></div>
-    <div class="buy-price"><b>{{ uah(l.cost) }}</b>{% if l.packs > 1 %}<span class="hint">{{ l.packs }} уп.</span>{% endif %}{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</div>
-    {% if link_url %}<a class="buy-go" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}
-  </li>
+{% for d in m.dishes %}{% set i = loop.index0 %}
+<dialog class="rsheet" id="rec{{ i }}" aria-labelledby="rt{{ i }}">
+  <button class="rclose" type="button" data-close aria-label="Закрити">×</button>
+  <div class="tile">{% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="{{ d.title }}" loading="lazy">{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}</div>
+  <div class="rbody">
+    <div class="dmeta"><span class="dn">{{ days[i] }}</span><span>{{ d.minutes }} хв · {{ m.people }} {{ plural(m.people, 'порція', 'порції', 'порцій') }} · {{ uah(d.used|round) }}</span></div>
+    <h3 id="rt{{ i }}">{{ d.title }}</h3>
+    {% if d.saving >= 1 %}<div class="tags"><span class="tag money">−{{ uah(d.saving|round) }} завдяки акціям</span></div>{% endif %}
+    <h4>Інгредієнти</h4>
+    <ul class="ing">{% for k, q in d.ingredients.items() %}<li{% if k in d.promo_keys %} class="p"{% endif %}><span>{{ ingredients[k][0] }}</span><span>{{ fmt_qty(q, ingredients[k][1]) }}</span></li>{% endfor %}</ul>
+    <h4>Як готувати</h4>
+    <ol class="steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+    <div class="ract">
+      <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}"><button type="submit">Інша страва</button></form>
+      <button type="button" class="primary" data-close>Готово</button>
+    </div>
+  </div>
+</dialog>
 {% endfor %}
-</ul>
-{% endif %}
-{% if m.other_lines %}
-<h3 class="store-h"><span class="chain-dot grey"></span>Решта <span class="hint">· орієнтовні ціни, акції зараз немає</span></h3>
-<ul class="buy">
-{% for l in m.other_lines %}
-  <li><div class="buy-main"><b>{{ l.name }}</b><span class="hint">треба {{ fmt_qty(l.need, l.unit) }}{% if l.key in pantry %} · можливо, вже є вдома{% endif %}</span></div>
-    <div class="buy-price"><b>≈ {{ uah(l.cost) }}</b></div></li>
-{% endfor %}
-</ul>
-{% endif %}
-<p class="hint">Сіль, спеції й вода не враховані. Ціни «орієнтовно» — середні для магазинів, не з чека. Обмеження в харчуванні враховані за назвою інгредієнтів — склад перевіряйте на упаковці.</p>
+
+<section id="list" class="mlist">
+  <div class="list-h"><h2>Список покупок</h2><button type="button" class="copy" id="copy">Скопіювати список</button></div>
+  <div><div class="progress"><i id="bar"></i></div><small class="hint" id="progressTxt">Відмічайте покупки просто в магазині</small></div>
+  {% macro row(l, price) %}
+  <label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ price }}">
+    <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+    <span class="rmain"><b>{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}</b>
+      <small>треба {{ fmt_qty(l.need, l.unit) }} · {{ l.days|unique|join(', ') }}{% if l.is_promo and l.source.offer.store_name and stores|length > 1 %} · {{ l.source.offer.store_name }}{% endif %}</small></span>
+    {{ caller() }}
+  </label>
+  {% endmacro %}
+  {% if m.promo_lines %}
+  <div class="group"><div class="gh"><b>В акції</b><span>{% if stores|length == 1 %}{{ stores[0].title }}{% else %}«Сільпо» поруч{% endif %}</span></div>
+  {% for l in m.promo_lines %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
+    {% call row(l, uah(l.cost)) %}<span class="rprice"><b>{{ uah(l.cost) }}{% if o.discount_pct %}<span class="disc">−{{ o.discount_pct|round|int }}%</span>{% endif %}</b>{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</span>
+      {% if link_url %}<a class="bgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}{% endcall %}
+  {% endfor %}</div>
+  {% endif %}
+  {% if m.other_lines %}
+  <div class="group"><div class="gh"><b>Без акції</b><span>будь-який магазин</span></div>
+  {% for l in m.other_lines %}{% call row(l, '≈ ' ~ uah(l.cost|round)) %}<span class="rprice"><b class="est">≈ {{ uah(l.cost|round) }}</b></span>{% endcall %}{% endfor %}</div>
+  {% endif %}
+  {% set waiting = m.pantry_lines|rejectattr('buy')|list %}
+  {% if waiting %}
+  <div class="group"><div class="gh"><b>Мабуть, уже є вдома</b><span>не рахуємо, поки не скажете</span></div>
+  {% for l in waiting %}
+    <div class="brow static"><span class="rmain"><b>{{ l.name }}</b><small>треба {{ fmt_qty(l.need, l.unit) }} · {% if l.is_promo %}в акції {{ uah(l.cost) }}{% else %}≈ {{ uah(l.cost|round) }}{% endif %}</small></span>
+      <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Закінчилось</button></form></div>
+  {% endfor %}</div>
+  {% endif %}
+  {% set added = m.pantry_lines|selectattr('buy')|list %}
+  {% if added %}<p class="hint">Додано, бо вдома закінчилось: {% for l in added %}<form method="post" action="/menu/pantry" class="inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="linkbtn" title="Прибрати з кошика">{{ l.name|lower }} ✕</button></form>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  <p class="hint">Сіль і спеції не враховані. Ціни зі знаком ≈ орієнтовні: цього тижня ці продукти не в акції. Обмеження в харчуванні враховані за назвою інгредієнтів — склад перевіряйте на упаковці.</p>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+<script>
+(function () {
+  document.querySelectorAll('[data-open]').forEach(function (b) {
+    b.addEventListener('click', function () { var d = document.getElementById(b.dataset.open); if (d && d.showModal) d.showModal(); });
+  });
+  document.querySelectorAll('dialog').forEach(function (d) {
+    d.addEventListener('click', function (e) { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+  });
+  var key = 'bought:{{ m.ids|join(",") }}:{{ m.people }}', saved = {};
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-buy]'));
+  function progress() {
+    var done = boxes.filter(function (b) { return b.checked; }).length;
+    document.getElementById('bar').style.width = (boxes.length ? done / boxes.length * 100 : 0) + '%';
+    document.getElementById('progressTxt').textContent = done ? 'У кошику ' + done + ' з ' + boxes.length : 'Відмічайте покупки просто в магазині';
+  }
+  boxes.forEach(function (b) {
+    b.checked = !!saved[b.dataset.buy];
+    b.addEventListener('change', function () { saved[b.dataset.buy] = b.checked; try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {} progress(); });
+  });
+  progress();
+  var tt; function toast(m) { var t = document.getElementById('toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(function () { t.hidden = true; }, 1800); }
+  document.getElementById('copy').addEventListener('click', function () {
+    var lines = ['Меню: {% for d in m.dishes %}{{ days[loop.index0] }} {{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}', ''];
+    document.querySelectorAll('.mlist .group').forEach(function (g) {
+      var rows = g.querySelectorAll('[data-buy]'); if (!rows.length) return;
+      lines.push(g.querySelector('.gh b').textContent + ':');
+      rows.forEach(function (r) { lines.push((r.checked ? '☑ ' : '☐ ') + r.dataset.text); });
+      lines.push('');
+    });
+    var text = lines.join('\n').trim();
+    try { navigator.clipboard.writeText(text).then(function () { toast('Список скопійовано'); }, function () { toast('Не вдалося скопіювати'); }); }
+    catch (e) { toast('Не вдалося скопіювати'); }
+  });
+})();
+</script>
 {% else %}
 <div class="card">Під ваші налаштування страв не знайшлося. Збільште час на готування або змініть обмеження в <a href="/profile">профілі</a>.</div>
 {% endif %}

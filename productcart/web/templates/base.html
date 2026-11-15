@@ -4,15 +4,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="/static/style.css">
-</head><body><div class="wrap">
+</head><body{% if user %} class="authed"{% endif %}><div class="wrap">
 <header class="top">
   <a class="logo" href="/"><i>%</i>Кошик з акцій</a>
   {% if user %}
   <nav class="top">
-    <a href="/list" {% if request.url.path == '/list' %}class="on"{% endif %}>Мій список</a>
-    <a href="/menu" {% if request.url.path == '/menu' %}class="on"{% endif %}>Меню</a>
-    <a href="/profile" {% if request.url.path == '/profile' %}class="on"{% endif %}>Профіль</a>
-    <a href="/silpo" {% if request.url.path == '/silpo' %}class="on"{% endif %}>Сільпо</a>
+    <a class="tabbed{% if request.url.path == '/list' %} on{% endif %}" href="/list">Мій список</a>
+    <a class="tabbed{% if request.url.path == '/menu' %} on{% endif %}" href="/menu">Меню</a>
+    <a class="tabbed{% if request.url.path == '/profile' %} on{% endif %}" href="/profile">Профіль</a>
+    <a class="tabbed{% if request.url.path == '/silpo' %} on{% endif %}" href="/silpo">Сільпо</a>
     {% if is_admin %}<a href="/admin/stats" {% if request.url.path == '/admin/stats' %}class="on"{% endif %}>Статистика</a>{% endif %}
     <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button type="submit">Вийти</button></form>
   </nav>
@@ -21,5 +21,12 @@
   {% endif %}
 </header>
 {% block body %}{% endblock %}
-<footer>Кошик з акцій — прототип. <a href="/privacy">Приватність і дані</a></footer>
-</div></body></html>
+<footer>Кошик з акцій — прототип. <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
+</div>
+{% if user %}{% set path = request.url.path %}
+<div class="tabs"><nav aria-label="Розділи">
+  <a href="/list" {% if path == '/list' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Акції</a>
+  <a href="/menu" {% if path == '/menu' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="13" r="7"/><circle cx="12" cy="13" r="3.5"/><path d="M12 3v2" stroke-linecap="round"/></svg>Меню</a>
+  <a href="/silpo" {% if path == '/silpo' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l1.5-5h13L20 10M4 10v9h16v-9M4 10h16M9 19v-5h6v5"/></svg>Магазини</a>
+  <a href="/profile" {% if path == '/profile' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Профіль</a>
+</nav></div>{% endif %}</body></html>
