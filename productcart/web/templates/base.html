@@ -13,7 +13,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
   if (/^\/(silpo|auth|go|logout)|refresh=1/.test(href)) e.preventDefault();
 });
 </script>
-</head><body{% if user %} class="authed"{% endif %}><div class="wrap{% block wrapcls %}{% endblock %}">
+</head><body class="tabbed{% if user %} authed{% endif %}"><div class="wrap{% block wrapcls %}{% endblock %}">
 <header class="top">
   <a class="logo" href="/"><i>%</i>Кошик з акцій</a>
   {% if user %}
@@ -26,7 +26,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
     <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button type="submit">Вийти</button></form>
   </nav>
   {% else %}
-  <nav class="top"><a href="/login">Увійти</a></nav>
+  <nav class="top"><a class="tabbed" href="/login">Увійти</a></nav>
   {% endif %}
   <a class="hcart{% if request.url.path == '/silpo/cart' %} on{% endif %}" href="{{ '/silpo/cart' if user else '/register' }}" aria-label="Мій кошик у «Сільпо»{% if cart_n %}: {{ cart_n }}{% endif %}" title="Мій кошик у «Сільпо»">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>
@@ -36,13 +36,13 @@ document.addEventListener('turbo:before-prefetch', function (e) {
 {% block body %}{% endblock %}
 <footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
 </div>
-{% if user %}{% set path = request.url.path %}
+{% set path = request.url.path %}
 <div class="tabs"><nav aria-label="Розділи">
   <a href="/list" {% if path == '/list' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Акції</a>
   <a href="/menu" {% if path == '/menu' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="13" r="7"/><circle cx="12" cy="13" r="3.5"/><path d="M12 3v2" stroke-linecap="round"/></svg>Меню</a>
   <a href="/silpo" {% if path == '/silpo' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l1.5-5h13L20 10M4 10v9h16v-9M4 10h16M9 19v-5h6v5"/></svg>Магазини</a>
-  <a href="/profile" {% if path == '/profile' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Профіль</a>
-</nav></div>{% endif %}{% if user %}<script>
+{% if user %}  <a href="/profile" {% if path == '/profile' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Профіль</a>{% else %}<a href="/login" {% if path in ('/login', '/register') %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5M15 12H4"/></svg>Увійти</a>{% endif %}
+</nav></div>{% if user %}<script>
 (function () {   // свіжа кількість товарів у кошику «Сільпо» для значка
   if (!window.fetch || location.pathname === '/silpo/cart') return;
   fetch('/silpo/cart/count', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
