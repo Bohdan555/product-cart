@@ -301,4 +301,7 @@ form.inline{display:inline;margin:0}
 .l-final .l-btn{background:var(--sticker);color:var(--sticker-ink);box-shadow:none}
 .gnote{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 14px;background:var(--soft);border-radius:14px;padding:12px 14px;margin:4px 0 14px}
 .gnote p{margin:0;font-size:14.5px;flex:1;min-width:200px}
-@media (prefers-reduced-motion:reduce){.l-btn{transition:none}}
+@media (prefers-reduced-motion:reduce){.l-btn{transition:none}}/* меню оновлюється на місці */
+#menuroot{transition:opacity .15s}
+#menuroot.busy .msum,#menuroot.busy .days,#menuroot.busy .mlist{opacity:.55;transition:opacity .2s .15s}
+button.pending{opacity:.6}

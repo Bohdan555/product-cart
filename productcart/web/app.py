@@ -146,11 +146,20 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             conn.execute("UPDATE silpo_links SET tokens_enc=? WHERE user_id=?", (box.seal(json.dumps(tokens)), user_id))
         return tokens
 
+    parsed_offers: dict[str, tuple[str, list[dict]]] = {}  # у межах процесу: store_id → (fetched_at, акції)
+
     def cached_offers(store_id: str) -> list[Offer] | None:
-        r = conn.execute("SELECT fetched_at, data FROM offers_cache WHERE chain='silpo' AND store_id=?", (store_id,)).fetchone()
+        # спершу лише дата (дешево); великий JSON читаємо й розбираємо, тільки якщо його ще немає в пам'яті
+        r = conn.execute("SELECT fetched_at FROM offers_cache WHERE chain='silpo' AND store_id=?", (store_id,)).fetchone()
         if not r or r["fetched_at"] < security.iso(security.now() - OFFERS_TTL):
             return None
-        return [offer_from_dict(d) for d in json.loads(r["data"])]
+        hit = parsed_offers.get(store_id)
+        if not hit or hit[0] != r["fetched_at"]:
+            row = conn.execute("SELECT data FROM offers_cache WHERE chain='silpo' AND store_id=?", (store_id,)).fetchone()
+            if not row:
+                return None
+            hit = parsed_offers[store_id] = (r["fetched_at"], json.loads(row["data"]))
+        return [offer_from_dict(d) for d in hit[1]]
 
     @contextlib.asynccontextmanager
     async def lazy_silpo(access_token: str):
@@ -165,13 +174,19 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
             yield get_call
 
+    branches_mem: list[dict] = []  # список магазинів у пам'яті процесу
+
     async def silpo_branches(get_call) -> list[dict]:
         """Список магазинів «Сільпо» однаковий для всіх — тримаємо в кеші на добу.
         get_call() відкриває з'єднання з «Сільпо» лише тоді, коли кеш застарів."""
+        fresh_after = security.iso(security.now() - timedelta(hours=24))
+        if branches_mem and branches_mem[0]["at"] >= fresh_after:
+            return branches_mem[0]["items"]
         raw = db.get_setting(conn, "silpo_branches")
         if raw:
             data = json.loads(raw)
-            if data.get("at", "") >= security.iso(security.now() - timedelta(hours=24)):
+            if data.get("at", "") >= fresh_after:
+                branches_mem[:] = [data]
                 return data["items"]
         items = await silpo.list_branches(await get_call())
         db.set_setting(conn, "silpo_branches", json.dumps({"at": security.iso(security.now()), "items": items}, ensure_ascii=False))

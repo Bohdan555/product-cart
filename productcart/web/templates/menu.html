@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Меню з акцій — Кошик з акцій{% endblock %}
 {% block body %}
+<div id="menuroot">
 <section class="intro">
   <h1>Вечері на тиждень</h1>
   {% if guest %}<div class="gnote"><p><b>Це приклад на демо-цінах.</b> Створіть профіль — меню збережеться, а ціни будуть з акцій вашого «Сільпо».</p><a class="btn small" href="/register">Створити профіль</a></div>
@@ -116,43 +117,98 @@
 </section>
 
 <div class="toast" id="toast" hidden></div>
-<script>
-(function () {
-  document.querySelectorAll('[data-open]').forEach(function (b) {
-    b.addEventListener('click', function () { var d = document.getElementById(b.dataset.open); if (d && d.showModal) d.showModal(); });
-  });
-  document.querySelectorAll('dialog').forEach(function (d) {
-    d.addEventListener('click', function (e) { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
-  });
-  var key = 'bought:{{ m.ids|join(",") }}:{{ m.people }}', saved = {};
-  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
-  var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-buy]'));
-  function progress() {
-    var done = boxes.filter(function (b) { return b.checked; }).length;
-    document.getElementById('bar').style.width = (boxes.length ? done / boxes.length * 100 : 0) + '%';
-    document.getElementById('progressTxt').textContent = done ? 'У кошику ' + done + ' з ' + boxes.length : 'Відмічайте покупки просто в магазині';
-  }
-  boxes.forEach(function (b) {
-    b.checked = !!saved[b.dataset.buy];
-    b.addEventListener('change', function () { saved[b.dataset.buy] = b.checked; try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {} progress(); });
-  });
-  progress();
-  var tt; function toast(m) { var t = document.getElementById('toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(function () { t.hidden = true; }, 1800); }
-  document.getElementById('copy').addEventListener('click', function () {
-    var lines = ['Меню: {% for d in m.dishes %}{{ days[loop.index0] }} {{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}', ''];
-    document.querySelectorAll('.mlist .group').forEach(function (g) {
-      var rows = g.querySelectorAll('[data-buy]'); if (!rows.length) return;
-      lines.push(g.querySelector('.gh b').textContent + ':');
-      rows.forEach(function (r) { lines.push((r.checked ? '☑ ' : '☐ ') + r.dataset.text); });
-      lines.push('');
-    });
-    var text = lines.join('\n').trim();
-    try { navigator.clipboard.writeText(text).then(function () { toast('Список скопійовано'); }, function () { toast('Не вдалося скопіювати'); }); }
-    catch (e) { toast('Не вдалося скопіювати'); }
-  });
-})();
-</script>
+<div hidden id="menudata" data-key="bought:{{ m.ids|join(",") }}:{{ m.people }}" data-menu="Меню: {% for d in m.dishes %}{{ days[loop.index0] }} {{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}"></div>
 {% else %}
 <div class="card">Під ваші налаштування страв не знайшлося. Збільште час на готування або змініть обмеження в <a href="/profile">профілі</a>.</div>
 {% endif %}
+</div>
+<script>
+(function () {
+  var root = document.getElementById('menuroot');
+  var tt;
+  function toast(m) { var t = document.getElementById('toast'); if (!t) return; t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(function () { t.hidden = true; }, 1800); }
+
+  // Усе, що треба перев'язати після кожного оновлення меню
+  function init() {
+    root.querySelectorAll('[data-open]').forEach(function (b) {
+      b.addEventListener('click', function () { var d = document.getElementById(b.dataset.open); if (d && d.showModal) d.showModal(); });
+    });
+    root.querySelectorAll('dialog').forEach(function (d) {
+      d.addEventListener('click', function (e) { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+    });
+    var data = document.getElementById('menudata'); if (!data) return;
+    var key = data.dataset.key, saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('[data-buy]'));
+    function progress() {
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      document.getElementById('bar').style.width = (boxes.length ? done / boxes.length * 100 : 0) + '%';
+      document.getElementById('progressTxt').textContent = done ? 'У кошику ' + done + ' з ' + boxes.length : 'Відмічайте покупки просто в магазині';
+    }
+    boxes.forEach(function (b) {
+      b.checked = !!saved[b.dataset.buy];
+      b.addEventListener('change', function () { saved[b.dataset.buy] = b.checked; try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {} progress(); });
+    });
+    progress();
+    var copy = document.getElementById('copy');
+    if (copy) copy.addEventListener('click', function () {
+      var lines = [data.dataset.menu, ''];
+      root.querySelectorAll('.mlist .group').forEach(function (g) {
+        var rows = g.querySelectorAll('[data-buy]'); if (!rows.length) return;
+        lines.push(g.querySelector('.gh b').textContent + ':');
+        rows.forEach(function (r) { lines.push((r.checked ? '☑ ' : '☐ ') + r.dataset.text); });
+        lines.push('');
+      });
+      var text = lines.join('\n').trim();
+      try { navigator.clipboard.writeText(text).then(function () { toast('Список скопійовано'); }, function () { toast('Не вдалося скопіювати'); }); }
+      catch (e) { toast('Не вдалося скопіювати'); }
+    });
+  }
+
+  // Налаштування, заміна страви й «закінчилось» — без перезавантаження сторінки:
+  // кнопка реагує одразу, запит іде у фоні, а меню оновлюється на місці.
+  var seq = 0, timer = null;
+  function send(form, submitter) {
+    var fd = new FormData(form);
+    if (submitter && submitter.name) fd.set(submitter.name, submitter.value);
+    var my = ++seq;
+    root.classList.add('busy');
+    fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) {
+        if (my !== seq) return;               // прийшла відповідь на застарілий запит
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var fresh = doc.getElementById('menuroot');
+        if (!fresh) throw new Error('no menu');
+        document.querySelectorAll('dialog[open]').forEach(function (d) { d.close(); });
+        root.innerHTML = fresh.innerHTML;
+        init();
+        root.classList.remove('busy');
+        var f = root.querySelector('.day.fresh'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      })
+      .catch(function () { if (my === seq) { root.classList.remove('busy'); form.submit(); } });
+  }
+  root.addEventListener('submit', function (e) {
+    var form = e.target, btn = e.submitter;
+    if (!window.fetch || !window.DOMParser || !/\/menu\//.test(form.getAttribute('action') || '')) return;
+    e.preventDefault();
+    // миттєвий відгук на натискання
+    if (form.classList.contains('step') && btn) {
+      var v = +btn.value, b = form.querySelector('b'), bs = form.querySelectorAll('button[name=people]');
+      b.textContent = v; bs[0].value = v - 1; bs[1].value = v + 1; bs[0].disabled = v <= 1; bs[1].disabled = v >= 12;
+      var hidden = form.querySelector('input[name=people]') || form.appendChild(Object.assign(document.createElement('input'), { type: 'hidden', name: 'people' }));
+      hidden.value = v;
+      clearTimeout(timer); timer = setTimeout(function () { send(form, null); }, 450);  // кілька натискань — один запит
+      root.classList.add('busy');
+      return;
+    }
+    if (form.classList.contains('seg') && btn) {
+      form.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === btn ? 'true' : 'false'); });
+    }
+    if (btn) btn.classList.add('pending');
+    send(form, btn);
+  });
+  init();
+})();
+</script>
 {% endblock %}
