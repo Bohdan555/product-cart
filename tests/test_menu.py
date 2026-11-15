@@ -75,3 +75,34 @@ def test_honest_totals_pantry_and_swap():
     assert again[1] not in (m.ids[1], new[1])
     assert menu.plan(offers, p, dinners=3, keep=new).ids == new          # збережене меню лишається
     assert menu.plan(offers, p, dinners=3, max_minutes=20, keep=new).ids != new  # але не якщо вже не підходить
+
+
+def test_weekly_menu_changes_and_more_recipes():
+    import datetime
+    from unittest import mock
+    from productcart import menu, planner
+    from productcart.models import Profile
+    from productcart.sources import demo
+    assert len(menu.RECIPES) >= 35
+    offers = planner.merge_nearby(demo.load())
+    p = Profile(household=3)
+    weeks = []
+    for wk in range(4):
+        with mock.patch("productcart.menu.date") as md:
+            md.today.return_value = datetime.date(2026, 11, 16) + datetime.timedelta(weeks=wk)
+            m = menu.plan(offers, p, dinners=5, max_minutes=60)
+        weeks.append(set(m.ids))
+        p.menu_prev = m.ids
+    for a, b in zip(weeks, weeks[1:]):
+        assert len(a & b) <= 2                     # тиждень у тиждень — щонайменше 3 нові страви
+    assert len(set().union(*weeks)) >= 14
+
+
+def test_source_map_cache_is_safe():
+    from productcart import menu, planner
+    from productcart.sources import demo
+    offers = planner.merge_nearby(demo.load())
+    a, b = menu.source_map(offers), menu.source_map(offers)
+    assert a is not b and {k: v.offer for k, v in a.items()} == {k: v.offer for k, v in b.items()}
+    a["eggs"].offer = None                         # зміна однієї копії не псує кеш
+    assert menu.source_map(offers)["eggs"].offer is not None or b["eggs"].offer is None

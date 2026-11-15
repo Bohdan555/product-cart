@@ -102,6 +102,8 @@ class Profile:
     menu: list[str] = field(default_factory=list)          # поточне меню (id рецептів) після замін
     menu_skip: list[str] = field(default_factory=list)     # нещодавно замінені страви — не пропонувати знову одразу
     pantry_buy: list[str] = field(default_factory=list)    # запаси, які вдома закінчились — додати в кошик
+    menu_week: str | None = None                           # тиждень (ISO), на який складено меню
+    menu_prev: list[str] = field(default_factory=list)     # меню минулого тижня — цього тижня пропонуємо інше
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо
 

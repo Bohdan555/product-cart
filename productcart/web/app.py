@@ -13,7 +13,7 @@ import contextlib
 import json
 import os
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 from functools import lru_cache
 from urllib.parse import quote, unquote, urlencode
 from pathlib import Path
@@ -39,7 +39,7 @@ COOKIE = "pc_session"
 GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
-GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy")
+GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev")
 OFFERS_TTL = timedelta(hours=6)
 STALE_TTL = timedelta(days=7)   # старіший кеш не показуємо навіть тимчасово
 offers_stale = contextvars.ContextVar("offers_stale", default=False)  # показали акції з застарілого кешу
@@ -755,9 +755,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
         link, stores, offers, notice, is_demo = await menu_offers(u, p, bool(refresh))
+        week = "%d-W%02d" % date.today().isocalendar()[:2]
+        new_week = p.menu_week != week
+        if new_week:   # новий тиждень — нове меню, страви минулого тижня відсуваємо
+            if p.menu:
+                p.menu_prev = p.menu
+            p.menu, p.menu_skip, p.menu_week = [], [], week
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
-        changed = m.ids != p.menu
+        changed = m.ids != p.menu or new_week
         p.menu = m.ids
         if changed and u:
             save_profile(u["id"], p, health)
@@ -1156,7 +1162,7 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
         dish_dislikes=[x for x in lst("dish_dislikes") if x in recipe_ids][:30],
     )
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
-    for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy"):
+    for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev"):
         setattr(p, k, getattr(prev, k))
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]

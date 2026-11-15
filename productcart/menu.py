@@ -6,7 +6,9 @@
 """
 from __future__ import annotations
 
+import hashlib
 import math
+from datetime import date
 import re
 from dataclasses import dataclass, field
 
@@ -44,6 +46,8 @@ INGREDIENTS: dict[str, tuple] = {
     "flour": ("Борошно пшеничне", "g", 1000, 32, False, {"grains", "gluten"}, [["борошн"]], ["рисов", "кукурудз", "гречан"]),
     "lentils": ("Сочевиця", "g", 500, 90, False, {"grains"}, [["сочевиц"]], []),
     "beans": ("Квасоля консервована", "g", 400, 100, False, {"grains"}, [["квасол"]], ["стручк"]),
+    "zucchini": ("Кабачок", "g", 1000, 45, True, {"vegetables"}, [["кабач"], ["цукін"]], ["ікра", "чипс", "консерв"]),
+    "kefir": ("Кефір", "ml", 900, 50, True, {"dairy", "lactose"}, [["кефір"]], ["безлактоз"]),
     "oil": ("Олія соняшникова", "ml", 850, 85, False, set(), [["олія"]], ["оливк", "кунжут", "кокос", "лляна"]),
 }
 PANTRY = {"oil", "rice", "buckwheat", "pasta", "flour", "lentils", "tomato_paste"}
@@ -171,6 +175,101 @@ RECIPES: list[Recipe] = [
        "Наріжте всі овочі кубиками.",
        "Обсмажте цибулю й моркву, додайте картоплю й капусту.",
        "Додайте перець і томати, тушкуйте під кришкою 25 хвилин."),
+    # --- більше різноманіття ---
+    _r("golubtsi", "Ліниві голубці", 60, {"класика"}, "фарш", "🥬",
+       {"minced": 500, "rice": 150, "cabbage": 400, "onion": 100, "carrot": 100, "tomato_paste": 50, "sour_cream": 150},
+       "Відваріть рис до напівготовності, дрібно нашаткуйте капусту й ошпарте її окропом.",
+       "Змішайте фарш, рис, капусту й половину цибулі; посоліть і сформуйте довгасті котлети.",
+       "Обсмажте решту цибулі з морквою, додайте томатну пасту, сметану й склянку води.",
+       "Викладіть голубці в соус і тушкуйте під кришкою 35 хвилин."),
+    _r("deruny", "Деруни зі сметаною", 40, {"класика", "вегетаріанське"}, "овочі", "🥔",
+       {"potato": 1000, "eggs": 2, "onion": 100, "flour": 60, "sour_cream": 200, "oil": 80},
+       "Натріть картоплю й цибулю на дрібній тертці, злийте зайвий сік.",
+       "Додайте яйця, борошно й сіль, перемішайте.",
+       "Смажте ложкою на розігрітій олії по 3 хвилини з кожного боку.",
+       "Подавайте гарячими зі сметаною."),
+    _r("lazy-varenyky", "Ліниві вареники", 30, {"вегетаріанське", "дітям", "швидко"}, "сир", "🥟",
+       {"cottage": 500, "eggs": 1, "flour": 120, "sour_cream": 150, "butter": 30},
+       "Розімніть сир виделкою з яйцем і дрібкою солі.",
+       "Додайте борошно, замісіть м'яке тісто, скачайте ковбаску й наріжте шматочками.",
+       "Варіть у підсоленому окропі 3–4 хвилини після спливання.",
+       "Подавайте з маслом і сметаною."),
+    _r("chicken-soup", "Курячий суп з локшиною", 50, {"класика", "курка", "дітям"}, "курка", "🍜",
+       {"chicken_thigh": 600, "potato": 400, "carrot": 150, "onion": 100, "pasta": 150},
+       "Залийте курку 2,5 л холодної води, доведіть до кипіння й зніміть піну; варіть 25 хвилин.",
+       "Додайте нарізану картоплю, моркву й цибулю, варіть ще 10 хвилин.",
+       "Всипте локшину й варіть до готовності, 6–8 хвилин. Посоліть."),
+    _r("pork-stew", "Свинина, тушкована з картоплею", 75, {"класика"}, "свинина", "🍖",
+       {"pork": 600, "potato": 800, "carrot": 150, "onion": 150, "tomato_paste": 40, "oil": 30},
+       "Наріжте свинину шматочками й обсмажте до рум'яності.",
+       "Додайте цибулю й моркву, потім томатну пасту.",
+       "Додайте картоплю, залийте водою наполовину й тушкуйте під кришкою 45 хвилин."),
+    _r("chicken-pasta", "Паста з куркою та печерицями у вершковому соусі", 30, {"курка", "швидко", "дітям"}, "курка", "🍝",
+       {"chicken_fillet": 500, "pasta": 400, "milk": 300, "cheese": 100, "mushrooms": 200, "butter": 20},
+       "Відваріть пасту до стану аль денте.",
+       "Обсмажте нарізане філе й печериці на маслі.",
+       "Влийте молоко, додайте тертий сир і прогрійте до загустіння.",
+       "Змішайте з пастою."),
+    _r("fish-cream", "Риба в сметані з рисом", 35, {"риба"}, "риба", "🐟",
+       {"fish": 700, "sour_cream": 200, "onion": 100, "rice": 300},
+       "Поставте варитися рис.",
+       "Викладіть рибу у форму, зверху цибулю кільцями, посоліть.",
+       "Залийте сметаною й запікайте 20–25 хвилин при 190 °C."),
+    _r("solyanka", "Тушкована капуста з сосисками", 35, {"дітям", "швидко"}, "сосиски", "🌭",
+       {"sausages": 400, "cabbage": 600, "onion": 100, "carrot": 100, "tomato_paste": 50, "oil": 30},
+       "Обсмажте цибулю з морквою, додайте нашатковану капусту.",
+       "Тушкуйте 15 хвилин, додайте томатну пасту.",
+       "Додайте нарізані сосиски й тушкуйте ще 10 хвилин."),
+    _r("meatballs", "Тефтелі в томатному соусі з гречкою", 50, {"дітям", "класика"}, "фарш", "🍲",
+       {"minced": 500, "rice": 80, "onion": 100, "tomatoes_can": 400, "buckwheat": 300, "eggs": 1},
+       "Змішайте фарш, сирий рис, яйце й половину цибулі; сформуйте кульки.",
+       "Обсмажте решту цибулі, додайте томати й склянку води.",
+       "Покладіть тефтелі в соус і тушкуйте 30 хвилин; тим часом зваріть гречку."),
+    _r("zrazy", "Картопляні зрази з грибами", 50, {"вегетаріанське"}, "гриби", "🥔",
+       {"potato": 1000, "mushrooms": 300, "onion": 100, "eggs": 1, "flour": 80, "oil": 60},
+       "Зваріть картоплю й зробіть пюре, додайте яйце та 2 ложки борошна.",
+       "Обсмажте печериці з цибулею для начинки.",
+       "Сформуйте коржики з начинкою, обваляйте в борошні й обсмажте до рум'яності."),
+    _r("zucchini-stew", "Кабачки, тушковані з овочами", 35, {"вегетаріанське", "веганське", "швидко"}, "овочі", "🥒",
+       {"zucchini": 800, "pepper": 200, "carrot": 150, "onion": 100, "tomatoes_can": 400, "oil": 30},
+       "Наріжте овочі кубиками.",
+       "Обсмажте цибулю з морквою, додайте кабачки й перець.",
+       "Додайте томати й тушкуйте 15–20 хвилин."),
+    _r("chicken-zucchini", "Курка з кабачками і рисом", 35, {"курка", "швидко"}, "курка", "🍗",
+       {"chicken_fillet": 600, "zucchini": 500, "rice": 300, "onion": 100, "oil": 30},
+       "Поставте варитися рис.",
+       "Обсмажте шматочки філе з цибулею 7 хвилин.",
+       "Додайте кабачки й тушкуйте ще 10 хвилин; посоліть."),
+    _r("pancakes", "Оладки на кефірі зі сметаною", 30, {"вегетаріанське", "дітям", "швидко"}, "сир", "🥞",
+       {"kefir": 500, "eggs": 2, "flour": 300, "oil": 60, "sour_cream": 150},
+       "Змішайте кефір, яйця, щіпку солі й соди.",
+       "Додайте борошно до густоти сметани.",
+       "Смажте ложкою на олії по 2 хвилини з кожного боку; подавайте зі сметаною."),
+    _r("liver-puree", "Печінка по-домашньому з пюре", 45, {"класика"}, "печінка", "🍽️",
+       {"liver": 500, "onion": 200, "sour_cream": 150, "potato": 900, "milk": 150, "butter": 30},
+       "Зваріть картоплю й розімніть з молоком і маслом.",
+       "Обсмажте цибулю, додайте печінку й смажте 5 хвилин.",
+       "Додайте сметану й тушкуйте ще 5 хвилин."),
+    _r("grechanyky", "Гречаники в томатному соусі", 50, {"класика", "дітям"}, "фарш", "🍘",
+       {"minced": 400, "buckwheat": 200, "onion": 100, "eggs": 1, "oil": 50, "tomatoes_can": 400},
+       "Зваріть гречку й остудіть.",
+       "Змішайте з фаршем, яйцем і цибулею; сформуйте котлети й обсмажте.",
+       "Залийте томатами й тушкуйте 15 хвилин."),
+    _r("chili", "Квасоля з фаршем і перцем", 35, {"швидко"}, "фарш", "🌶️",
+       {"beans": 800, "minced": 400, "tomatoes_can": 400, "onion": 100, "pepper": 200, "oil": 20},
+       "Обсмажте фарш із цибулею до розсипчастості.",
+       "Додайте перець і томати, тушкуйте 10 хвилин.",
+       "Додайте квасолю й прогрійте ще 5 хвилин."),
+    _r("mushroom-soup", "Крем-суп з печериць", 35, {"вегетаріанське"}, "гриби", "🍄",
+       {"mushrooms": 500, "potato": 400, "onion": 100, "milk": 400, "butter": 30},
+       "Обсмажте цибулю й печериці на маслі.",
+       "Додайте картоплю, залийте водою й варіть 15 хвилин.",
+       "Влийте молоко, збийте блендером до кремової текстури, посоліть."),
+    _r("eggs-sausage", "Яєчня з сосисками й овочами", 15, {"швидко", "дітям"}, "яйця", "🍳",
+       {"eggs": 8, "sausages": 300, "pepper": 150, "tomatoes_can": 200, "oil": 20},
+       "Обсмажте нарізані сосиски й перець 5 хвилин.",
+       "Додайте томати, прогрійте.",
+       "Вбийте яйця й смажте під кришкою 4–5 хвилин."),
 ]
 RECIPE_BY_ID = {r.id: r for r in RECIPES}
 
@@ -195,6 +294,17 @@ def recipe_tags(rec: Recipe) -> set[str]:
     for k in rec.ingredients:
         out |= INGREDIENTS[k][5]
     return out
+
+
+_BASES = ("rice", "buckwheat", "pasta", "potato")
+
+
+def _base(r: "Recipe") -> str | None:
+    return next((b for b in _BASES if b in r.ingredients), None)
+
+
+def _is_soup(r: "Recipe") -> bool:
+    return any(w in r.title.lower() for w in ("суп", "борщ"))
 
 
 def _per(key: str) -> int:
@@ -224,23 +334,49 @@ class Source:
         return self.unit_price
 
 
+_UNIT_LABEL = {"g": "кг", "ml": "л", "pcs": "шт"}
+_source_cache: dict[int, dict[str, "Source"]] = {}
+
+
 def source_map(offers: list[Offer]) -> dict[str, Source]:
-    """Для кожного інгредієнта — найдешевший за кг/л/шт акційний товар; інакше орієнтовна ціна."""
+    """Для кожного інгредієнта — найдешевший за кг/л/шт акційний товар; інакше орієнтовна ціна.
+    Назву кожної акції розбираємо один раз і перевіряємо лише акції, де трапляється початок потрібного слова;
+    результат для того самого набору акцій тримаємо в пам'яті (меню й «Замінити» рахують його двічі поспіль)."""
+    sig = hash(tuple((o.product_id, o.store_id, o.price, o.name) for o in offers))
+    hit = _source_cache.get(sig)
+    if hit is not None:
+        return {k: Source(k, v.offer) for k, v in hit.items()}
+    toks = [_tokens(o.name) for o in offers]
+    lows = [(o.name or "").lower() for o in offers]
+    by_prefix: dict[str, set[int]] = {}
+    for i, ts in enumerate(toks):
+        for t in ts:
+            by_prefix.setdefault(t[:3], set()).add(i)
     best: dict[str, Source] = {}
-    for key in INGREDIENTS:
-        unit = INGREDIENTS[key][1]
+    for key, ing in INGREDIENTS.items():
+        unit, variants, excludes = ing[1], ing[6], ing[7]
+        idx: set[int] = set()
+        for var in variants:
+            idx |= by_prefix.get(var[0][:3], set())
         cands = []
-        for o in offers:
-            if not matches_ingredient(o.name, key):
+        for i in idx:
+            if any(e in lows[i] for e in excludes):
                 continue
+            ts = toks[i]
+            if not any(all(any(t.startswith(stem) for t in ts) for stem in var) for var in variants):
+                continue
+            o = offers[i]
             up = o.unit_price()
             # одиниці мають збігатися: г ↔ кг, мл ↔ л, шт ↔ шт
-            if not up or {"g": "кг", "ml": "л", "pcs": "шт"}[unit] != up[1]:
+            if not up or _UNIT_LABEL[unit] != up[1]:
                 continue
-            cands.append((up[0], o))
-        cands.sort(key=lambda x: x[0])
-        best[key] = Source(key, cands[0][1] if cands else None)
-    return best
+            cands.append((up[0], i, o))
+        cands.sort(key=lambda x: (x[0], x[1]))
+        best[key] = Source(key, cands[0][2] if cands else None)
+    if len(_source_cache) > 16:
+        _source_cache.clear()
+    _source_cache[sig] = best
+    return {k: Source(k, v.offer) for k, v in best.items()}
 
 
 @dataclass
@@ -384,6 +520,8 @@ class _Ctx:
         self.sources = source_map(offers)
         self.likes = set(profile.likes)
         self.dish_likes = set(profile.dish_likes)
+        self.avoid = set(profile.menu_prev)   # страви минулого тижня — штраф, щоб меню мінялось
+        self.week = date.today().isocalendar()[:2]
         self.regular_stems = [w[:-1] if len(w) > 4 else w for r in profile.regulars for w in _tokens(r)]
         self.pool = [r for r in RECIPES if allowed(r, profile, max_minutes)]
         self.people = max(1, profile.household)
@@ -401,7 +539,20 @@ class _Ctx:
         pref = len(recipe_tags(r) & self.likes) + 0.5 * len(self._regs(r)) + (2.0 if r.id in self.dish_likes else 0)
         same = sum(1 for o in others if o.protein == r.protein)
         penalty = 2.0 if same >= 2 else (0.6 if same else 0)
-        return 2.0 * pref + 6.0 * (saving / cost if cost else 0) + 0.4 * n_promo + 1.5 * overlap - penalty
+        base = _base(r)   # однаковий гарнір (рис, гречка, макарони, картопля) кілька днів поспіль набридає
+        if base:
+            penalty += 0.9 * sum(1 for o in others if _base(o) == base)
+        if _is_soup(r):
+            penalty += 1.2 * sum(1 for o in others if _is_soup(o))
+        if r.id in self.avoid:
+            penalty += 2.5
+        return (2.0 * pref + 6.0 * (saving / cost if cost else 0) + 0.4 * n_promo + 1.5 * overlap - penalty
+                + self.jitter(r))
+
+    def jitter(self, r: Recipe) -> float:
+        """Невелика «випадковість», що змінюється щотижня: за тих самих акцій меню не повторюється тиждень у тиждень."""
+        h = hashlib.sha1(f"{r.id}:{self.week}".encode()).digest()
+        return h[0] / 255 * 1.8
 
     def _regs(self, r: Recipe) -> list[str]:
         return [k for k in r.ingredients if any(st in INGREDIENTS[k][0].lower() for st in self.regular_stems)]
