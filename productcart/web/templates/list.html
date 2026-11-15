@@ -81,7 +81,11 @@ document.getElementById('loc-btn').addEventListener('click', function () {
       <div class="punit">{% if up %}{{ uah(up[0]) }}/{{ up[1] }}{% endif %}{% if o.valid_to %} · до {{ o.valid_to }}{% endif %}</div>
       {% set why = [] %}{% for r in m.reasons %}{% if not r.startswith(('−', 'економія', 'також')) %}{% set _ = why.append(r) %}{% endif %}{% endfor %}{% if why %}<div class="pwhy"><span>{{ why[0] }}</span></div>{% endif %}
       {% if o.promo %}<div class="ppromo">{{ o.promo }}</div>{% endif %}
-      {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener">До {{ chain_name(o.chain) }} →</a>{% endif %}
+      <div class="pacts">
+        {% if user and o.chain == 'silpo' and link %}<button type="button" class="padd" data-pid="{{ o.product_id }}" data-name="{{ o.name }}" data-w="{{ 1 if o.weighted else 0 }}">+ У кошик</button>
+        {% else %}<a class="padd" href="{{ '/silpo' if user else '/register' }}">+ У кошик</a>{% endif %}
+        {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити в «{{ chain_name(o.chain) }}»">↗</a>{% endif %}
+      </div>
     </div>
   </article>
   {% endfor %}
@@ -89,6 +93,22 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% endfor %}
 
 <script>
+(function () {   // «+ У кошик»: товар іде в кошик «Сільпо» без перезавантаження
+  document.querySelectorAll('.padd[data-pid]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.disabled) return;
+      var fd = new FormData(); fd.append('csrf', '{{ user.csrf if user else "" }}'); fd.append('pid', b.dataset.pid); fd.append('name', b.dataset.name); fd.append('weighted', b.dataset.w);
+      b.disabled = true; b.textContent = '…';
+      fetch('/silpo/cart/add', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json().then(function (d) { return [r.status, d]; }); })
+        .then(function (x) {
+          var d = x[1];
+          if (d.ok) { b.textContent = '✓ У кошику'; b.classList.add('done'); if (window.setCartCount) window.setCartCount(d.count); setTimeout(function () { b.disabled = false; b.textContent = '+ Ще'; }, 1500); return; }
+          if (d.go) { location.href = d.go; return; }
+          b.textContent = d.error || 'Не вдалося'; setTimeout(function () { b.disabled = false; b.textContent = '+ У кошик'; }, 2000);
+        }).catch(function () { b.disabled = false; b.textContent = '+ У кошик'; });
+    });
+  });
+})();
 (function () {   // сортування в межах кожного магазину; вибір запам'ятовуємо в браузері
   var sel = document.getElementById('sortSel'); if (!sel) return;
   var KEY = 'pc-sort';

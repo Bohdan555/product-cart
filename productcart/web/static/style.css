@@ -486,3 +486,21 @@ nav.top + .hcart,.logo + .hcart{margin-left:6px}
 .stale.ready .live-dot{animation:none}
 .l-foot{color:var(--muted);font-size:13px;text-align:center;margin:8px 0 0}
 .stores-sum{margin:0 0 12px;font-size:14px;color:var(--muted)}.stores-sum summary{cursor:pointer}.stores-sum .meta{margin-top:4px}
+/* перший крок після реєстрації */
+.start{display:grid;gap:14px;justify-items:start;padding:20px 0}
+.start h1{font-size:30px;margin:0}
+.start .lead{margin:0}
+.btn.big{font-size:18px;padding:18px 26px;border-radius:16px}
+.start .skip{color:var(--muted);font-size:14px}
+.readybar{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--soft);border-radius:14px;padding:10px 14px;margin:0 0 12px;font-size:14px}
+/* кошик у нижній панелі */
+.tabs .tico{position:relative;display:inline-grid}
+.tabs .cartN{position:absolute;top:-6px;right:-12px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:700 10.5px/18px var(--body);text-align:center}
+@media (max-width:640px){.hcart{display:none}}
+.storeline{margin:-2px 0 12px;color:var(--muted);font-size:14px}
+/* «+ У кошик» на картці акції */
+.pacts{margin-top:auto;display:flex;gap:6px}
+.pacts .pgo{margin-top:0;width:40px;flex:none;padding:9px 0}
+.padd{flex:1;display:block;text-align:center;border:0;background:var(--accent);color:var(--accent-ink);font:700 14px/1 var(--body);border-radius:10px;padding:11px 8px;cursor:pointer;text-decoration:none;min-height:40px}
+.padd.done{background:var(--soft);color:var(--accent)}
+.padd:disabled{opacity:.85;cursor:default}

@@ -56,7 +56,7 @@ def csrf(html: str) -> str:
 
 def register(c, email="a@b.ua"):
     r = c.post("/register", data={"email": email, "password": "password123", "agree": "1"})
-    assert r.status_code == 303 and r.headers["location"].startswith("/profile")
+    assert r.status_code == 303 and r.headers["location"] == "/start"
     return csrf(c.get("/profile").text)
 
 
@@ -269,7 +269,7 @@ def test_google_signup_login_and_guards(tmp_path):
         assert "Увійти через Google" in c.get("/login").text
         c.post("/menu/settings", data={"people": "4"})           # гість налаштував меню
         r = google_login(c)
-        assert r.status_code == 303 and r.headers["location"] == "/profile?welcome=1"
+        assert r.status_code == 303 and r.headers["location"] == "/start"
         assert "<b>4</b>" in c.get("/menu").text                  # налаштування гостя збереглись
         c.cookies.clear()
         assert google_login(c).headers["location"] == "/list"      # повторний вхід — той самий профіль
@@ -350,7 +350,7 @@ def test_silpo_cart_view(tmp_path):
     app = create_app(db_path=str(tmp_path / "v.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
     with TestClient(app, follow_redirects=False) as c:
         token = register(c)
-        assert c.get("/silpo/cart").headers["location"] == "/silpo"       # без «Сільпо» — на підключення
+        assert "Підключити «Сільпо»" in c.get("/silpo/cart").text          # без «Сільпо» — пропозиція підключити
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
         c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
@@ -496,3 +496,58 @@ def test_guest_sees_demo_deals(client):
     r = client.get("/list")
     assert r.status_code == 200 and "Популярні акції" in r.text and 'href="/register">Увійти' in r.text
     assert r.text.count('class="pcard"') >= 10 and "hero-sum" not in r.text and "Не підійшли" not in r.text
+
+
+def test_onboarding_start_and_auto_store(client):
+    token = register(client)
+    page = client.get("/start").text
+    assert "Підключити «Сільпо»" in page and "Пропустити" in page
+    r = client.post("/silpo/connect", data={"csrf": token})
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    # «Сільпо» повертає людину з Києва — магазин і склад сім'ї підтягуються самі
+    r = client.get("/auth/silpo/callback", params={"code": "good-code", "state": state},
+                   headers={"x-vercel-ip-latitude": "50.44", "x-vercel-ip-longitude": "30.51"})
+    assert r.headers["location"] == "/menu?ready=1"
+    link = client.app.state.conn.execute("SELECT store_id FROM silpo_links").fetchone()
+    assert link["store_id"] == "b1"
+    assert "✓ Готово" in client.get("/menu?ready=1").text
+    assert 'value="3"' in client.get("/profile").text                  # сім'я з «Сільпо»
+    assert client.get("/start").headers["location"] == "/menu"         # уже підключено — одразу в меню
+
+
+def test_cart_tab_for_guest(client):
+    page = client.get("/silpo/cart").text
+    assert 'href="/register">Увійти' in page and 'href="/silpo/cart"' in client.get("/").text
+
+
+def test_add_deal_to_silpo_cart(tmp_path):
+    from test_silpo_cart import CartMCP
+    shared = CartMCP(existing={"other": 1})
+
+    class Combined(FakeMCP):
+        async def __call__(self, name, args):
+            if "cart" in name:
+                return await shared(name, args)
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Combined()
+
+    app = create_app(db_path=str(tmp_path / "a.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        assert c.post("/silpo/cart/add", data={"pid": "p1"}).json()["go"] == "/register"
+        token = register(c)
+        assert c.post("/silpo/cart/add", data={"csrf": token, "pid": "p1"}).json()["go"] == "/silpo"
+        assert 'href="/silpo">+ У кошик' in c.get("/list").text                  # демо: веде підключати «Сільпо»
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
+        assert 'data-pid="p2"' in c.get("/list").text                              # справжні акції — кнопка в кошик
+        d = c.post("/silpo/cart/add", data={"csrf": token, "pid": "p2", "name": "Кава", "weighted": "0"}).json()
+        assert d == {"ok": True, "count": 2} and shared.items["p2"] == 1
+        c.post("/silpo/cart/add", data={"csrf": token, "pid": "p2", "name": "Кава"})
+        assert shared.items["p2"] == 2 and shared.items["other"] == 1               # ще раз — +1, чуже не чіпаємо
+        assert c.post("/silpo/cart/add", data={"csrf": "bad", "pid": "p2"}).status_code == 400

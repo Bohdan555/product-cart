@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Початок — Кошик з акцій{% endblock %}
+{% block body %}
+<section class="start">
+  <h1>Ще один крок</h1>
+  <p class="lead">Підключіть «Сільпо» — і меню буде зі справжніх акцій вашого магазину.</p>
+  <form method="post" action="/silpo/connect" data-turbo="false">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}">
+    <button class="btn big" type="submit">Підключити «Сільпо»</button>
+  </form>
+  <p class="hint">Магазин виберемо поруч, анкету заповнимо самі — змінити можна будь-коли.</p>
+  <a class="skip" href="/menu">Пропустити — показати меню на демо-цінах</a>
+</section>
+{% endblock %}

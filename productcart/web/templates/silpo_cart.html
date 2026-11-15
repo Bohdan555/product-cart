@@ -4,10 +4,17 @@
 {% set DT = {"SelfPickup": "Самовивіз", "DeliveryHome": "Доставка додому", "DeliveryFlat": "Доставка в квартиру",
              "DeliveryOffice": "Доставка в офіс", "DeliveryExpress": "Експрес-доставка", "WideAssortDelivery": "Доставка"} %}
 <section class="intro">
-  <h1>Мій кошик у «Сільпо»</h1>
+  <h1>Кошик</h1>
+  {% if store %}<p class="storeline">{{ store }} · <a href="/silpo">змінити магазин</a></p>{% elif user and not connect %}<p class="storeline"><a href="/silpo">Вибрати магазин</a></p>{% endif %}
 </section>
 
-{% if error %}
+{% if connect %}
+<div class="card stack cconnect">
+  <p><b>Кошик збирається в «Сільпо»</b></p>
+  {% if connect == 'register' %}<a class="btn" href="/register">Увійти</a>
+  {% else %}<form method="post" action="/silpo/connect" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn" type="submit">{{ 'Підключити «Сільпо» ще раз' if connect == 'again' else 'Підключити «Сільпо»' }}</button></form>{% endif %}
+</div>
+{% elif error %}
 <div class="card stack"><div class="err">{{ error }}</div><p><a class="btn alt" href="/silpo/cart">Спробувати ще раз</a></p></div>
 {% elif not cart or not cart.lines %}
 {% if cleared %}<div class="ok" style="margin-bottom:12px">Кошик очищено.</div>{% endif %}

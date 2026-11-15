@@ -340,7 +340,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if err:
             return render(request, "auth.html", mode="register", error=err, email=email, status=400)
         uid = new_user(request, email, security.hash_password(password), "password")
-        return signed_in(uid, "/profile?welcome=1")
+        return signed_in(uid, "/start")
 
     def new_user(request: Request, email: str, pw_hash: str, method: str) -> int:
         uid = conn.execute("INSERT INTO users (email, pw_hash, created_at) VALUES (?, ?, ?) RETURNING id",
@@ -397,7 +397,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             analytics.track(conn, r["id"], "login", method="google")
             resp = signed_in(r["id"], "/list")
         else:
-            resp = signed_in(new_user(request, email, "google", "google"), "/profile?welcome=1")
+            resp = signed_in(new_user(request, email, "google", "google"), "/start")
         resp.delete_cookie(GOOGLE_COOKIE)
         return resp
 
@@ -575,7 +575,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return go(f"/silpo?error=Не вдалося відкрити вхід «Сільпо»: {str(e)[:100]}")
 
     @app.get("/auth/silpo/callback")
-    def silpo_callback(request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""):
+    async def silpo_callback(request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""):
         u, bad = need_user(request)
         if bad:
             return bad
@@ -593,7 +593,57 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         ON CONFLICT(user_id) DO UPDATE SET tokens_enc=excluded.tokens_enc, connected_at=excluded.connected_at""",
                      (u["id"], box.seal(json.dumps(tokens)), security.iso(security.now())))
         analytics.track(conn, u["id"], "silpo_connected")
-        return go("/silpo")
+        store = await auto_setup(request, u["id"], tokens)
+        return go("/menu?ready=1" if store else "/silpo")
+
+    async def auto_setup(request: Request, user_id: int, tokens: dict) -> str | None:
+        """Одразу після підключення «Сільпо»: найближчий магазин за приблизним місцем (з мережі) і анкета
+        з «Сільпо» — лише порожні поля (обмеження в харчуванні не чіпаємо: на них потрібна згода).
+        Повертає назву вибраного магазину або None, якщо магазин треба вибрати вручну."""
+        p, consent = load_profile(user_id)
+        link = silpo_link(user_id)
+        title = link["store_title"] if link and link["store_id"] else None
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                if not title:
+                    try:
+                        lat = float(request.headers["x-vercel-ip-latitude"])
+                        lon = float(request.headers["x-vercel-ip-longitude"])
+                    except (KeyError, ValueError):
+                        lat = lon = None
+                    if lat is not None:
+                        near = silpo.nearest(await silpo_branches(get_call), lat, lon, n=1)
+                        if near and near[0]["km"] <= 30:
+                            conn.execute("UPDATE silpo_links SET store_id=?, store_title=? WHERE user_id=?",
+                                         (near[0]["id"], near[0]["title"][:120], user_id))
+                            title = near[0]["title"]
+                            analytics.track(conn, user_id, "store_selected", chain="silpo", store_id=near[0]["id"], auto=True)
+                call = await get_call()
+                changed = False
+                if p.household <= 1:
+                    hints = await silpo.profile_hints(call)
+                    if hints.get("household"):
+                        p.household, changed = hints["household"], True
+                if not p.regulars:
+                    buys = await silpo.purchase_hints(call)
+                    if buys["regulars"]:
+                        p.regulars, changed = buys["regulars"], True
+                    if buys["brands"] and not p.brands_like:
+                        p.brands_like, changed = buys["brands"], True
+                if changed:
+                    save_profile(user_id, p, consent)
+        except Exception as e:
+            log.warning("Сільпо: автоналаштування: %s", str(root_error(e))[:500])
+        return title
+
+    @app.get("/start", response_class=HTMLResponse)
+    def start_page(request: Request):
+        u, bad = need_user(request)
+        if bad:
+            return bad
+        if silpo_link(u["id"]):
+            return go("/menu")
+        return render(request, "start.html", u)
 
     @app.post("/silpo/store")
     def silpo_store(request: Request, csrf: str = Form(""), store_id: str = Form(...), store_title: str = Form("")):
@@ -679,7 +729,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         saving=m.saving, guest=not u)
         resp = render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
                       days=menu.DAYS, fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
-                      stale=bool(u) and offers_stale.get(),
+                      stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"))
         return keep_guest(resp, p) if (changed and not u) else resp
 
@@ -747,12 +797,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     # ---------- перегляд кошика «Сільпо» ----------
     @app.get("/silpo/cart", response_class=HTMLResponse)
     async def silpo_cart_view(request: Request, error: str = "", changed: str = "", cleared: int = 0):
-        u, bad = need_user(request)
-        if bad:
-            return bad
-        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        u = user_of(request)
+        if u is None:
+            return render(request, "silpo_cart.html", None, cart=None, connect="register")
+        link = silpo_link(u["id"])
+        tokens = silpo_tokens(u["id"]) if link else None
         if not tokens:
-            return go("/silpo")
+            return render(request, "silpo_cart.html", u, cart=None, connect="silpo" if not link else "again")
         cart, err = None, None
         try:
             async with lazy_silpo(tokens["access_token"]) as get_call:
@@ -763,6 +814,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             err = f"«Сільпо» не відповіло: {str(e)[:150]}"
         analytics.track(conn, u["id"], "silpo_cart_viewed", items=cart.count if cart else 0)
         resp = render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed,
+                      store=link["store_title"],
                       cleared=bool(cleared))
         return remember_cart(resp, cart.count if cart else 0, u["id"]) if not err else resp
 
@@ -800,6 +852,42 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         analytics.track(conn, u["id"], "silpo_cart_changed", action=action)
         cart_counts.pop(u["id"], None)
         return go(f"/silpo/cart?changed={quote(line_id)}#l-{quote(line_id)}")
+
+    @app.post("/silpo/cart/add")
+    async def silpo_cart_add(request: Request):
+        """«+ У кошик» з картки акції: кладемо одну упаковку (вагове — 0,5 кг) у кошик «Сільпо». Відповідь — JSON."""
+        form = await request.form()
+        u = user_of(request)
+        if u is None:
+            return JSONResponse({"error": "Увійдіть", "go": "/register"}, status_code=401)
+        if not secrets.compare_digest(str(form.get("csrf", "")), u["csrf"]):
+            return JSONResponse({"error": "Оновіть сторінку"}, status_code=400)
+        link = silpo_link(u["id"])
+        tokens = silpo_tokens(u["id"]) if link else None
+        if not tokens:
+            return JSONResponse({"error": "Підключіть «Сільпо»", "go": "/silpo"}, status_code=409)
+        pid, name = str(form.get("pid", "")).strip(), str(form.get("name", ""))[:200]
+        weighted = form.get("weighted") == "1"
+        if not pid or len(pid) > 64:
+            return JSONResponse({"error": "Невідомий товар"}, status_code=400)
+        want = silpo_cart.Want(pid, name or "товар", 500 if weighted else 1, "g" if weighted else "pcs",
+                               product_id=pid, packs=1, weighted=weighted)
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                branch = None
+                if link["store_id"]:
+                    known = {b["id"]: b for b in await silpo_branches(get_call)}
+                    branch = known.get(link["store_id"]) or {"id": link["store_id"], "title": link["store_title"]}
+                res = await silpo_cart.build(await get_call(), [want], branch)
+        except Exception as e:
+            err = root_error(e)
+            log.warning("Сільпо: + у кошик: %s: %s", type(err).__name__, str(err)[:500])
+            msg = str(err) if isinstance(err, silpo_cart.CartError) else "«Сільпо» не відповіло"
+            return JSONResponse({"error": msg[:200]}, status_code=502)
+        if not res["placed"]:
+            return JSONResponse({"error": "Немає в наявності"}, status_code=409)
+        analytics.track(conn, u["id"], "deal_added", chain="silpo", product_id=pid)
+        return remember_cart(JSONResponse({"ok": True, "count": res["count"]}), res["count"], u["id"])
 
     @app.post("/silpo/cart/clear")
     async def silpo_cart_clear(request: Request, csrf: str = Form("")):

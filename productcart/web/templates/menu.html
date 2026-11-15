@@ -3,6 +3,7 @@
 {% block body %}
 {% include "_stale.html" %}
 <div id="menuroot">
+{% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
 <section class="intro">
   <h1>Вечері на тиждень</h1>
   {% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
