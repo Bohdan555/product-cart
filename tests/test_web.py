@@ -295,3 +295,36 @@ def test_google_links_existing_and_rejects_unverified(tmp_path):
 def test_google_hidden_without_keys(client):
     assert "Google" not in client.get("/login").text
     assert client.get("/auth/google").headers["location"] == "/login"
+
+
+def test_menu_to_silpo_cart(tmp_path):
+    from test_silpo_cart import CartMCP
+    shared = CartMCP(existing={"other": 1})
+
+    class Combined(FakeMCP):
+        async def __call__(self, name, args):
+            if "cart" in name or name == "silpo_find_products_batch":
+                return await shared(name, args)
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Combined()
+
+    app = create_app(db_path=str(tmp_path / "c.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c)
+        assert "стане кошиком" in c.get("/menu").text               # без «Сільпо» — пропозиція підключити
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
+        assert "Зібрати кошик у «Сільпо»" in c.get("/menu").text
+        r = c.post("/menu/silpo-cart", data={"csrf": token, "bought": ""})
+        assert "вже 1 товар" in r.text and 'name="confirm"' in r.text   # попередження про наявний кошик
+        assert shared.items == {"other": 1}                            # до підтвердження нічого не змінено
+        r = c.post("/menu/silpo-cart", data={"csrf": token, "bought": "", "confirm": "1"})
+        assert r.status_code == 200 and "Перейти до оплати" in r.text and "https://silpo.ua/pay/c1" in r.text
+        assert shared.items["other"] == 1 and len(shared.items) > 1
+        assert c.post("/menu/silpo-cart", data={"csrf": "bad"}).status_code == 400

@@ -25,7 +25,7 @@ from .. import matcher, menu, planner
 from ..catalog import TAG_LABELS, enrich
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
-from ..sources import demo, silpo
+from ..sources import demo, silpo, silpo_cart
 from . import analytics, db, security
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
@@ -637,6 +637,46 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return HTMLResponse("Невідомий продукт.", status_code=400)
         p.pantry_buy = [k for k in p.pantry_buy if k != key] if key in p.pantry_buy else p.pantry_buy + [key]
         return menu_done(u, p, health, "/menu#list")
+
+    # ---------- кошик «Сільпо» з меню ----------
+    @app.post("/menu/silpo-cart", response_class=HTMLResponse)
+    async def menu_silpo_cart(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return bad
+        p, _ = load_profile(u["id"])
+        link = silpo_link(u["id"])
+        tokens = silpo_tokens(u["id"]) if link else None
+        if not tokens:
+            return go("/silpo")
+        _, stores, offers, notice, is_demo = await current_offers(u["id"], p, False)
+        if is_demo:
+            return go("/silpo")
+        m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
+                      keep=p.menu, pantry_buy=p.pantry_buy)
+        bought = {k for k in str(form.get("bought", "")).split(",") if k}
+        wants = silpo_cart.wants_from_menu(m.cart, bought)
+        ctx = dict(bought=",".join(sorted(bought)), wanted=len(wants))
+        if not wants:
+            return render(request, "cart.html", u, error="Усе зі списку вже позначено як куплене — додавати нічого.", **ctx)
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                call = await get_call()
+                if not form.get("confirm"):
+                    cart = await silpo_cart.current_cart(call)
+                    if cart and cart.count:
+                        sample = [n for n in cart.names.values() if n][:5]
+                        return render(request, "cart.html", u, confirm=True, had=cart.count, sample=sample, **ctx)
+                res = await silpo_cart.build(call, wants)
+        except silpo_cart.CartError as e:
+            return render(request, "cart.html", u, error=str(e), **ctx)
+        except Exception as e:
+            log.warning("Сільпо: кошик не зібрався: %s", str(e)[:500])
+            return render(request, "cart.html", u, error="«Сільпо» не відповіло. Спробуйте ще раз за хвилину.", **ctx)
+        analytics.track(conn, u["id"], "silpo_cart_built", placed=len(res["placed"]), missing=len(res["missing"]),
+                        had=res["had"], total=res["total"], checkout=bool(res["checkout"]))
+        return render(request, "cart.html", u, res=res, **ctx)
 
     @app.get("/photos", response_class=HTMLResponse)
     def photo_credits(request: Request):

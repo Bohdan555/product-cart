@@ -84,6 +84,14 @@
 <section id="list" class="mlist">
   <div class="list-h"><h2>Список покупок</h2><button type="button" class="copy" id="copy">Скопіювати список</button></div>
   <div><div class="progress"><i id="bar"></i></div><small class="hint" id="progressTxt">Відмічайте покупки просто в магазині</small></div>
+  {% if guest %}<a class="scart-alt" href="/register">Зареєструйтесь і підключіть «Сільпо» — і цей список стане кошиком одним натиском →</a>
+  {% elif link and not is_demo %}
+  <form method="post" action="/menu/silpo-cart" class="scart" data-noajax>
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="">
+    <button class="btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>Зібрати кошик у «Сільпо»</button>
+    <small class="hint">Додамо до вашого кошика в «Сільпо», нічого не видаляючи. Відмічене як куплене пропустимо.</small>
+  </form>
+  {% else %}<a class="scart-alt" href="/silpo">Підключіть «Сільпо» — і цей список стане кошиком одним натиском →</a>{% endif %}
   {% macro row(l, price) %}
   <label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ price }}">
     <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
@@ -190,6 +198,11 @@
   }
   root.addEventListener('submit', function (e) {
     var form = e.target, btn = e.submitter;
+    if (form.hasAttribute('data-noajax')) {   // кошик «Сільпо»: звичайний перехід, але з позначками «куплено»
+      form.querySelector('input[name=bought]').value = Array.prototype.filter.call(root.querySelectorAll('[data-buy]'), function (b) { return b.checked; }).map(function (b) { return b.dataset.buy; }).join(',');
+      var sb = form.querySelector('button'); sb.disabled = true; sb.lastChild.textContent = 'Збираємо кошик…';
+      return;
+    }
     if (!window.fetch || !window.DOMParser || !/\/menu\//.test(form.getAttribute('action') || '')) return;
     e.preventDefault();
     // миттєвий відгук на натискання

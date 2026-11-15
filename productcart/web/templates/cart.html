@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Кошик «Сільпо» — Кошик з акцій{% endblock %}
+{% block body %}
+<section class="intro"><h1>Кошик у «Сільпо»</h1></section>
+
+{% if error %}
+<div class="card stack"><div class="err">{{ error }}</div><p><a class="btn alt" href="/menu#list">Назад до меню</a></p></div>
+
+{% elif confirm %}
+<form class="card stack cconf" method="post" action="/menu/silpo-cart">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="{{ bought }}"><input type="hidden" name="confirm" value="1">
+  <h2>У вашому кошику вже {{ had }} {{ plural(had, 'товар', 'товари', 'товарів') }}</h2>
+  {% if sample %}<p class="hint">{{ sample|join(', ') }}{% if had > sample|length %} та інші{% endif %}</p>{% endif %}
+  <p>Ми нічого не видалимо — лише додамо {{ wanted }} {{ plural(wanted, 'позицію', 'позиції', 'позицій') }} з меню. Якщо товар уже лежить у кошику, збільшимо його кількість.</p>
+  <div class="row"><button class="btn" type="submit" id="go">Додати до кошика</button><a class="btn alt" href="/menu#list">Скасувати</a></div>
+</form>
+
+{% else %}
+<div class="card stack">
+  <div class="ok">Додано {{ res.placed|length }} {{ plural(res.placed|length, 'товар', 'товари', 'товарів') }}{% if res.had %} до {{ res.had }}, що вже були в кошику{% endif %}.{% if res.total %} Разом у кошику: <b>{{ uah(res.total) }}</b>.{% endif %}</div>
+  <ul class="clist">{% for pl in res.placed %}<li><span>{{ pl.name }}</span><b>{% if pl.weighted %}{{ '%.2f'|format(pl.quantity)|replace('.', ',') }} кг{% else %}× {{ pl.quantity|int }}{% endif %}</b></li>{% endfor %}</ul>
+  {% if res.missing %}<div class="note"><b>Не знайшли в магазині кошика:</b> {{ res.missing|map(attribute='name')|join(', ') }}. Додайте їх у «Сільпо» вручну або купіть деінде.</div>{% endif %}
+  <p class="hint">Ціни й наявність остаточно рахує «Сільпо»: у кошику можуть бути інші ціни, якщо він прив'язаний до іншого магазину. Перевірте кошик перед оплатою.</p>
+  <div class="row">
+    <a class="btn" href="{{ res.checkout or 'https://silpo.ua/cart' }}" target="_blank" rel="noopener">{{ 'Перейти до оплати в «Сільпо»' if res.checkout else 'Відкрити кошик у «Сільпо»' }}</a>
+    <a class="btn alt" href="/menu#list">До меню</a>
+  </div>
+</div>
+{% endif %}
+<script>
+var f = document.querySelector('.cconf'); if (f) f.addEventListener('submit', function () { var b = document.getElementById('go'); b.disabled = true; b.textContent = 'Додаємо…'; });
+</script>
+{% endblock %}

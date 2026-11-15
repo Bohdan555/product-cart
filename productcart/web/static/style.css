@@ -385,3 +385,11 @@ details.more[open] summary{margin-bottom:10px}
 @media (prefers-reduced-motion:reduce){.wstep,.people span,.tile3.pop,.shake{animation:none}}
 .wiz.js.edit .wiz-nav #wizSave{display:inline-block}
 .wiz.js.edit .wiz-nav #wizNext{order:3}
+/* кошик «Сільпо» */
+.scart{display:grid;gap:6px;justify-items:start;margin:4px 0 6px}
+.scart .btn{display:inline-flex;align-items:center;gap:8px}
+.scart .btn svg{width:20px;height:20px}
+.scart-alt{display:block;font-size:14px;font-weight:600;background:var(--soft);border-radius:12px;padding:10px 12px;text-decoration:none}
+.clist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.clist li{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:6px 0;font-size:15px}
+.clist b{white-space:nowrap;font-variant-numeric:tabular-nums}
