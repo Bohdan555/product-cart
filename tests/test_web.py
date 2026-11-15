@@ -494,4 +494,5 @@ def test_turbo_and_fonts_cached(client):
 
 def test_guest_sees_demo_deals(client):
     r = client.get("/list")
-    assert r.status_code == 200 and "Демо-ціни" in r.text and 'href="/register">Увійти' in r.text and "pcard" in r.text
+    assert r.status_code == 200 and "Популярні акції" in r.text and 'href="/register">Увійти' in r.text
+    assert r.text.count('class="pcard"') >= 10 and "hero-sum" not in r.text and "Не підійшли" not in r.text

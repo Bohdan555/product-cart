@@ -625,13 +625,18 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     @app.get("/list", response_class=HTMLResponse)
     async def shopping_list(request: Request, refresh: int = 0):
         u = user_of(request)
-        if u is None:   # гість: демо-акції під налаштування з cookie гостя
+        if u is None:   # гість: просто популярні акції — без персонального підбору й суми кошика
             p = guest_profile(request)
-            offers = planner.merge_nearby(demo.load())
-            matches, rejected = matcher.rank(offers, p)
-            sl = planner.build(matches, p)
+            offers = [o for o in planner.merge_nearby(demo.load()) if o.discount_pct]
+            since = security.iso(security.now() - timedelta(days=30))
+            clicks = {r["product_id"]: r["n"] for r in conn.execute(
+                "SELECT product_id, COUNT(*) AS n FROM events WHERE event='offer_click' AND ts >= ? "
+                "AND product_id IS NOT NULL GROUP BY product_id", (since,)).fetchall()}
+            offers.sort(key=lambda o: (-clicks.get(o.product_id, 0), -(o.discount_pct or 0)))
+            sl = planner.ShoppingList(p)
+            sl.groups["Популярні"] = [matcher.Match(o, 0.0, []) for o in offers[:40]]
             analytics.track(conn, None, "list_viewed", source="demo", guest=True, items=len(sl.items))
-            return render(request, "list.html", None, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
+            return render(request, "list.html", None, p=p, sl=sl, offers_total=len(offers), rejected=[],
                           stale=False, is_demo=True, link=None, notice=None, stores=[], need_location=False, guest=True)
         p, _ = load_profile(u["id"])
         link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))

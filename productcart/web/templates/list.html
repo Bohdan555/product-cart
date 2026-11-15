@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Мій список — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>Акції для вас</h1>
+<h1>{{ "Популярні акції" if guest else "Акції для вас" }}</h1>
 {% include "_stale.html" %}
 {% if link and p.lat is none %}
 <form class="card stack" method="post" action="/location" id="loc-form" style="margin-bottom:14px">
@@ -41,15 +41,15 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 
 {% if sl.items %}
 {% set cats = [] %}{% for m in sl.items %}{% set c = visual(m.offer).cat %}{% if c not in cats %}{% set _ = cats.append(c) %}{% endif %}{% endfor %}
-<section class="hero-sum">
+{% if not guest %}<section class="hero-sum">
   <div class="hs-main"><span class="hs-label">Разом</span><b class="hs-total">{{ uah(sl.total|round) }}</b>
     <span class="hs-items">{{ sl.items|length }} {{ plural(sl.items|length, 'товар', 'товари', 'товарів') }}</span></div>
   <div class="hs-save"><span>економія</span><b>−{{ uah(sl.saving|round) }}</b></div>
-</section>
+</section>{% endif %}
 <div class="sortbar">
   <label for="sortSel">Сортувати</label>
   <select id="sortSel">
-    <option value="rank">Для вас</option>
+    <option value="rank">{{ "Популярні" if guest else "Для вас" }}</option>
     <option value="disc">Найбільша знижка</option>
     <option value="save">Найбільша економія, ₴</option>
     <option value="price">Найдешевші</option>
@@ -63,7 +63,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 </div>
 {% endif %}
 {% for key, items in sl.groups.items() %}
-<h2 class="store-h"><span class="chain-dot"></span>{{ chain_name(key) }}{% if ' · ' in key %} <span class="hint">{{ key.split(' · ',1)[1] }}</span>{% endif %}</h2>
+{% if not guest %}<h2 class="store-h"><span class="chain-dot"></span>{{ chain_name(key) }}{% if ' · ' in key %} <span class="hint">{{ key.split(' · ',1)[1] }}</span>{% endif %}</h2>{% endif %}
 <div class="grid">
   {% for m in items %}{% set o = m.offer %}{% set v = visual(o) %}{% set link_url = click_url(o) %}
   {% set up = o.unit_price() %}
@@ -118,7 +118,7 @@ document.querySelectorAll('.fchip').forEach(function (b) {
     document.querySelectorAll('.pcard').forEach(function (card) { card.hidden = c && card.dataset.cat !== c; });
     document.querySelectorAll('.grid').forEach(function (g) {
       var any = Array.prototype.some.call(g.children, function (x) { return !x.hidden; });
-      g.hidden = !any; g.previousElementSibling.hidden = !any;
+      g.hidden = !any; var h = g.previousElementSibling; if (h && h.classList.contains('store-h')) h.hidden = !any;
     });
   });
 });
@@ -127,7 +127,7 @@ document.querySelectorAll('.fchip').forEach(function (b) {
 <div class="card">Акцій не знайшлося. <a href="/profile">Змінити профіль</a></div>
 {% endif %}
 
-<details style="margin-top:20px"><summary>Не підійшли ({{ rejected|length }})</summary>
+{% if not guest %}<details style="margin-top:20px"><summary>Не підійшли ({{ rejected|length }})</summary>
   <div class="card" style="margin-top:8px">{% for r in rejected %}<div class="meta">✗ {{ r.offer.name }} — {{ r.reason }}</div>{% endfor %}</div>
-</details>
+</details>{% endif %}
 {% endblock %}
