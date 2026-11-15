@@ -2,6 +2,7 @@
 {% block title %}Мій список — Кошик з акцій{% endblock %}
 {% block body %}
 <h1>Ваш список з акцій</h1>
+{% include "_stale.html" %}
 {% if link and p.lat is none %}
 <form class="card stack" method="post" action="/location" id="loc-form" style="margin-bottom:14px">
   <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="lat" id="loc-lat"><input type="hidden" name="lon" id="loc-lon">

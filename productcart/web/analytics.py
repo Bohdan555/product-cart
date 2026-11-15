@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import hmac
 import json
@@ -44,8 +45,14 @@ def init(conn) -> None:
     conn.executescript(SCHEMA.format(pk="SERIAL PRIMARY KEY" if conn.is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"))
 
 
+# Turbo завантажує сторінки наперед (при наведенні/дотику) — такі запити не рахуємо як перегляди
+prefetching: contextvars.ContextVar[bool] = contextvars.ContextVar("prefetching", default=False)
+
+
 def track(conn, user_id: int | None, event: str, *, chain: str | None = None, store_id: str | None = None,
           product_id: str | None = None, category: str | None = None, discount: float | None = None, **meta) -> None:
+    if prefetching.get():
+        return
     try:
         conn.execute(
             "INSERT INTO events (ts, user_id, event, chain, store_id, product_id, category, discount, meta) "

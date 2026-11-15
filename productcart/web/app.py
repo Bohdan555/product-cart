@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import time
 import logging
@@ -40,6 +41,8 @@ CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «С�
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy")
 OFFERS_TTL = timedelta(hours=6)
+STALE_TTL = timedelta(days=7)   # старіший кеш не показуємо навіть тимчасово
+offers_stale = contextvars.ContextVar("offers_stale", default=False)  # показали акції з застарілого кешу
 MAX_NEARBY = 4  # щонайбільше магазинів поруч в одному списку
 LIKE_TAGS = ["dairy", "meat", "fish", "eggs", "vegetables", "fruits", "grains", "coffee", "tea", "sweets"]
 HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
@@ -66,6 +69,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         # Server-Timing: загальний час, база (кількість і час), регіон функції
         stats = [0, 0.0]
         token = db.db_stats.set(stats)
+        purpose = (request.headers.get("x-sec-purpose") or request.headers.get("sec-purpose") or "").lower()
+        analytics.prefetching.set("prefetch" in purpose)
         t = time.perf_counter()
         try:
             resp = await call_next(request)
@@ -83,7 +88,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     async def cache_static(request: Request, call_next):
         # статика (фото страв, стилі) кешується браузером і CDN Vercel, а не віддається функцією щоразу
         resp = await call_next(request)
-        if request.url.path.startswith("/static/") and resp.status_code == 200:
+        if request.url.path.startswith(("/static/fonts/", "/static/vendor/")) and resp.status_code == 200:
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"   # версія в назві файлу
+        elif request.url.path.startswith("/static/") and resp.status_code == 200:
             resp.headers["Cache-Control"] = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800"
         return resp
     tpl = Jinja2Templates(directory=HERE / "templates")
@@ -183,10 +190,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     parsed_offers: dict[str, tuple[str, list[dict]]] = {}  # у межах процесу: store_id → (fetched_at, акції)
 
-    def cached_offers(store_id: str) -> list[Offer] | None:
+    def cached_offers(store_id: str, max_age: timedelta = OFFERS_TTL) -> list[Offer] | None:
         # спершу лише дата (дешево); великий JSON читаємо й розбираємо, тільки якщо його ще немає в пам'яті
         r = conn.execute("SELECT fetched_at FROM offers_cache WHERE chain='silpo' AND store_id=?", (store_id,)).fetchone()
-        if not r or r["fetched_at"] < security.iso(security.now() - OFFERS_TTL):
+        if not r or r["fetched_at"] < security.iso(security.now() - max_age):
             return None
         hit = parsed_offers.get(store_id)
         if not hit or hit[0] != r["fetched_at"]:
@@ -232,9 +239,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         ON CONFLICT(chain, store_id) DO UPDATE SET fetched_at=excluded.fetched_at, data=excluded.data""",
                      (store_id, security.iso(security.now()), json.dumps([o.to_dict() for o in offers], ensure_ascii=False)))
 
-    async def silpo_list_input(user_id: int, p: Profile, force: bool = False):
+    async def silpo_list_input(user_id: int, p: Profile, force: bool = False, allow_stale: bool = True):
         """Магазини для списку та їхні акції.
-        Повертає (stores, offers, notice): stores — магазини поруч (з km) або вибраний вручну."""
+        Повертає (stores, offers, notice): stores — магазини поруч (з km) або вибраний вручну.
+        allow_stale: якщо кеш магазину старший за 6 год, але молодший за тиждень — показуємо його одразу
+        (offers_stale = True), а свіжі акції сторінка дотягує окремим запитом /offers/refresh."""
+        offers_stale.set(False)
         link = silpo_link(user_id)
         if not link:
             return [], [], None
@@ -257,8 +267,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                     return [], [], None
                 offers: list[Offer] = []
                 todo = []
+                stale = False
                 for st in stores:
                     hit = None if force else cached_offers(st["id"])
+                    if hit is None and not force and allow_stale:
+                        hit = cached_offers(st["id"], STALE_TTL)
+                        stale = stale or hit is not None
                     if hit is not None:
                         offers += [dict_store(o, st) for o in hit]
                     else:
@@ -282,7 +296,18 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             e = root_error(e)
             log.warning("Сільпо: список акцій: %s: %s", type(e).__name__, str(e)[:1000])
             return stores, [], f"«Сільпо» не відповіло: {str(e)[:120]}"
+        offers_stale.set(stale)
         return stores, offers, notice
+
+    @app.post("/offers/refresh")
+    async def offers_refresh(request: Request, csrf: str = Form("")):
+        """Дотягує свіжі акції для застарілого кешу. Сторінка показала старі одразу й викликає це у фоні."""
+        u, bad = need_user(request, csrf)
+        if bad:
+            return JSONResponse({"ok": False}, status_code=400)
+        p, _ = load_profile(u["id"])
+        _, offers, notice = await silpo_list_input(u["id"], p, allow_stale=False)
+        return JSONResponse({"ok": bool(offers) and not notice, "notice": notice})
 
     # ---------- сторінки ----------
     @app.get("/", response_class=HTMLResponse)
@@ -610,7 +635,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         chain=None if is_demo else "silpo", store_id=",".join(st["id"] for st in stores)[:200] or None,
                         source="demo" if is_demo else "silpo", stores=len(stores), offers=len(offers),
                         items=len(sl.items), error=bool(notice), located=p.lat is not None)
-        return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40],
+        return render(request, "list.html", u, p=p, sl=sl, offers_total=len(offers), rejected=rejected[:40], stale=offers_stale.get(),
                       is_demo=is_demo, link=link, notice=notice, stores=stores,
                       need_location=bool(link and p.lat is None and not link["store_id"]))
 
@@ -643,6 +668,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         saving=m.saving, guest=not u)
         resp = render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
                       days=menu.DAYS, fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
+                      stale=bool(u) and offers_stale.get(),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"))
         return keep_guest(resp, p) if (changed and not u) else resp
 

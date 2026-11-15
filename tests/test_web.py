@@ -463,3 +463,30 @@ def test_profile_wizard_extras(tmp_path):
         menu_page = c.get("/menu").text
         assert "Сирники" not in menu_page and "Омлет" not in menu_page
     assert S.generic_name("Сир твердий Гауда 45%") == "сир твердий"
+
+
+def test_stale_offers_shown_then_refreshed(client):
+    token = register(client)
+    r = client.post("/silpo/connect", data={"csrf": token})
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    client.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+    client.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
+    assert "Кава зернова" in client.get("/list").text                     # перший раз — свіжо з «Сільпо»
+    conn = client.app.state.conn
+    conn.execute("UPDATE offers_cache SET fetched_at='2000-01-01T00:00:00+00:00'")
+    page = client.get("/list").text
+    assert 'id="staleNote"' not in page                                    # старше тижня — не показуємо, тягнемо заново
+    conn.execute("UPDATE offers_cache SET fetched_at=?", ((__import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+                  - __import__("datetime").timedelta(hours=10)).isoformat(),))
+    page = client.get("/list").text
+    assert 'id="staleNote"' in page and "Кава зернова" in page              # 10 год — показуємо одразу й оновлюємо фоном
+    assert client.post("/offers/refresh", data={"csrf": token}).json()["ok"] is True
+    assert 'id="staleNote"' not in client.get("/list").text
+    assert client.post("/offers/refresh", data={"csrf": "bad"}).status_code == 400
+
+
+def test_turbo_and_fonts_cached(client):
+    html = client.get("/").text
+    assert "/static/vendor/turbo-8.0.12.js" in html and "fonts.googleapis" not in html
+    assert "immutable" in client.get("/static/fonts/golos-text-cyrillic-wght-normal.woff2").headers["cache-control"]
+    assert "app;dur=" in client.get("/login").headers["server-timing"]

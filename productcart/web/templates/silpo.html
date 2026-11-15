@@ -7,7 +7,7 @@
 <p class="lead">Підключіть свій акаунт «Сільпо», щоб ми бачили акції вашого магазину та ваші персональні пропозиції.</p>
 <div class="card stack">
   <p style="margin:0">Вхід відбувається на сторінці «Сільпо» — телефоном і кодом. Ми не бачимо ваш пароль чи код, лише отримуємо дозвіл читати каталог і акції від вашого імені. Відключити можна будь-коли.</p>
-  <form method="post" action="/silpo/connect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn" type="submit">Підключити «Сільпо»</button></form>
+  <form method="post" action="/silpo/connect" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn" type="submit">Підключити «Сільпо»</button></form>
 </div>
 {% else %}
 <div class="ok">«Сільпо» підключено{% if link.store_title %} · магазин: {{ link.store_title }}{% endif %}.</div>

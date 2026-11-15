@@ -1,9 +1,18 @@
 <!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{% block title %}Кошик з акцій{% endblock %}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600;700;800&display=swap">
+<link rel="preload" href="/static/fonts/golos-text-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/unbounded-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={{ css_v }}">
+<script src="/static/vendor/turbo-8.0.12.js" defer></script>
+<script>
+// Turbo: переходи без перезавантаження + попереднє завантаження при наведенні/дотику.
+// Не завантажуємо наперед те, що ходить у «Сільпо» або має побічні дії.
+document.addEventListener('turbo:before-prefetch', function (e) {
+  var href = (e.target && e.target.getAttribute('href')) || '';
+  if (/^\/(silpo|auth|go|logout)|refresh=1/.test(href)) e.preventDefault();
+});
+</script>
 </head><body{% if user %} class="authed"{% endif %}><div class="wrap{% block wrapcls %}{% endblock %}">
 <header class="top">
   <a class="logo" href="/"><i>%</i>Кошик з акцій</a>

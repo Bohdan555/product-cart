@@ -380,15 +380,16 @@
   function live() {
     clearTimeout(liveTimer);
     liveTimer = setTimeout(function () {
-      var my = ++liveSeq; document.getElementById('live').classList.add('busy');
+      var box = document.getElementById('live'); if (!box || !document.body.contains(form)) return;   // уже пішли зі сторінки
+      var my = ++liveSeq; box.classList.add('busy');
       fetch('/profile/preview', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
         .then(function (r) { return r.json(); }).then(function (d) {
-          if (my !== liveSeq || d.list === undefined) return;
+          if (my !== liveSeq || d.list === undefined || !document.body.contains(box)) return;
           var parts = ['акцій для вас: ' + d.matched];
           if (d.per_portion) parts.push('меню ≈ ' + d.per_portion + ' ₴ за порцію');
           var sv = Math.max(d.list_saving || 0, d.menu_saving || 0); if (sv > 0) parts.push('економія ~' + sv + ' ₴');
           document.getElementById('liveTxt').textContent = 'Під ваш профіль: ' + parts.join(' · ') + (d.demo ? ' (демо-ціни)' : '');
-          document.getElementById('live').classList.remove('busy');
+          box.classList.remove('busy');
         }).catch(function () {});
     }, 500);
   }

@@ -1,0 +1,14 @@
+{% if stale %}
+<div class="stale" id="staleNote" role="status"><span class="live-dot" aria-hidden="true"></span><span id="staleTxt">Показуємо збережені акції. Перевіряємо, чи «Сільпо» не оновило їх…</span></div>
+<script>
+(function () {
+  var note = document.getElementById('staleNote'), txt = document.getElementById('staleTxt'), fd = new FormData();
+  fd.append('csrf', '{{ user.csrf }}');
+  fetch('/offers/refresh', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.ok) { note.hidden = true; return; }
+    txt.innerHTML = 'Є свіжі акції. <a href="' + location.pathname + '">Показати</a>';
+    note.classList.add('ready');
+  }).catch(function () { note.hidden = true; });
+})();
+</script>
+{% endif %}
