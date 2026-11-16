@@ -22,7 +22,7 @@
 </p>
 <ol class="eat-list">
 {% for d in m.dishes %}{% set i = loop.index0 %}
-  <li class="eat-row{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}">
+  <li class="eat-row{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}" data-dish="{{ d.id }}">
     <button type="button" class="eat-open" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
       <span class="eat-day">{{ days[i] }}</span>
       {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 2 %}loading="lazy"{% endif %}>{% else %}<span class="eat-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
@@ -149,6 +149,7 @@
       }
     }
     root.querySelectorAll('[data-open]').forEach(function (b) {
+      if (b.dataset.bound) return; b.dataset.bound = '1';       // рядки, що лишились після заміни, вже мають обробник
       b.addEventListener('click', function () { var d = document.getElementById(b.dataset.open); if (d && d.showModal) d.showModal(); });
     });
     root.querySelectorAll('dialog').forEach(function (d) {
@@ -210,7 +211,8 @@
     var fd = new FormData(form);
     if (submitter && submitter.name) fd.set(submitter.name, submitter.value);
     var my = ++seq;
-    root.classList.add('busy');
+    var row = form.closest('.eat-row');          // заміна страви: «думає» лише цей рядок, а не весь екран
+    if (row) row.classList.add('swapping'); else root.classList.add('busy');
     fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin' })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(function (html) {
@@ -221,7 +223,26 @@
         document.querySelectorAll('dialog[open]').forEach(function (d) { d.close(); });
         var old = {}; root.querySelectorAll('[data-count]').forEach(function (x, k) { old[k] = x.dataset.count; });
         var r0 = document.getElementById('reel'), left = r0 ? r0.scrollLeft : 0;
+        // Список вечорів оновлюємо точково: рядки з тією самою стравою лишаються як є (фото не перезавантажуються
+        // і не блимають), замінюються лише змінені.
+        var oldList = root.querySelector('.eat-list'), newList = fresh.querySelector('.eat-list');
+        if (oldList && newList) {
+          var olds = Array.prototype.slice.call(oldList.children), news = Array.prototype.slice.call(newList.children);
+          news.forEach(function (n, i) {
+            var o = olds[i];
+            if (o && o.dataset.dish === n.dataset.dish) {
+              o.classList.remove('swapping', 'fresh'); o.id = n.id;
+              var f = o.querySelector('form'), nf = n.querySelector('form'); if (f && nf) f.replaceWith(document.importNode(nf, true));
+            } else {
+              var nn = document.importNode(n, true);
+              if (o) o.replaceWith(nn); else oldList.appendChild(nn);
+            }
+          });
+          olds.slice(news.length).forEach(function (o) { o.remove(); });
+          oldList.remove();
+        }
         root.innerHTML = fresh.innerHTML;
+        if (oldList && newList) { var place = root.querySelector('.eat-list'); if (place) place.replaceWith(oldList); }
         var r1 = document.getElementById('reel'); if (r1) r1.scrollLeft = left;
         root.querySelectorAll('[data-count]').forEach(function (x, k) { if (old[k] !== undefined) x.dataset.from = old[k]; });
         init();
@@ -230,7 +251,7 @@
         var f = root.querySelector('.day.fresh'), rr = document.getElementById('reel');
         if (f && rr) rr.scrollTo({ left: f.offsetLeft - (rr.clientWidth - f.clientWidth) / 2, behavior: 'smooth' });
       })
-      .catch(function () { if (my === seq) { root.classList.remove('busy'); form.submit(); } });
+      .catch(function () { if (my === seq) { root.classList.remove('busy'); if (row) row.classList.remove('swapping'); form.submit(); } });
   }
   root.addEventListener('submit', function (e) {
     var form = e.target, btn = e.submitter;
