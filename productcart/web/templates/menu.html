@@ -5,43 +5,20 @@
 <div id="menuroot"{% if fresh %} class="fresh-in"{% endif %}>
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
 {% set step = 2 %}{% include "_week.html" %}
-<section class="intro">
-  <h1 class="xh">Вечері цього тижня <span class="hl">з акцій</span></h1>
-  {% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
-  {% elif is_demo %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/silpo">Підключити «Сільпо»</a></div>{% endif %}
+<section class="eat-h">
+  <h1 class="xh">Що <span class="hl">їмо</span></h1>
+  <a class="eat-set" href="/menu/setup" aria-label="Налаштувати меню">{{ ic("family", "mid") }}<span>Налаштувати</span></a>
 </section>
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
 
-{% if p.fridge %}<a class="fr-banner on" href="/fridge"><span class="icotile">{{ ic("fridge", "mid") }}</span><span><b>Доїдаємо те, що вдома</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ') or 'продукти з фото' }} · змінити</small></span></a>{% endif %}
-<a class="su-open" href="/menu/setup">✨ Налаштувати меню<small>скільки вас, дні, час, смаки, бюджет</small></a>
-<div class="mctl" aria-label="Налаштування меню">
-  <form method="post" action="/menu/settings" class="ctl step">
-    <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Нас</span>
-    <button type="submit" name="people" value="{{ m.people - 1 }}" aria-label="Менше людей" {% if m.people <= 1 %}disabled{% endif %}>−</button>
-    <b>{{ m.people }}</b>
-    <button type="submit" name="people" value="{{ m.people + 1 }}" aria-label="Більше людей" {% if m.people >= 12 %}disabled{% endif %}>+</button>
-  </form>
-  <form method="post" action="/menu/settings" class="ctl seg">
-    <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Вечерь</span>
-    {% for n in (3, 5, 7) %}<button type="submit" name="dinners" value="{{ n }}" aria-pressed="{{ 'true' if p.dinners == n else 'false' }}">{{ n }}</button>{% endfor %}
-  </form>
-  <form method="post" action="/menu/settings" class="ctl seg">
-    <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Готувати</span>
-    <button type="submit" name="max_minutes" value="30" aria-pressed="{{ 'true' if p.max_minutes <= 30 else 'false' }}">до 30 хв</button>
-    <button type="submit" name="max_minutes" value="60" aria-pressed="{{ 'true' if 30 < p.max_minutes <= 60 else 'false' }}">до 1 год</button>
-    <button type="submit" name="max_minutes" value="180" aria-pressed="{{ 'true' if p.max_minutes > 60 else 'false' }}">будь-як</button>
-  </form>
-</div>
-
 {% if m.dishes %}
-<section class="stats" aria-label="Підсумок">
-  <div class="stat" style="--c:var(--p-tomato)"><small>Порція</small><b>≈ <span data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</span><em>₴</em></b></div>
-  <div class="stat" style="--c:var(--p-basil)"><small>Економія</small><b>−<span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span><em>₴</em></b></div>
-  <a class="stat" style="--c:var(--p-plum)" href="#list"><small>Разом ↓</small><b><span data-count="{{ m.total|round|int }}">{{ m.total|round|int }}</span><em>₴</em></b></a>
-</section>
-
+<p class="eat-sum">
+  <span>{{ m.dishes|length }} {{ plural(m.dishes|length, 'вечеря', 'вечері', 'вечерь') }} · {{ m.people }} {{ plural(m.people, 'людина', 'людини', 'людей') }}</span>
+  <span>≈ <b data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</b> ₴ порція</span>
+  {% if m.saving >= 1 %}<span class="sv">−<b data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</b> ₴</span>{% endif %}
+  {% if is_demo %}<a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо-ціни</a>{% endif %}
+</p>
 {% set PAL = ["p-tomato", "p-citrus", "p-basil", "p-plum", "p-sky", "p-berry", "p-citrus"] %}
-<div class="daychips" id="daychips">{% for d in m.dishes %}<button type="button" data-to="d{{ loop.index0 }}"{% if loop.first %} class="on"{% endif %}>{{ days[loop.index0] }}<i style="background:var(--{{ PAL[loop.index0 % 7] }})"></i></button>{% endfor %}</div>
 <div class="days reel" id="reel">
 {% for d in m.dishes %}{% set i = loop.index0 %}
   <article class="day{% if swapped and swapped|int == i %} fresh{% endif %}{% if d.id not in photos %} nophoto{% endif %}" id="d{{ i }}" style="--c:var(--{{ PAL[i % 7] }})">
@@ -63,7 +40,10 @@
   </article>
 {% endfor %}
 </div>
-{% if user %}<a class="wk-add" href="/dishes">{{ ic("book", "sm") }} + Своя страва</a>{% endif %}
+<div class="eat-next">
+  {% if user %}<a class="btn alt" href="/dishes">+ Своя страва</a>{% endif %}
+  <a class="btn" href="#list">Далі: що купити →</a>
+</div>
 
 {% for d in m.dishes %}{% set i = loop.index0 %}
 <dialog class="rsheet" id="rec{{ i }}" aria-labelledby="rt{{ i }}">

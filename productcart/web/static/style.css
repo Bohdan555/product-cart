@@ -1088,3 +1088,13 @@ body:has(.su) footer{display:none}
 .plogout{text-align:center;margin:16px 0}
 .plogout button{display:inline-flex;align-items:center;gap:8px;border:0;background:none;color:var(--muted);font:700 15px var(--body);cursor:pointer;padding:10px}
 .plogout .ico{--ic:transparent}
+
+/* ---------- «Що їмо»: лише заголовок, один рядок підсумку і страви ---------- */
+.eat-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 6px}
+.eat-h .xh{margin:0}
+.eat-set{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);background:var(--chip);border-radius:999px;padding:8px 14px 8px 10px;font-weight:700;font-size:14px;flex:none}
+.eat-set .ico{--ic:var(--s-citrus)}
+.eat-sum{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;color:var(--muted);font-size:14.5px;margin:0 0 14px;font-variant-numeric:tabular-nums}
+.eat-sum b{color:var(--ink)}.eat-sum .sv,.eat-sum .sv b{color:var(--accent);font-weight:800}
+.eat-sum .demo{background:var(--p-citrus);color:var(--ink);border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:700;text-decoration:none}
+.eat-next{display:flex;gap:8px;margin:6px 0 22px}.eat-next .btn{flex:1;text-align:center}
