@@ -32,6 +32,12 @@ class Want:
     packs: int = 1            # для акційного штучного товару
     weighted: bool = False
     generic: str | None = None  # загальна назва («Морква») — шукаємо заміну, якщо акційного товару немає в наявності
+    alts: tuple = ()            # інші прості запити по черзі: «хек» → «минтай» → «філе риби»
+    label: str | None = None    # як показати людині («Макарони»), коли name — пошуковий запит
+
+    @property
+    def title(self) -> str:
+        return self.label or self.name
 
 
 @dataclass
@@ -237,63 +243,104 @@ async def _search(call: Call, ctx: dict, names: list[str]) -> dict[str, list[dic
     by_query: dict[str, list[dict]] = {}
     names = list(dict.fromkeys(n for n in names if n))
     for i in range(0, len(names), SEARCH_BATCH):
+        chunk = names[i:i + SEARCH_BATCH]
         try:
-            res = await call("silpo_find_products_batch", dict(ctx, products=names[i:i + SEARCH_BATCH])) or {}
+            res = await call("silpo_find_products_batch", dict(ctx, products=chunk)) or {}
         except Exception as e:
             log.warning("Сільпо: find_products_batch: %s", str(e)[:300])
             continue
         queries = _first(res, "queries", "results") if isinstance(res, dict) else res
         log.debug("Сільпо: find_products_batch → %s", str(res)[:800])
-        for q in queries or []:
-            name = _first(q, "query", "name", "requestedName")
+        for j, q in enumerate(queries or []):
+            name = _first(q, "query", "name", "requestedName") if isinstance(q, dict) else None
+            items = (_first(q, "products", "items") if isinstance(q, dict) else None) or []
             if name:
-                by_query.setdefault(str(name).lower(), _first(q, "products", "items") or [])
+                by_query.setdefault(str(name).lower(), items)
+            if j < len(chunk):      # якщо API переформулювало запит — тримаємо й за порядком
+                by_query.setdefault(chunk[j].lower(), items)
     return by_query
+
+
+def _matches(p: dict, key: str) -> bool:
+    try:
+        from ..menu import INGREDIENTS, matches_ingredient
+        return key in INGREDIENTS and matches_ingredient(str(p.get("name") or ""), key)
+    except Exception:
+        return False
 
 
 async def resolve(call: Call, cart: CartState, wants: list[Want]) -> dict:
     """Перевіряє наявність у магазині кошика й підбирає товари.
-    → {"found": [(want, productId, quantity, назва, ваговий)], "missing": [Want], "replaced": [(старе, нове)]}"""
+    → {"found": [(want, productId, quantity, назва, ваговий)], "missing": [Want], "replaced": [(старе, нове)]}
+    Акційний товар — саме той, якщо є й вистачає залишку; інакше заміна. Решту шукаємо кількома простими
+    запитами по черзі (до 4 кіл), беремо найдешевше з достатнім залишком, спершу — що справді відповідає продукту."""
     ctx = {k: v for k, v in {"branchId": cart.branch_id, "deliveryType": cart.delivery_type,
                              "timeslotStart": cart.slot_start, "timeslotEnd": cart.slot_end}.items() if v}
     found, missing, replaced = [], [], []
     swap_from: dict[str, str] = {}   # ключ рядка → назва акційного товару, якого не виявилось
+    why: dict[str, str] = {}         # ключ → чому не знайшли (у лог, для діагностики)
     # 1) акційні товари: чи є саме цей товар у магазині кошика і чи вистачає залишку
     by_id_query = await _search(call, ctx, [w.name for w in wants if w.product_id])
-    search: list[Want] = []
+    pending: list[tuple[Want, list[str]]] = []      # (рядок, черга запитів)
     for w in wants:
+        queue = [q for q in dict.fromkeys([w.name] + list(w.alts)) if q]
         if not w.product_id:
-            search.append(w)
+            pending.append((w, queue))
             continue
         qty = quantity_for(w)
         same = next((p for p in by_id_query.get(w.name.lower(), []) if str(_first(p, "id", "productId")) == w.product_id), None)
         if same is not None and _stock_ok(same, qty):
             found.append((w, w.product_id, qty, w.name, w.weighted))
-        elif w.generic:
-            log.info("Сільпо: «%s» немає в наявності — шукаємо заміну «%s»", w.name, w.generic)
-            swap_from[w.key] = w.name
-            search.append(Want(w.key, w.generic, w.need, w.unit))
-        else:
-            missing.append(w)
-    # 2) решта — пошук за назвою: найдешевше з достатнім залишком
-    by_query = await _search(call, ctx, [w.name for w in search])
-    for w in search:
-        cands = [p for p in by_query.get(w.name.lower(), []) if _stock_ok(p, quantity_for(w, p))]
-        p = pick_product(cands)
-        if p is None:
+            continue
+        why[w.key] = "акційного немає" if same is None else "акційного мало на залишку"
+        alt_queue = [q for q in dict.fromkeys([w.generic or ""] + list(w.alts)) if q]
+        if not alt_queue:
             missing.append(w)
             continue
-        name = p.get("name") or w.name
-        if w.key in swap_from:
-            replaced.append((swap_from[w.key], name))
-        found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), name, bool(p.get("weighted"))))
+        log.info("Сільпо: «%s» немає в наявності — шукаємо заміну: %s", w.name, ", ".join(alt_queue[:3]))
+        swap_from[w.key] = w.name
+        pending.append((Want(w.key, alt_queue[0], w.need, w.unit, alts=tuple(alt_queue[1:]), label=w.title), alt_queue))
+    # 2) пошук за назвами: кожне коло — наступний запит для тих, що ще не знайдені
+    tries: dict[str, list[str]] = {}
+    for _round in range(4):
+        if not pending:
+            break
+        names = [queue[0] for _, queue in pending]
+        by_query = await _search(call, ctx, names)
+        nxt = []
+        for w, queue in pending:
+            q = queue[0]
+            tries.setdefault(w.key, []).append(q)
+            got = by_query.get(q.lower(), [])
+            ok_stock = [p for p in got if _stock_ok(p, quantity_for(w, p))]
+            fitting = [p for p in ok_stock if _matches(p, w.key)]
+            p = pick_product(fitting) or pick_product(ok_stock)
+            if p is None:
+                why[w.key] = "нічого не знайшли" if not got else f"знайшли {len(got)}, але немає в наявності"
+                if len(queue) > 1:
+                    nxt.append((w, queue[1:]))
+                else:
+                    missing.append(w)
+                continue
+            name = p.get("name") or w.name
+            if w.key in swap_from:
+                replaced.append((swap_from[w.key], name))
+            found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), name, bool(p.get("weighted"))))
+        pending = nxt
+    for w, _ in pending:
+        missing.append(w)
     ok = []
     for item in found:
         if sane(item[2], item[4]):
             ok.append(item)
         else:
             log.warning("Сільпо: підозріла кількість %s для «%s» (%s %s) — не кладемо", item[2], item[3], item[0].need, item[0].unit)
+            why[item[0].key] = "підозріла кількість"
             missing.append(item[0])
+    if missing:
+        log.warning("Сільпо: не знайшли в магазині %s: %s", cart.branch_id,
+                    "; ".join(f"{w.title} ({why.get(w.key, '?')}; шукали: {', '.join(tries.get(w.key, []) or [w.name])})"
+                              for w in missing)[:1500])
     return {"found": ok, "missing": missing, "replaced": replaced}
 
 
@@ -363,6 +410,11 @@ async def add_to_cart(call: Call, cart: CartState, found: list[tuple[Want, str, 
     return list(merged.values())
 
 
+def search_terms(key: str) -> tuple:
+    from ..menu import search_terms as _terms
+    return _terms(key) if not key.startswith("x:") else ()
+
+
 def wants_from_menu(lines, bought: set[str] = frozenset()) -> list[Want]:
     """Рядки «до каси» з меню → що класти. Позначене як куплене пропускаємо."""
     out = []
@@ -370,9 +422,12 @@ def wants_from_menu(lines, bought: set[str] = frozenset()) -> list[Want]:
         if l.key in bought:
             continue
         o = l.source.offer
+        terms = search_terms(l.key)
         if o is not None and o.chain == "silpo" and o.product_id:
             out.append(Want(l.key, o.name, l.need, l.unit, product_id=o.product_id, packs=l.packs, weighted=o.weighted,
-                            generic=l.name))
+                            generic=terms[0] if terms else l.name, alts=tuple(terms[1:]), label=o.name))
+        elif terms:
+            out.append(Want(l.key, terms[0], l.need, l.unit, alts=tuple(terms[1:]), label=l.name))
         else:
             out.append(Want(l.key, l.name, l.need, l.unit))
     return out

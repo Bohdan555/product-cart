@@ -6,6 +6,15 @@ import pytest
 from productcart.sources import silpo_cart as sc
 
 
+def lookup(catalog: dict, q: str) -> list:
+    """Як пошук «Сільпо»: без урахування регістру й за частиною назви."""
+    ql = q.lower()
+    for k, v in catalog.items():
+        if k.lower() == ql:
+            return v
+    return next((v for k, v in catalog.items() if v and (ql in k.lower() or k.lower() in ql)), [])
+
+
 class CartMCP:
     def __init__(self, existing=None, has_cart=True):
         self.calls = []
@@ -31,7 +40,7 @@ class CartMCP:
                 "Сметана": [{"id": "sm-big", "name": "Сметана 15% 400г", "price": 60, "displayRatio": "400г", "stock": 3},
                             {"id": "sm-small", "name": "Сметана 15% 200г", "price": 40, "displayRatio": "200г", "stock": 0}],
             }
-            return {"queries": [{"query": q, "products": catalog.get(q, [])} for q in args["products"]]}
+            return {"queries": [{"query": q, "products": lookup(catalog, q)} for q in args["products"]]}
         if name == "silpo_add_cart_products":
             assert args["shoppingCartId"] == "c1"
             for p in args["products"]:
@@ -169,7 +178,7 @@ class OutOfStockMCP(CartMCP):
             cat = {"Сметана Галичина 15% 350г": [{"id": "sm-promo", "name": "Сметана Галичина 15% 350г", "price": 49, "stock": 0}],
                    "Сметана": [{"id": "sm-other", "name": "Сметана Простоквашино 20% 350г", "price": 62, "displayRatio": "350г", "stock": 7}],
                    "Тофу Х 300г": []}
-            return {"queries": [{"query": q, "products": cat.get(q, [])} for q in args["products"]]}
+            return {"queries": [{"query": q, "products": lookup(cat, q)} for q in args["products"]]}
         return await super().__call__(name, args)
 
 
@@ -188,3 +197,34 @@ def test_cart_totals_split_products_and_delivery():
         {"id": "l1", "productId": "a", "name": "A", "quantity": 2, "price": 10, "total": 20}]}],
         "calculation": {"total": 119, "totalAfterDiscounts": 119, "productsTotal": 20, "delivery": {"total": 99}}}})
     assert (st.products_total, st.delivery, st.total) == (20, 99, 119)
+
+
+class FallbackMCP(CartMCP):
+    """«хек» у магазині нема, а «минтай» є; на «сир твердий» каталог повертає й плавлений, і гауду."""
+    async def __call__(self, name, args):
+        if name == "silpo_find_products_batch":
+            self.calls.append((name, args))
+            cat = {"минтай": [{"id": "pollock", "name": "Минтай філе 1кг", "price": 199, "weighted": True, "stock": 5}],
+                   "сир твердий": [{"id": "melted", "name": "Сирок плавлений 90г", "price": 25, "stock": 9},
+                                   {"id": "gouda", "name": "Сир твердий Гауда 45% 200г", "price": 89, "displayRatio": "200г", "stock": 4}]}
+            return {"queries": [{"query": q, "products": cat.get(q, [])} for q in args["products"]]}
+        return await super().__call__(name, args)
+
+
+def test_fallback_queries_and_matching_product():
+    from productcart import menu
+    mcp = FallbackMCP()
+    t = menu.search_terms
+    wants = [sc.Want("fish", t("fish")[0], 800, "g", alts=t("fish")[1:], label="Філе риби"),
+             sc.Want("cheese", t("cheese")[0], 150, "g", alts=t("cheese")[1:], label="Сир твердий")]
+    res = run(sc.build(mcp, wants))
+    assert mcp.items.get("pollock") and mcp.items.get("gouda") == 1 and "melted" not in mcp.items
+    assert not res["missing"]
+    queried = [q for n, a in mcp.calls if n == "silpo_find_products_batch" for q in a["products"]]
+    assert queried[:2] == ["хек", "сир твердий"] and "минтай" in queried     # друге коло — наступний запит
+
+
+def test_missing_shows_human_name():
+    mcp = OutOfStockMCP()
+    res = run(sc.build(mcp, [sc.Want("tofu", "тофу", 200, "g", label="Тофу")]))
+    assert [w.title for w in res["missing"]] == ["Тофу"]
