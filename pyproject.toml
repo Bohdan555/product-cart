@@ -13,12 +13,14 @@ dependencies = [
   "httpx>=0.27",
   "mcp>=1.12,<2",
   "psycopg[binary]>=3.2",
+  # Розпізнавання фото холодильника (Claude через Vercel AI Gateway або Anthropic API)
+  "anthropic>=2.8,<3",
 ]
 
 [project.optional-dependencies]
 # Офіційний MCP «Сільпо» (OAuth від імені покупця). SDK 2.x має інший API, тому фіксуємо 1.x.
 silpo = ["mcp>=1.12,<2"]
-web = ["fastapi>=0.115", "uvicorn>=0.30", "jinja2>=3.1", "python-multipart>=0.0.9", "cryptography>=42", "httpx>=0.27", "mcp>=1.12,<2", "psycopg[binary]>=3.2"]
+web = ["fastapi>=0.115", "uvicorn>=0.30", "jinja2>=3.1", "python-multipart>=0.0.9", "cryptography>=42", "httpx>=0.27", "mcp>=1.12,<2", "psycopg[binary]>=3.2", "anthropic>=2.8,<3"]
 dev = ["pytest>=8"]
 
 [project.scripts]

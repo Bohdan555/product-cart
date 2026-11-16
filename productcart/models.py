@@ -104,6 +104,9 @@ class Profile:
     pantry_buy: list[str] = field(default_factory=list)    # запаси, які вдома закінчились — додати в кошик
     menu_week: str | None = None                           # тиждень (ISO), на який складено меню
     menu_prev: list[str] = field(default_factory=list)     # меню минулого тижня — цього тижня пропонуємо інше
+    fridge: list[str] = field(default_factory=list)        # ключі інгредієнтів, які вже є вдома (з фото холодильника)
+    fridge_other: list[str] = field(default_factory=list)  # решта знайденого на фото (не з довідника) — лише показуємо
+    fridge_at: str | None = None                           # коли сфотографували (через тиждень забуваємо)
     menu_days: list[int] = field(default_factory=list)     # у які дні готуємо (0 = пн); порожньо — підряд з понеділка
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо

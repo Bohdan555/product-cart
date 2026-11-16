@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Що в холодильнику — Кошик з акцій{% endblock %}
+{% block body %}
+<nav class="mtabs" aria-label="Меню"><a href="/menu">Меню тижня</a><a href="/fridge" aria-current="page">Холодильник</a><a href="/dishes">Мої страви</a></nav>
+<section class="intro">
+  <h1 class="xh">Що в <span class="hl">холодильнику?</span></h1>
+  <p class="lead">Сфотографуйте — меню спершу доїсть те, що вже є, а з акцій докупимо решту.</p>
+</section>
+
+{% if not user %}
+<div class="card stack"><p><b>Фото холодильника → меню без зайвих покупок</b></p>
+  <p><a class="btn" href="/register">Увійти, щоб спробувати</a></p></div>
+{% else %}
+<form class="fr" id="fr" method="post" action="/fridge/save" data-turbo="false">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+
+  <label class="fr-shot" id="frShot">
+    <input type="file" id="frFile" accept="image/*" capture="environment" hidden>
+    <img id="frImg" alt="" hidden>
+    <span class="fr-scan" aria-hidden="true"></span>
+    <span class="fr-cta" id="frCta"><span class="cam" aria-hidden="true">📸</span><b>Сфотографувати холодильник</b><small>або обрати фото чеку чи полиці</small></span>
+  </label>
+  <p class="fr-state" id="frState" aria-live="polite"></p>
+
+  <div class="fr-found" id="frFound"{% if not p.fridge and not p.fridge_other %} hidden{% endif %}>
+    <div class="fr-h"><b>Є вдома</b><small>торкніться, щоб прибрати</small></div>
+    <div class="fr-chips" id="frChips">
+      {% for k in p.fridge %}<button type="button" class="fr-chip" data-key="{{ k }}"><i>{{ name_visual(names[k]).emoji }}</i>{{ names[k] }}</button>{% endfor %}
+      {% for n in p.fridge_other %}<button type="button" class="fr-chip other" data-other="{{ n }}"><i>{{ name_visual(n).emoji }}</i>{{ n }}</button>{% endfor %}
+    </div>
+    <small class="hint fr-note">Сірі — не з наших рецептів: у меню не підуть, але й купувати їх не будемо.</small>
+  </div>
+
+  <details class="fr-add"><summary>+ Додати вручну</summary>
+    <div class="fr-pick">{% for k, n in choices %}<button type="button" data-addkey="{{ k }}" data-name="{{ n }}">{{ name_visual(n).emoji }} {{ n }}</button>{% endfor %}</div>
+  </details>
+
+  <div id="frHidden"></div>
+  <div class="fr-go">
+    <button type="submit" class="btn" id="frSave">🍽 Скласти меню з цього</button>
+    {% if p.fridge or p.fridge_other %}<button type="submit" class="btn alt" id="frClear" formnovalidate>Очистити</button>{% endif %}
+  </div>
+  <p class="hint">Фото не зберігаємо — лише список продуктів, і лише на тиждень. Розпізнає фото модель Claude.</p>
+</form>
+
+<script>
+(function () {
+  var form = document.getElementById('fr'); if (!form) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var CSRF = form.querySelector('[name=csrf]').value;
+  var tap = function (ms) { if (window.haptic) haptic(ms || 10); };
+
+  // зменшуємо фото в браузері: швидше завантаження і дешевше розпізнавання
+  function shrink(file) {
+    return new Promise(function (ok, bad) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var k = Math.min(1, 1568 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(function (b) { b ? ok(b) : bad(); }, 'image/jpeg', 0.85);
+      };
+      img.onerror = function () { bad(); }; img.src = url;
+    });
+  }
+
+  function chip(it, i) {
+    if (it.ingredient !== 'other' && form.querySelector('.fr-chip[data-key="' + it.ingredient + '"]')) return;
+    if (it.ingredient === 'other' && [].some.call(form.querySelectorAll('.fr-chip[data-other]'), function (c) { return c.dataset.other.toLowerCase() === it.name.toLowerCase(); })) return;
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'fr-chip new' + (it.ingredient === 'other' ? ' other' : '') + (it.confident === false ? ' unsure' : '');
+    if (it.ingredient === 'other') b.dataset.other = it.name; else b.dataset.key = it.ingredient;
+    b.style.animationDelay = (i * 70) + 'ms';
+    var e = document.createElement('i'); e.textContent = it.emoji || '🥫'; b.appendChild(e);
+    b.appendChild(document.createTextNode(it.ingredient === 'other' ? it.name : (it.label || it.name)));
+    if (it.amount) { var s = document.createElement('small'); s.textContent = it.amount; b.appendChild(s); }
+    if (it.confident === false) b.title = 'Не впевнені — перевірте';
+    $('frChips').appendChild(b);
+  }
+
+  $('frFile').addEventListener('change', function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    $('frImg').src = URL.createObjectURL(f); $('frImg').hidden = false; $('frCta').hidden = true;
+    $('frShot').classList.add('scanning'); $('frState').textContent = 'Дивимось, що є…'; tap(15);
+    shrink(f).then(function (blob) {
+      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('photo', blob, 'fridge.jpg');
+      return fetch('/fridge/scan', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+    }).then(function (d) {
+      $('frShot').classList.remove('scanning');
+      if (d.error) { $('frState').textContent = d.error; return; }
+      var useful = d.items.filter(function (x) { return x.ingredient !== 'other'; }).length;
+      $('frState').textContent = d.items.length ? 'Знайшли ' + d.items.length + ' — з них для рецептів: ' + useful + ' ✨' : 'Їжі на фото не видно 🤔 Спробуйте ближче або додайте вручну.';
+      $('frFound').hidden = !d.items.length && !$('frChips').children.length;
+      d.items.forEach(chip); tap(25);
+      if (window.celebrate && useful) celebrate();
+    }).catch(function () { $('frShot').classList.remove('scanning'); $('frState').textContent = 'Не вдалося надіслати фото. Перевірте інтернет.'; });
+  });
+
+  $('frChips').addEventListener('click', function (e) {
+    var c = e.target.closest('.fr-chip'); if (!c) return;
+    c.classList.add('gone'); tap(); setTimeout(function () { c.remove(); if (!$('frChips').children.length) $('frFound').hidden = true; }, 220);
+  });
+  form.querySelectorAll('[data-addkey]').forEach(function (b) { b.onclick = function () {
+    $('frFound').hidden = false; chip({ ingredient: b.dataset.addkey, name: b.dataset.name, label: b.dataset.name, emoji: b.textContent.trim().split(' ')[0] }, 0); tap(); }; });
+
+  form.addEventListener('submit', function (e) {
+    var h = $('frHidden'); h.innerHTML = '';
+    var clear = e.submitter && e.submitter.id === 'frClear';
+    if (!clear) form.querySelectorAll('.fr-chip:not(.gone)').forEach(function (c) {
+      var i = document.createElement('input'); i.type = 'hidden';
+      if (c.dataset.key) { i.name = 'have'; i.value = c.dataset.key; } else { i.name = 'other'; i.value = c.dataset.other; }
+      h.appendChild(i);
+    });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

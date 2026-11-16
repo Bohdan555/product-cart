@@ -4,7 +4,7 @@
 {% include "_stale.html" %}
 <div id="menuroot"{% if fresh %} class="fresh-in"{% endif %}>
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
-<nav class="mtabs" aria-label="Меню"><a href="/menu" aria-current="page">Меню тижня</a><a href="/dishes">Мої страви</a></nav>
+<nav class="mtabs" aria-label="Меню"><a href="/menu" aria-current="page">Меню тижня</a><a href="/fridge">Холодильник</a><a href="/dishes">Мої страви</a></nav>
 <section class="intro">
   <h1 class="xh">Вечері цього тижня <span class="hl">з акцій</span></h1>
   {% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
@@ -12,6 +12,8 @@
 </section>
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
 
+{% if p.fridge %}<a class="fr-banner on" href="/fridge"><span aria-hidden="true">🧊</span><span><b>Доїдаємо те, що вдома</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ') or 'продукти з фото' }} · змінити</small></span></a>
+{% elif not guest %}<a class="fr-banner" href="/fridge"><span aria-hidden="true">📸</span><span><b>Що в холодильнику?</b><small>сфотографуйте — меню доїсть те, що вже є</small></span></a>{% endif %}
 <a class="su-open" href="/menu/setup">✨ Налаштувати меню<small>скільки вас, дні, час, смаки, бюджет</small></a>
 <div class="mctl" aria-label="Налаштування меню">
   <form method="post" action="/menu/settings" class="ctl step">
@@ -50,7 +52,7 @@
       {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
     </button>
     <div class="dbody">
-      <div class="dmeta"><span class="dn">{{ days[i] }} · {{ d.minutes }} хв</span>{% if d.recipe.mine %}<span class="mine">моя</span>{% endif %}</div>
+      <div class="dmeta"><span class="dn">{{ days[i] }} · {{ d.minutes }} хв</span>{% if d.recipe.mine %}<span class="mine">моя</span>{% endif %}{% if d.home %}<span class="mine home" title="Є вдома: {{ d.home|join(', ') }}">🧊 є вдома</span>{% endif %}</div>
       <h3 class="dt">{{ d.title }}</h3>
       <div class="dact">
         {% if not d.recipe.mine %}<button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>{% endif %}
@@ -72,7 +74,7 @@
     <h3 id="rt{{ i }}">{{ d.title }}</h3>
     {% if d.saving >= 1 %}<div class="tags"><span class="tag money">−{{ uah(d.saving|round) }} завдяки акціям</span></div>{% endif %}
     <h4>Інгредієнти</h4>
-    <ul class="ing">{% for k, q in d.ingredients.items() %}<li{% if k in d.promo_keys %} class="p"{% endif %}><span>{{ ingredients[k][0] }}</span><span>{{ fmt_qty(q, ingredients[k][1]) }}</span></li>{% endfor %}{% for x in d.recipe.extras %}<li class="x"><span>{{ x }}</span><span>без ціни</span></li>{% endfor %}</ul>
+    <ul class="ing">{% for k, q in d.ingredients.items() %}<li{% if k in d.promo_keys %} class="p"{% endif %}><span>{{ ingredients[k][0] }}</span><span>{% if k in p.fridge %}🧊 є вдома{% else %}{{ fmt_qty(q, ingredients[k][1]) }}{% endif %}</span></li>{% endfor %}{% for x in d.recipe.extras %}<li class="x"><span>{{ x }}</span><span>без ціни</span></li>{% endfor %}</ul>
     {% if d.recipe.steps %}<h4>Як готувати</h4>
     <ol class="steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>{% endif %}
     {% if d.recipe.mine %}<p><a href="/dishes?edit={{ d.id }}" data-turbo="false">Змінити мою страву →</a></p>{% endif %}
@@ -121,6 +123,12 @@
   <label class="brow"><input type="checkbox" data-buy="x:{{ x }}" data-text="{{ x }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
     <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
     <span class="rmain"><b>{{ x }}</b></span></label>
+  {% endfor %}</div>
+  {% endif %}
+  {% if m.home_lines %}
+  <div class="group"><div class="gh"><b>🧊 Є вдома</b><small>з фото холодильника — не купуємо</small></div>
+  {% for l in m.home_lines %}{% set nv = name_visual(l.name) %}
+    <div class="brow static"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span></div>
   {% endfor %}</div>
   {% endif %}
   {% set waiting = m.pantry_lines|rejectattr('buy')|list %}

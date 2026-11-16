@@ -906,3 +906,38 @@ details.more{border-top:0;background:var(--chip);border-radius:18px;padding:12px
 body:has(.su) .dock{display:none}
 body:has(.su) .su-live{bottom:10px}
 body:has(.su) footer{display:none}
+
+/* ---------- Холодильник ---------- */
+.mtabs{max-width:100%;overflow-x:auto;scrollbar-width:none}.mtabs a{white-space:nowrap}
+.fr-shot{position:relative;display:grid;place-items:center;min-height:240px;border-radius:28px;overflow:hidden;cursor:pointer;
+  background:repeating-linear-gradient(135deg,var(--p-sky) 0 18px,color-mix(in srgb,var(--p-sky) 70%,var(--card)) 18px 36px);border:2px dashed color-mix(in srgb,var(--ink) 20%,transparent)}
+.fr-shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fr-cta{display:grid;justify-items:center;gap:6px;text-align:center;padding:24px;position:relative}
+.fr-cta .cam{font-size:56px;animation:su-cook 1.4s ease-in-out infinite alternate}
+.fr-cta b{font-size:18px}.fr-cta small{color:var(--muted)}
+.fr-scan{position:absolute;left:0;right:0;top:0;height:30%;opacity:0;pointer-events:none;
+  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--accent) 45%,transparent) 85%,var(--accent));box-shadow:0 2px 18px var(--accent)}
+.fr-shot.scanning .fr-scan{opacity:1;animation:fr-scan 1.3s ease-in-out infinite alternate}
+.fr-shot.scanning img{filter:saturate(.6) brightness(.9)}
+.fr-state{min-height:22px;font-weight:700;margin:10px 2px}
+.fr-found{background:var(--card);border-radius:22px;padding:14px;margin:6px 0 12px;box-shadow:0 1px 0 var(--line)}
+.fr-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.fr-h small{color:var(--muted)}
+.fr-chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 6px}
+.fr-chip{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 14px 8px 8px;background:var(--p-basil);color:var(--ink);font:700 14px var(--body);cursor:pointer;transition:transform .2s,opacity .2s}
+.fr-chip i{font-style:normal;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:color-mix(in srgb,var(--bg) 70%,transparent);font-size:16px}
+.fr-chip small{font-weight:600;color:var(--muted)}
+.fr-chip.other{background:var(--chip);color:var(--muted)}
+.fr-chip.unsure{outline:2px dashed color-mix(in srgb,var(--ink) 30%,transparent)}
+.fr-chip.new{animation:su-pop .4s cubic-bezier(.3,1.5,.5,1) both}
+.fr-chip.gone{transform:scale(.6);opacity:0}
+.fr-note{display:block}
+.fr-add{margin:0 0 14px}.fr-add summary{cursor:pointer;font-weight:700;color:var(--accent);padding:6px 0}
+.fr-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.fr-pick button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px;font:600 13.5px var(--body);cursor:pointer;color:var(--ink)}
+.fr-go{display:flex;gap:8px;margin-bottom:8px}.fr-go #frSave{flex:1}
+.fr-banner{display:flex;gap:12px;align-items:center;text-decoration:none;color:var(--ink);background:var(--p-sky);border-radius:20px;padding:12px 16px;margin:0 0 10px}
+.fr-banner>span:first-child{font-size:28px}.fr-banner b{display:block}.fr-banner small{color:color-mix(in srgb,var(--ink) 65%,transparent)}
+.fr-banner.on{background:color-mix(in srgb,var(--p-sky) 70%,var(--p-basil))}
+.dmeta .mine.home{background:var(--p-sky);color:var(--ink)}
+@keyframes fr-scan{from{transform:translateY(-30%)}to{transform:translateY(260%)}}
+@media (prefers-reduced-motion:reduce){.fr-shot.scanning .fr-scan,.fr-cta .cam,.fr-chip.new{animation:none}}

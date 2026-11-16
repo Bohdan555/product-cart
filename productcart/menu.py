@@ -415,6 +415,7 @@ class Dish:
     why: list[str] = field(default_factory=list)
     reuse: list[str] = field(default_factory=list)
     promo_keys: list[str] = field(default_factory=list)
+    home: list[str] = field(default_factory=list)      # інгредієнти, які вже є вдома (з холодильника)
 
     # сумісність зі старим кодом і шаблонами
     title = property(lambda self: self.recipe.title)
@@ -447,6 +448,7 @@ class Line:
     days: list[str] = field(default_factory=list)
     pantry: bool = False
     buy: bool = True                   # для запасів: людина сказала, що вдома закінчилось
+    have: bool = False                 # уже є вдома (з фото холодильника) — не купуємо
 
     @property
     def is_promo(self) -> bool:
@@ -498,7 +500,12 @@ class Menu:
 
     @property
     def pantry_lines(self) -> list[Line]:
-        return [l for l in self.lines if l.pantry]
+        return [l for l in self.lines if l.pantry and not l.have]
+
+    @property
+    def home_lines(self) -> list[Line]:
+        """Що для меню вже є вдома (з фото холодильника)."""
+        return [l for l in self.lines if l.have]
 
     @property
     def ids(self) -> list[str]:
@@ -531,7 +538,7 @@ def _cost(key: str, need: float, src: Source) -> tuple[int, float, float, float,
     return packs, pack, round(packs * price_pack, 2), round(packs * regular_pack, 2), packs * pack - need
 
 
-def basket(dishes: list[Dish], sources: dict[str, Source], people: int, pantry_buy=()) -> list[Line]:
+def basket(dishes: list[Dish], sources: dict[str, Source], people: int, pantry_buy=(), have=()) -> list[Line]:
     need: dict[str, float] = {}
     days: dict[str, list[str]] = {}
     for i, d in enumerate(dishes):
@@ -541,9 +548,9 @@ def basket(dishes: list[Dish], sources: dict[str, Source], people: int, pantry_b
     lines = []
     for k, q in need.items():
         packs, pack, cost, regular, left = _cost(k, q, sources[k])
-        pantry = k in PANTRY
+        pantry, home = k in PANTRY, k in have
         lines.append(Line(k, INGREDIENTS[k][0], q, INGREDIENTS[k][1], packs, pack, cost, regular, sources[k], left,
-                          days[k], pantry, (not pantry) or k in pantry_buy))
+                          days[k], pantry, not home and ((not pantry) or k in pantry_buy), home))
     lines.sort(key=lambda l: (not l.is_promo, l.name))
     return lines
 
@@ -558,6 +565,7 @@ class _Ctx:
         self.avoid = set(profile.menu_prev)   # страви минулого тижня — штраф, щоб меню мінялось
         self.week = date.today().isocalendar()[:2]
         self.regular_stems = [w[:-1] if len(w) > 4 else w for r in profile.regulars for w in _tokens(r)]
+        self.have = set(getattr(profile, "fridge", None) or []) & set(INGREDIENTS)   # уже є вдома
         self.mine = user_recipes(profile)
         self.by_id = {**RECIPE_BY_ID, **{r.id: r for r in self.mine}}
         self.dish_likes |= {r.id for r in self.mine}       # свої страви — як улюблені
@@ -584,7 +592,8 @@ class _Ctx:
             penalty += 1.2 * sum(1 for o in others if _is_soup(o))
         if r.id in self.avoid:
             penalty += 2.5
-        return (2.0 * pref + 6.0 * (saving / cost if cost else 0) + 0.4 * n_promo + 1.5 * overlap - penalty
+        home = sum(3.0 if INGREDIENTS[k][4] else 1.0 for k in r.ingredients if k in self.have)   # спершу доїдаємо своє
+        return (2.0 * pref + 6.0 * (saving / cost if cost else 0) + 0.4 * n_promo + 1.5 * overlap + home - penalty
                 + self.jitter(r))
 
     def jitter(self, r: Recipe) -> float:
@@ -603,6 +612,10 @@ class _Ctx:
             d.saving += q / _per(k) * (src.regular_unit_price - src.unit_price)
         d.used, d.saving = round(d.used, 2), round(d.saving, 2)
         d.promo_keys = [k for k in r.ingredients if self.sources[k].offer]
+        home = [INGREDIENTS[k][0].lower() for k in r.ingredients if k in self.have]
+        d.home = home
+        if home:
+            d.why.append("Є вдома: " + ", ".join(home))
         if r.mine:
             d.why.append("Ваша страва")
         elif r.id in self.dish_likes:
@@ -619,7 +632,7 @@ class _Ctx:
 
     def menu(self, recipes: list[Recipe], pantry_buy=()) -> Menu:
         dishes = [self.dish(r, recipes[:i]) for i, r in enumerate(recipes)]
-        return Menu(dishes, basket(dishes, self.sources, self.people, pantry_buy), self.people)
+        return Menu(dishes, basket(dishes, self.sources, self.people, pantry_buy, self.have), self.people)
 
     def greedy(self, n: int, fixed: list[Recipe] | None = None) -> list[Recipe]:
         chosen = list(fixed or [])

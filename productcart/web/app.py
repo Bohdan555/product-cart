@@ -31,7 +31,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask
 
-from . import analytics, db, logs, security, unsplash
+from . import analytics, db, fridge, logs, security, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -58,6 +58,8 @@ def day_labels(p: Profile) -> list[str]:
     days = sorted(set(d for d in p.menu_days if 0 <= d <= 6))
     return [menu.DAYS[d] for d in days] if days and len(days) == p.dinners else menu.DAYS
 OFFERS_TTL = timedelta(hours=6)
+FRIDGE_TTL = timedelta(days=7)
+FRIDGE_PER_DAY = 15            # фото на людину за добу: кожне розпізнавання коштує грошей
 ERROR_PAGE = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
               "<title>Помилка — Кошик з акцій</title><body style='font:16px/1.5 system-ui;padding:32px;max-width:520px'>"
               "<h1>Щось пішло не так</h1><p>Ми вже бачимо цю помилку в логах. Спробуйте оновити сторінку.</p>"
@@ -75,7 +77,7 @@ HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 
 def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None,
                gateway: SilpoGateway | None = None, secure_cookies: bool | None = None,
-               google: GoogleAuth | None = None, telegram: Telegram | None = None) -> FastAPI:
+               google: GoogleAuth | None = None, telegram: Telegram | None = None, vision=None) -> FastAPI:
     logs.setup()
     app_secret = app_secret or os.environ.get("APP_SECRET", "")
     vercel_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")  # Vercel задає сам, без https://
@@ -87,6 +89,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     secure = base_url.startswith("https://") if secure_cookies is None else secure_cookies
     google = google or GoogleAuth(redirect_uri=f"{base_url}/auth/google/callback")
     tg = telegram or Telegram()
+    vision = vision or fridge.recognize     # фото холодильника → продукти (у тестах — підробка)
 
     app = FastAPI(title="Кошик з акцій", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -835,6 +838,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def week_menu(p: Profile, offers: list[Offer]):
         """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
         new_week = roll_week(p)
+        if p.fridge and (not p.fridge_at or p.fridge_at < security.iso(security.now() - FRIDGE_TTL)):
+            p.fridge, p.fridge_other, p.fridge_at = [], [], None    # фото тижневої давнини — вже неправда
+            new_week = True
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
         changed = m.ids != p.menu or new_week
@@ -1251,6 +1257,65 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
 
+    # ---------- що в холодильнику: фото → продукти вдома → меню доїдає їх ----------
+    def fridge_scans_today(uid: int) -> int:
+        since = security.iso(security.now() - timedelta(days=1))
+        r = conn.execute("SELECT COUNT(*) AS n FROM events WHERE user_id=? AND event='fridge_scan' AND ts >= ?",
+                         (uid, since)).fetchone()
+        return r["n"] if r else 0
+
+    @app.get("/fridge", response_class=HTMLResponse)
+    def fridge_page(request: Request):
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else None
+        choices = sorted(((k, v[0]) for k, v in menu.INGREDIENTS.items()), key=lambda x: x[1])
+        return render(request, "fridge.html", u, p=p, choices=choices, names=dict(choices))
+
+    @app.post("/fridge/scan")
+    async def fridge_scan(request: Request):
+        """Фото → список продуктів (JSON). Фото не зберігаємо."""
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return JSONResponse({"error": "Увійдіть, щоб розпізнавати фото"}, status_code=401)
+        photo = form.get("photo")
+        if photo is None or not hasattr(photo, "read"):
+            return JSONResponse({"error": "Додайте фото"}, status_code=400)
+        data = await photo.read()
+        media = (getattr(photo, "content_type", "") or "").split(";")[0]
+        if media not in fridge.MEDIA or not data or len(data) > fridge.MAX_BYTES:
+            return JSONResponse({"error": "Потрібне фото JPG, PNG або WebP до 8 МБ"}, status_code=400)
+        if fridge_scans_today(u["id"]) >= FRIDGE_PER_DAY:
+            return JSONResponse({"error": "На сьогодні досить фото — спробуйте завтра"}, status_code=429)
+        analytics.track(conn, u["id"], "fridge_scan", size_kb=len(data) // 1024)
+        try:
+            items = await asyncio.to_thread(vision, data, media, request.headers.get("x-vercel-oidc-token"))
+        except fridge.NotConfigured:
+            log.warning("Холодильник: розпізнавання не налаштоване (немає ключа)")
+            return JSONResponse({"error": "Розпізнавання фото ще налаштовується. Додайте продукти вручну нижче."}, status_code=503)
+        except Exception as e:
+            log.warning("Холодильник: не вдалося розпізнати: %s: %s", type(e).__name__, str(e)[:300])
+            return JSONResponse({"error": "Не вдалося розпізнати фото. Спробуйте ще раз або додайте продукти вручну."}, status_code=502)
+        for it in items:
+            it["emoji"] = name_visual(it["name"])["emoji"]
+            it["label"] = menu.INGREDIENTS[it["ingredient"]][0] if it["ingredient"] != "other" else None
+        return JSONResponse({"items": items})
+
+    @app.post("/fridge/save")
+    async def fridge_save(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        p.fridge = sorted({k for k in form.getlist("have") if k in menu.INGREDIENTS})
+        p.fridge_other = [str(x).strip()[:60] for x in form.getlist("other") if str(x).strip()][:40]
+        p.fridge_at = security.iso(security.now()) if (p.fridge or p.fridge_other) else None
+        p.menu, p.menu_skip = [], []        # меню перебудуємо під те, що є вдома
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "fridge_saved", have=len(p.fridge), other=len(p.fridge_other))
+        return go("/menu?fresh=1" if p.fridge else "/menu")
+
     # ---------- мої страви ----------
     def ing_choices() -> list[tuple[str, str, str]]:
         """(ключ, назва, одиниця для поля) — довідник інгредієнтів, з якими рахуємо ціни й акції."""
@@ -1612,7 +1677,8 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     )
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
     for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly", "my_dishes"):
+              "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly", "my_dishes",
+              "fridge", "fridge_other", "fridge_at", "menu_days"):
         setattr(p, k, getattr(prev, k))
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]
