@@ -42,8 +42,10 @@ TAG_RULES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
                 "черешн", "персик", "слив", "грейпфрут"), ("сік", "нектар", "чипс", "йогурт")),
     ("grains", ("гречк", "рис ", "рис ", "крупа", "пшон", "вівсян", "кіноа", "сочевиц", "квасол", "горох",
                 "нут"), ()),
-    ("household", ("порошок", "гель для прання", "засіб для", "мило", "шампунь", "туалетн", "серветк",
-                   "губк", "пакети для сміття", "зубна паст"), ()),
+    ("household", ("порошок", "гель для прання", "засіб для", "засіб ", "мило", "шампунь", "туалетн", "серветк",
+                   "губк", "пакети для сміття", "зубна паст", "таблетки для", "капсули для", "освіжувач",
+                   "кондиціонер для", "ополіскувач", "відбілювач", "плямовивід", "для прання", "для посуд",
+                   "дезодорант", "гель для душу", "крем для", "бальзам для", "засоби для", "очищувач", "антинакип"), ()),
 ]
 TAG_LABELS = {
     "dairy": "молочне", "lactose": "з лактозою", "gluten": "з глютеном", "meat": "м'ясо", "pork": "свинина",
@@ -70,12 +72,29 @@ def parse_pack(name: str) -> tuple[float | None, str | None]:
     return qty, _UNITS[unit]
 
 
+# Свіжі овочі й фрукти — лише коли назва ними починається: «Яблука Голден» — фрукт,
+# а «Паштет з яблуком» чи «Таблетки для посудомийки лимон» — ні.
+FIRST_WORD_TAGS = {"fruits", "vegetables"}
+FOOD_TAGS = {"dairy", "lactose", "gluten", "meat", "pork", "fish", "eggs", "honey", "sweets", "coffee", "tea",
+             "vegetables", "fruits", "grains"}
+
+
+def first_word(text: str) -> str:
+    w = re.split(r"[\s,«»\"'()]+", (text or "").lower().strip(), maxsplit=1)
+    return w[0] if w else ""
+
+
 def infer_tags(text: str) -> set[str]:
     t = f" {(text or '').lower()} ".replace("’", "'").replace("ʼ", "'")
+    first = first_word(text)
     tags = set()
     for tag, roots, exceptions in TAG_RULES:
-        if any(r in t for r in roots) and not any(e in t for e in exceptions):
+        hay = first if tag in FIRST_WORD_TAGS else t
+        if any((hay.startswith(r.strip()) if tag in FIRST_WORD_TAGS else r in hay) for r in roots) \
+                and not any(e in t for e in exceptions):
             tags.add(tag)
+    if "household" in tags:      # побутова хімія «з ароматом лимона» — не їжа
+        tags -= FOOD_TAGS
     return tags
 
 
@@ -83,7 +102,7 @@ def enrich(offer: Offer) -> Offer:
     """Доповнює упаковку і теги, якщо джерело їх не дало."""
     if offer.pack_qty is None and not offer.weighted:
         offer.pack_qty, offer.pack_unit = parse_pack(offer.name)
-    offer.tags |= infer_tags(f"{offer.name} {offer.category or ''}")
+    offer.tags |= infer_tags(f"{offer.name} {offer.category or ''}".strip())
     return offer
 
 

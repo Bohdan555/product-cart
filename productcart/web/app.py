@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .. import matcher, menu, planner
-from ..catalog import TAG_LABELS, enrich
+from ..catalog import TAG_LABELS, enrich, first_word
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
@@ -1395,7 +1395,10 @@ VISUALS = [("coffee", "☕", 28, "Кава"), ("tea", "🍵", 95, "Чай"), ("f
 
 # Спершу за назвою товару (точніше), потім за тегом. (основи слів, емодзі, категорія для фільтра)
 NAME_VISUALS = [
-    (("засіб", "мило", "порошок", "гель для", "серветк", "папір туалет"), "🧴", "Побут"),
+    (("засіб", "засоб", "мило", "порошок", "гель для", "серветк", "папір туалет", "таблетки для", "капсули для",
+      "освіжувач", "кондиціонер для", "ополіскувач", "відбілювач", "плямовивід", "для прання", "для посуд",
+      "шампунь", "дезодорант", "зубна паст", "крем для", "бальзам для", "губк", "пакети для", "очищувач"), "🧴", "Побут"),
+    (("паштет", "печінк", "ковбас", "сосиск"), "🥫", "М'ясо"),
     (("пиво",), "🍺", "Напої"), (("вино", "коньяк", "горілк"), "🍷", "Напої"),
     (("сік", "нектар"), "🧃", "Напої"), (("вода",), "💧", "Напої"),
     (("напій",), "🥤", "Напої"),
@@ -1433,19 +1436,28 @@ CAT_ORDER = ["Овочі", "Фрукти", "Кава", "Чай", "М'ясо", "�
              "Бакалія", "Солодке", "Напої", "Побут"]
 
 
+FRESH_CATS = ("Фрукти", "Овочі")   # лише якщо назва ними починається («Яблука», а не «Паштет з яблуком»)
+
+
+def _visual_hit(low: str, first: str, stems, label: str) -> bool:
+    if label in FRESH_CATS:
+        return any(first.startswith(st.strip()) for st in stems)
+    return any(st in low for st in stems)
+
+
 def name_visual(name: str) -> dict:
     """Емодзі, категорія й пастельний колір за назвою продукту (для рядків списку й плиток акцій)."""
-    low = f" {(name or '').lower()} "
+    low, first = f" {(name or '').lower()} ", first_word(name)
     for stems, emoji, label in NAME_VISUALS:
-        if any(st in low for st in stems):
+        if _visual_hit(low, first, stems, label):
             return {"emoji": emoji, "cat": label, "pastel": CAT_PASTEL.get(label, "p-basil")}
     return {"emoji": "🛒", "cat": "Інше", "pastel": "p-basil"}
 
 
 def offer_visual(o: Offer) -> dict:
-    name = f" {(o.name or '').lower()} "
+    name, first = f" {(o.name or '').lower()} ", first_word(o.name)
     for stems, emoji, label in NAME_VISUALS:
-        if any(st in name for st in stems):
+        if _visual_hit(name, first, stems, label):
             return {"emoji": emoji, "hue": CAT_HUE.get(label, 150), "cat": label, "pastel": CAT_PASTEL.get(label, "p-basil")}
     for tag, emoji, hue, label in VISUALS:
         if tag in o.tags:
@@ -1531,7 +1543,7 @@ def local_photos() -> dict[str, str]:
 
 def offer_from_dict(d: dict) -> Offer:
     known = {k: v for k, v in d.items() if k in Offer.__dataclass_fields__}
-    known["tags"] = set(known.get("tags") or [])
+    known["tags"] = set()        # теги з назви перераховуємо: кеш міг зберегти їх за старими правилами
     return enrich(Offer(**known))
 
 
