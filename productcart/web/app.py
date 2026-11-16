@@ -28,7 +28,7 @@ from ..catalog import TAG_LABELS, enrich
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
-from . import analytics, db, security
+from . import analytics, db, security, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
@@ -109,6 +109,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     # ---------- допоміжне ----------
     def user_of(request: Request):
         return security.session_user(conn, request.cookies.get(COOKIE))
+
+    def menu_photos() -> dict[str, str]:
+        """id страви → адреса фото: свої (Wikimedia) або з Unsplash. Відсутні дошукуються у фоні."""
+        photos = local_photos()
+        for d, p in unsplash.load(conn).items():
+            photos.setdefault(d, unsplash.img_url(p["raw"]))
+        missing = [r.id for r in menu.RECIPES if r.id not in photos]
+        if missing:
+            unsplash.ensure(conn, missing)
+        return photos
 
     def render(request: Request, name: str, user=None, status: int = 200, **ctx):
         is_admin = bool(user) and user["email"].lower() in admin_emails
@@ -1048,6 +1058,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     @app.get("/photos", response_class=HTMLResponse)
     def photo_credits(request: Request):
         return render(request, "photos.html", user_of(request), credits=menu_credits(),
+                      unsplash={d: dict(p, by_url=unsplash.with_utm(p["by_url"]))
+                                for d, p in unsplash.load(conn).items() if d not in menu_credits()},
+                      unsplash_home=unsplash.with_utm("https://unsplash.com"),
                       titles={r.id: r.title for r in menu.RECIPES})
 
     @app.post("/location")
@@ -1229,8 +1242,8 @@ def menu_credits() -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
-def menu_photos() -> set[str]:
-    return set(menu_credits())
+def local_photos() -> dict[str, str]:
+    return {d: f"/static/dishes/{d}.jpg" for d in menu_credits()}
 
 
 def offer_from_dict(d: dict) -> Offer:

@@ -45,7 +45,7 @@
     <div class="dprice"><small>порція</small><b>{{ d.per_portion|round|int }} ₴</b></div>
     {% if d.saving >= 1 %}<span class="dsave">−{{ d.saving|round|int }} ₴</span>{% endif %}
     <button type="button" class="tile" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
-      {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+      {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
     </button>
     <div class="dbody">
       <div class="dmeta"><span class="dn">{{ days[i] }} · {{ d.minutes }} хв</span></div>
@@ -64,7 +64,7 @@
 {% for d in m.dishes %}{% set i = loop.index0 %}
 <dialog class="rsheet" id="rec{{ i }}" aria-labelledby="rt{{ i }}">
   <button class="rclose" type="button" data-close aria-label="Закрити">×</button>
-  <div class="tile">{% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="{{ d.title }}" loading="lazy">{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}</div>
+  <div class="tile">{% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="{{ d.title }}" loading="lazy">{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}</div>
   <div class="rbody">
     <div class="dmeta"><span class="dn">{{ days[i] }}</span><span>{{ d.minutes }} хв · {{ m.people }} {{ plural(m.people, 'порція', 'порції', 'порцій') }} · {{ uah(d.used|round) }}</span></div>
     <h3 id="rt{{ i }}">{{ d.title }}</h3>

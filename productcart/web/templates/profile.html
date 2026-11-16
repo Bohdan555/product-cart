@@ -47,7 +47,7 @@
     <p class="hint">Оцініть страви</p>
     <input type="hidden" name="dish_likes" id="dish_likes" value="{{ p.dish_likes|join(',') }}">
     <input type="hidden" name="dish_dislikes" id="dish_dislikes" value="{{ p.dish_dislikes|join(',') }}">
-    <div class="swipe" id="swipe" data-dishes='{{ dishes|tojson }}' data-photos='{{ photos|list|tojson }}'>
+    <div class="swipe" id="swipe" data-dishes='{{ dishes|tojson }}' data-photos='{{ photos|tojson }}'>
       <div class="deck" id="deck" aria-live="polite"></div>
       <div class="swipe-act">
         <button type="button" class="sw-no" id="swNo"><span aria-hidden="true">👎</span> Не моє</button>
@@ -291,7 +291,7 @@
   }
   function card(d) {
     var c = document.createElement('div'); c.className = 'dcard';
-    c.innerHTML = (PH.indexOf(d.id) >= 0 ? '<img src="/static/dishes/' + d.id + '.jpg" alt="" draggable="false">' : '<span class="demo-emoji">' + d.emoji + '</span>') +
+    c.innerHTML = (PH[d.id] ? '<img src="' + PH[d.id] + '" alt="" draggable="false">' : '<span class="demo-emoji">' + d.emoji + '</span>') +
       '<div class="dcap"><b></b><small>' + d.minutes + ' хв</small></div><span class="stamp yes">СМАЧНО</span><span class="stamp no">НЕ МОЄ</span>';
     c.querySelector('b').textContent = d.title;
     return c;

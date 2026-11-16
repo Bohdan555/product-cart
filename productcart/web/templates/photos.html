@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Автори фото — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>Автори фото</h1>
-<p class="lead">Фото страв у меню взяті з Wikimedia Commons на умовах вільних ліцензій. Ми обрізали їх до однакового формату.</p>
+<h1 class="xh">Автори <span class="hl">фото</span></h1>
+{% if unsplash %}
+<p class="lead">Фото з <a href="{{ unsplash_home }}" target="_blank" rel="noopener">Unsplash</a>.</p>
+<div class="card stack">
+{% for id, p in unsplash.items() %}
+  <div><b>{{ titles.get(id, id) }}</b><br><span class="hint">Фото: <a href="{{ p.by_url }}" target="_blank" rel="noopener">{{ p.by }}</a> на <a href="{{ unsplash_home }}" target="_blank" rel="noopener">Unsplash</a></span></div>
+{% endfor %}
+</div>
+{% endif %}
+<p class="lead">Фото з Wikimedia Commons, вільні ліцензії (обрізані до однакового формату).</p>
 <div class="card stack">
 {% for id, c in credits.items() %}
   <div><b>{{ titles.get(id, id) }}</b><br><span class="hint">{{ c.author }} · <a href="{{ c.page }}" target="_blank" rel="noopener">{{ c.lic }}</a>{% if c.lic_url %} (<a href="{{ c.lic_url }}" target="_blank" rel="noopener">текст ліцензії</a>){% endif %}</span></div>

@@ -29,7 +29,7 @@
     <div class="lx-reel">
       {% for d in m.dishes %}
       <a class="lx-dish{% if d.id not in photos %} nophoto{% endif %}" href="/menu" style="--c:var(--{{ PAL[loop.index0 % 5] }})">
-        {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" {% if loop.index0 > 1 %}loading="lazy"{% endif %}>{% else %}<span class="lx-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+        {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if loop.index0 > 1 %}loading="lazy"{% endif %}>{% else %}<span class="lx-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
         <span class="dprice"><small>порція</small><b>{{ d.per_portion|round|int }} ₴</b></span>
         {% if d.saving >= 1 %}<span class="dsave">−{{ d.saving|round|int }} ₴</span>{% endif %}
         <span class="lx-cap"><span class="lx-day">{{ days[loop.index0] }} · {{ d.minutes }} хв</span><b>{{ d.title }}</b></span>
