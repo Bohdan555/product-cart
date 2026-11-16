@@ -156,7 +156,6 @@ def sync(conn, missing: list[str], client: httpx.Client | None = None) -> int:
         data = load(conn)
         data.update(found)
         db.set_setting(conn, KEY, json.dumps(data, ensure_ascii=False))
-        log.info("Unsplash: додано фото для %d страв", len(found))
     return len(found)
 
 
@@ -182,7 +181,7 @@ def run(conn, todo: list[str]) -> None:
     try:
         n = sync(conn, todo)
         db.set_setting(conn, ERR_KEY, f"ok: +{n}")
-        print(f"Unsplash: додано {n}", flush=True)
+        log.info("Unsplash: додано фото для %d страв", n)
     except Exception as e:   # фото — не критично
         db.set_setting(conn, ERR_KEY, f"{type(e).__name__}: {e}"[:300])
-        print(f"Unsplash: помилка {type(e).__name__}: {e}", flush=True)
+        log.warning("Unsplash: помилка %s: %s", type(e).__name__, str(e)[:300])

@@ -17,7 +17,7 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 
-from . import db
+from . import db, logs
 
 MCP_URL = "https://mcp.silpo.ua/mcp"
 
@@ -101,7 +101,14 @@ class SilpoGateway:
                 await s.initialize()
 
                 async def call(name: str, args: dict | None = None):
-                    return _unwrap(await s.call_tool(name, args or {}))
+                    t = time.perf_counter()
+                    try:
+                        res = _unwrap(await s.call_tool(name, args or {}))
+                    except BaseException as e:
+                        logs.silpo_call_done(name, t, e)
+                        raise
+                    logs.silpo_call_done(name, t)
+                    return res
 
                 call.session = s  # type: ignore[attr-defined]  # щоб прочитати схеми інструментів
                 yield call

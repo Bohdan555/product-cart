@@ -327,7 +327,7 @@ async def purchase_hints(call: Call, top: int = 12) -> dict:
                 log.warning("Сільпо: %s(%s): %s", tool, args, str(e)[:300])
         if not data:
             continue
-        log.info("Сільпо: %s → %s", tool, str(data)[:1200])
+        log.debug("Сільпо: %s → %s", tool, str(data)[:1200])
         for order in _orders(data)[:30]:
             prods: list = []
             _product_dicts(order, prods)

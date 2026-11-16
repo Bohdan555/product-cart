@@ -13,7 +13,7 @@ import logging
 from datetime import timedelta
 from urllib.parse import urlencode
 
-from . import security
+from . import logs, security
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +53,9 @@ def track(conn, user_id: int | None, event: str, *, chain: str | None = None, st
           product_id: str | None = None, category: str | None = None, discount: float | None = None, **meta) -> None:
     if prefetching.get():
         return
+    logs.event(log, "ev." + event, logging.DEBUG if event.endswith("_viewed") else logging.INFO,
+               uid=user_id, chain=chain, store=store_id, product=product_id, discount=discount,
+               **{k: v for k, v in meta.items() if k not in ("email", "lat", "lon", "address")})
     try:
         conn.execute(
             "INSERT INTO events (ts, user_id, event, chain, store_id, product_id, category, discount, meta) "

@@ -31,7 +31,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask
 
-from . import analytics, db, security, unsplash
+from . import analytics, db, logs, security, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -47,6 +47,10 @@ GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (бе�
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
               "dish_likes")
 OFFERS_TTL = timedelta(hours=6)
+ERROR_PAGE = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+              "<title>Помилка — Кошик з акцій</title><body style='font:16px/1.5 system-ui;padding:32px;max-width:520px'>"
+              "<h1>Щось пішло не так</h1><p>Ми вже бачимо цю помилку в логах. Спробуйте оновити сторінку.</p>"
+              "<p><a href='/'>На головну</a></p><p style='color:#888'>Код запиту: {rid}</p>")
 STALE_TTL = timedelta(days=7)   # старіший кеш не показуємо навіть тимчасово
 offers_stale = contextvars.ContextVar("offers_stale", default=False)  # показали акції з застарілого кешу
 MAX_NEARBY = 4  # щонайбільше магазинів поруч в одному списку
@@ -61,6 +65,7 @@ HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None,
                gateway: SilpoGateway | None = None, secure_cookies: bool | None = None,
                google: GoogleAuth | None = None, telegram: Telegram | None = None) -> FastAPI:
+    logs.setup()
     app_secret = app_secret or os.environ.get("APP_SECRET", "")
     vercel_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")  # Vercel задає сам, без https://
     base_url = (base_url or os.environ.get("BASE_URL")
@@ -77,7 +82,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     @app.middleware("http")
     async def timing(request: Request, call_next):
-        # Server-Timing: загальний час, база (кількість і час), регіон функції
+        """Кожен запит: id (X-Request-ID), Server-Timing і один рядок логу «req» з підсумком.
+        Непередбачена помилка — у лог з трасою, людині — сторінка з кодом запиту."""
+        path = request.url.path
+        ctx = logs.new_request(request.headers)
+        ctx_token = logs.request_ctx.set(ctx)
         stats = [0, 0.0]
         token = db.db_stats.set(stats)
         purpose = (request.headers.get("x-sec-purpose") or request.headers.get("sec-purpose") or "").lower()
@@ -85,14 +94,25 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         t = time.perf_counter()
         try:
             resp = await call_next(request)
+        except Exception:
+            log.exception("Помилка: %s %s", request.method, path)
+            resp = HTMLResponse(ERROR_PAGE.format(rid=ctx["rid"]), status_code=500)
         finally:
             db.db_stats.reset(token)
         total = (time.perf_counter() - t) * 1000
         resp.headers["Server-Timing"] = (f'app;dur={total:.0f}, db;dur={stats[1] * 1000:.0f};desc="{stats[0]} queries", '
                                          f'region;desc="{os.environ.get("VERCEL_REGION", "local")}"')
-        if total > 800 and not request.url.path.startswith("/static/"):
-            log.warning("Повільно: %s %s — %.0f мс, база %d запитів / %.0f мс", request.method, request.url.path,
-                        total, stats[0], stats[1] * 1000)
+        resp.headers["X-Request-ID"] = ctx["rid"]
+        if not path.startswith("/static/"):
+            st = resp.status_code
+            level = (logging.ERROR if st >= 500 else logging.WARNING if total > 800 or st == 429
+                     else logging.INFO)
+            logs.event(log, "req", level, method=request.method, path=path, st=st, ms=round(total),
+                       db=stats[0], db_ms=round(stats[1] * 1000), silpo=ctx["silpo_n"] or None,
+                       silpo_ms=round(ctx["silpo_ms"]) if ctx["silpo_n"] else None,
+                       prefetch=analytics.prefetching.get() or None, slow=total > 800 or None,
+                       region=os.environ.get("VERCEL_REGION"))
+        logs.request_ctx.reset(ctx_token)
         return resp
 
     @app.middleware("http")
@@ -119,7 +139,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     # ---------- допоміжне ----------
     def user_of(request: Request):
-        return security.session_user(conn, request.cookies.get(COOKIE))
+        u = security.session_user(conn, request.cookies.get(COOKIE))
+        if u:
+            logs.set_user(u["id"])
+        return u
 
     def menu_photos() -> dict[str, str]:
         """id страви → адреса фото: свої (Wikimedia) або з Unsplash. Відсутні дошукуються у фоні."""
@@ -213,7 +236,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 return None
             try:
                 tokens = gw.refresh(tokens)
-            except Exception:
+            except Exception as e:
+                logs.event(log, "silpo.refresh_failed", logging.WARNING, err=f"{type(e).__name__}: {str(e)[:200]}")
                 return None
             conn.execute("UPDATE silpo_links SET tokens_enc=? WHERE user_id=?", (box.seal(json.dumps(tokens)), user_id))
         return tokens
@@ -404,6 +428,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     @app.get("/auth/google/callback", response_class=HTMLResponse)
     def google_callback(request: Request, code: str = "", state: str = "", error: str = ""):
         def fail(msg: str):
+            logs.event(log, "auth.google_failed", logging.WARNING, reason=msg[:120], google_error=error or None)
             resp = render(request, "auth.html", mode="login", error=msg, status=400)
             resp.delete_cookie(GOOGLE_COOKIE)
             return resp
@@ -443,6 +468,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return render(request, "auth.html", mode="login", email=email, status=400,
                           error="Цей профіль створено через Google. Натисніть «Увійти через Google».")
         if not r or not security.verify_password(password, r["pw_hash"]):
+            logs.event(log, "auth.login_failed", logging.WARNING, method="password")
             return render(request, "auth.html", mode="login", error="Неправильний email або пароль.", email=email, status=400)
         token, _ = security.new_session(conn, r["id"])
         analytics.track(conn, r["id"], "login")
@@ -613,12 +639,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         pending = conn.execute("SELECT * FROM oauth_pending WHERE state=? AND user_id=?", (state, u["id"])).fetchone()
         conn.execute("DELETE FROM oauth_pending WHERE state=?", (state,))
         if error or not code:
+            logs.event(log, "silpo.connect_failed", logging.WARNING, reason="cancelled", error=error or None)
             return go(f"/silpo?error=Вхід у «Сільпо» скасовано: {error_description or error or 'немає коду'}")
         if not pending:
+            logs.event(log, "silpo.connect_failed", logging.WARNING, reason="stale_state")
             return go("/silpo?error=Сесія входу застаріла. Натисніть «Підключити Сільпо» ще раз.")
         try:
             tokens = gw.exchange(code, pending["verifier"])
         except Exception as e:
+            log.warning("Сільпо: обмін коду на токен: %s: %s", type(e).__name__, str(e)[:300])
             return go(f"/silpo?error={str(e)[:150]}")
         conn.execute("""INSERT INTO silpo_links (user_id, tokens_enc, connected_at) VALUES (?, ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET tokens_enc=excluded.tokens_enc, connected_at=excluded.connected_at""",
@@ -1376,7 +1405,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             except Exception as e:
                 st["errors"] += 1
                 log.warning("Telegram: розсилка користувачу: %s", str(root_error(e))[:300])
-        log.warning("Telegram: розсилка %s", st)
+        logs.event(log, "tg.cron", logging.WARNING if st["errors"] else logging.INFO, menu_day=menu_day, **st)
         return st
 
     @app.get("/privacy", response_class=HTMLResponse)

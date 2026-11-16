@@ -210,7 +210,7 @@ def pick_product(items: list[dict]) -> dict | None:
 
 async def current_cart(call: Call) -> CartState | None:
     mine = await call("silpo_get_my_shopping_cart", {}) or {}
-    log.info("Сільпо: get_my_shopping_cart → %s", str(mine)[:600])
+    log.debug("Сільпо: get_my_shopping_cart → %s", str(mine)[:600])
     cid = _find(mine, "cartId", "shoppingCartId") or (_first(mine, "id") if isinstance(mine, dict) else None)
     if not cid:
         if _find(mine, "exists") is False:
@@ -219,7 +219,7 @@ async def current_cart(call: Call) -> CartState | None:
         return None
     data = await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cid}) or {}
     cart = parse_cart(data)
-    log.info("Сільпо: кошик %s: позицій %d, сума %s, ключі %s, web-посилання %s, mobile-посилання %s, перевірки %s",
+    log.debug("Сільпо: кошик %s: позицій %d, сума %s, ключі %s, web-посилання %s, mobile-посилання %s, перевірки %s",
              cart.cart_id, cart.count, cart.total, sorted(data)[:15] if isinstance(data, dict) else type(data).__name__,
              (cart.checkout or "")[:40], (cart.checkout_mobile or "")[:40], cart.validations)
     return cart
@@ -243,7 +243,7 @@ async def _search(call: Call, ctx: dict, names: list[str]) -> dict[str, list[dic
             log.warning("Сільпо: find_products_batch: %s", str(e)[:300])
             continue
         queries = _first(res, "queries", "results") if isinstance(res, dict) else res
-        log.info("Сільпо: find_products_batch → %s", str(res)[:800])
+        log.debug("Сільпо: find_products_batch → %s", str(res)[:800])
         for q in queries or []:
             name = _first(q, "query", "name", "requestedName")
             if name:
@@ -308,7 +308,7 @@ async def tool_schema(call: Call, name: str) -> dict:
             try:
                 tools = (await session.list_tools()).tools
                 _schemas.update({t.name: t.inputSchema or {} for t in tools})
-                log.info("Сільпо: кошикові інструменти: %s", sorted(n for n in _schemas if "cart" in n))
+                log.debug("Сільпо: кошикові інструменти: %s", sorted(n for n in _schemas if "cart" in n))
             except Exception as e:
                 log.warning("Сільпо: tools/list: %s", str(e)[:300])
     return _schemas.get(name, {})
@@ -335,16 +335,16 @@ async def add_to_cart(call: Call, cart: CartState, found: list[tuple[Want, str, 
     if new:
         add_schema = await tool_schema(call, "silpo_add_cart_products")
         if add_schema:
-            log.info("Сільпо: схема silpo_add_cart_products: %s", str(add_schema)[:1200])
+            log.debug("Сільпо: схема silpo_add_cart_products: %s", str(add_schema)[:1200])
         products = [{"productId": pl.product_id, "companyId": cart.company_id or "", "branchId": cart.branch_id or "",
                      "quantity": pl.quantity} for pl in new]
         log.info("Сільпо: add_cart_products %d позицій у кошик %s", len(products), cart.cart_id)
         res = await call("silpo_add_cart_products", {"shoppingCartId": cart.cart_id, "products": products})
-        log.info("Сільпо: add_cart_products → %s", str(res)[:600])
+        log.debug("Сільпо: add_cart_products → %s", str(res)[:600])
     if old:
         upd_schema = await tool_schema(call, "silpo_update_cart_products")
         if upd_schema:
-            log.info("Сільпо: схема silpo_update_cart_products: %s", str(upd_schema)[:1200])
+            log.debug("Сільпо: схема silpo_update_cart_products: %s", str(upd_schema)[:1200])
         props = _item_props(upd_schema)
         id_key = next((k for k in ("id", "cartProductId", "lineItemId", "itemId") if k in props), "id")
         lines = []
@@ -359,7 +359,7 @@ async def add_to_cart(call: Call, cart: CartState, found: list[tuple[Want, str, 
             lines.append(item)
         if lines:
             res = await call("silpo_update_cart_products", {"shoppingCartId": cart.cart_id, "products": lines})
-            log.info("Сільпо: update_cart_products → %s", str(res)[:600])
+            log.debug("Сільпо: update_cart_products → %s", str(res)[:600])
     return list(merged.values())
 
 
@@ -394,9 +394,9 @@ async def _slot(call: Call, branch_id: str, delivery_type: str) -> tuple[str, st
 
 
 async def _create(call: Call, args: dict) -> CartState:
-    log.info("Сільпо: create_shopping_cart %s", {k: v for k, v in args.items() if k not in ("latitude", "longitude")})
+    log.info("Сільпо: create_shopping_cart branch=%s type=%s", args.get("branchId"), args.get("deliveryType"))
     created = await call("silpo_create_shopping_cart", args) or {}
-    log.info("Сільпо: create_shopping_cart → %s", str(created)[:600])
+    log.debug("Сільпо: create_shopping_cart → %s", str(created)[:600])
     cid = _find(created, "shoppingCartId", "cartId") or _first(created.get("cart") if isinstance(created, dict) else None, "id")
     if not cid:
         raise CartError("«Сільпо» не створило кошик")
@@ -485,14 +485,14 @@ async def set_quantity(call: Call, cart: CartState, line_id: str, quantity: floa
     if line is None:
         raise CartError("Цього товару вже немає в кошику — оновіть сторінку.")
     schema = await tool_schema(call, "silpo_update_cart_products")
-    log.info("Сільпо: схема silpo_update_cart_products: %s", str(schema)[:1200])
+    log.debug("Сільпо: схема silpo_update_cart_products: %s", str(schema)[:1200])
     props = _item_props(schema)
     id_key = next((k for k in ("id", "cartProductId", "lineItemId", "itemId") if k in props), "id")
     item = {id_key: line_id, "quantity": quantity}
     if "productId" in props:
         item["productId"] = line["product_id"]
     res = await call("silpo_update_cart_products", {"shoppingCartId": cart.cart_id, "products": [item]})
-    log.info("Сільпо: update_cart_products → %s", str(res)[:400])
+    log.debug("Сільпо: update_cart_products → %s", str(res)[:400])
 
 
 async def remove_line(call: Call, cart: CartState, line_id: str) -> None:
@@ -500,7 +500,7 @@ async def remove_line(call: Call, cart: CartState, line_id: str) -> None:
     if line is None:
         return
     schema = await tool_schema(call, "silpo_remove_cart_products")
-    log.info("Сільпо: схема silpo_remove_cart_products: %s", str(schema)[:1200])
+    log.debug("Сільпо: схема silpo_remove_cart_products: %s", str(schema)[:1200])
     props = schema.get("properties") or {}
     args: dict = {"shoppingCartId": cart.cart_id}
     if "products" in props or not props:
@@ -517,12 +517,12 @@ async def remove_line(call: Call, cart: CartState, line_id: str) -> None:
         key = next((k for k in ("ids", "cartProductIds", "lineItemIds", "itemIds") if k in props), "ids")
         args[key] = [line_id]
     res = await call("silpo_remove_cart_products", args)
-    log.info("Сільпо: remove_cart_products → %s", str(res)[:400])
+    log.debug("Сільпо: remove_cart_products → %s", str(res)[:400])
 
 
 async def clear(call: Call, cart: CartState) -> None:
     res = await call("silpo_clear_shopping_cart", {"shoppingCartId": cart.cart_id})
-    log.info("Сільпо: clear_shopping_cart → %s", str(res)[:300])
+    log.debug("Сільпо: clear_shopping_cart → %s", str(res)[:300])
 
 
 async def count(call: Call) -> int:
