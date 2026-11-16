@@ -128,7 +128,8 @@
   {% if m.home_lines %}
   <div class="group"><div class="gh"><b>🧊 Є вдома</b><small>з фото холодильника — не купуємо</small></div>
   {% for l in m.home_lines %}{% set nv = name_visual(l.name) %}
-    <div class="brow static"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span></div>
+    <div class="brow static"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span>
+      <form method="post" action="/fridge/remove" data-noajax data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Немає</button></form></div>
   {% endfor %}</div>
   {% endif %}
   {% set waiting = m.pantry_lines|rejectattr('buy')|list %}

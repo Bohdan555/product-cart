@@ -941,3 +941,10 @@ body:has(.su) footer{display:none}
 .dmeta .mine.home{background:var(--p-sky);color:var(--ink)}
 @keyframes fr-scan{from{transform:translateY(-30%)}to{transform:translateY(260%)}}
 @media (prefers-reduced-motion:reduce){.fr-shot.scanning .fr-scan,.fr-cta .cam,.fr-chip.new{animation:none}}
+
+.fr-chip .x{font-weight:800;font-size:16px;line-height:1;margin-left:2px;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:color-mix(in srgb,var(--ink) 12%,transparent);color:var(--ink)}
+.fr-chip:hover .x{background:var(--ink);color:var(--bg)}
+.fr-all{border:0;background:none;color:var(--bad,#b3261e);font:700 13.5px var(--body);cursor:pointer;padding:4px 0}
+.fr-n{color:var(--muted);font-weight:600}
+.fr-undo{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--ink);color:var(--bg);border-radius:14px;padding:8px 8px 8px 14px;margin-top:10px;font-size:14px;animation:su-in .25s both}
+.fr-undo button{border:0;background:var(--sticker);color:var(--sticker-ink,#2b2410);border-radius:10px;padding:7px 12px;font:700 13.5px var(--body);cursor:pointer}

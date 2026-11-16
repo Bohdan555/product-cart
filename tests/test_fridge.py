@@ -44,6 +44,10 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         page = c.get("/fridge").text
         assert 'data-key="potato"' in page and 'data-other="Кетчуп"' in page and "bogus" not in page
 
+        assert "Прибрати все" in page and "Прибрати: Картопля" in page
+        r = c.post("/fridge/remove", data={"csrf": token, "key": "potato"})
+        assert r.headers["location"] == "/menu#list"
+        assert 'data-key="potato"' not in c.get("/fridge").text and 'data-key="chicken_thigh"' in c.get("/fridge").text
         c.post("/fridge/save", data={"csrf": token})
         assert "Що в холодильнику?" in c.get("/menu").text
 

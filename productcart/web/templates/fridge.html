@@ -23,10 +23,11 @@
   <p class="fr-state" id="frState" aria-live="polite"></p>
 
   <div class="fr-found" id="frFound"{% if not p.fridge and not p.fridge_other %} hidden{% endif %}>
-    <div class="fr-h"><b>Є вдома</b><small>торкніться, щоб прибрати</small></div>
+    <div class="fr-h"><b>Є вдома <span class="fr-n" id="frN"></span></b><button type="button" class="fr-all" id="frAll">Прибрати все</button></div>
+    <div class="fr-undo" id="frUndo" hidden><span id="frUndoTxt"></span><button type="button" id="frUndoBtn">↩ Повернути</button></div>
     <div class="fr-chips" id="frChips">
-      {% for k in p.fridge %}<button type="button" class="fr-chip" data-key="{{ k }}"><i>{{ name_visual(names[k]).emoji }}</i>{{ names[k] }}</button>{% endfor %}
-      {% for n in p.fridge_other %}<button type="button" class="fr-chip other" data-other="{{ n }}"><i>{{ name_visual(n).emoji }}</i>{{ n }}</button>{% endfor %}
+      {% for k in p.fridge %}<button type="button" class="fr-chip" data-key="{{ k }}" aria-label="Прибрати: {{ names[k] }}"><i>{{ name_visual(names[k]).emoji }}</i>{{ names[k] }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
+      {% for n in p.fridge_other %}<button type="button" class="fr-chip other" data-other="{{ n }}" aria-label="Прибрати: {{ n }}"><i>{{ name_visual(n).emoji }}</i>{{ n }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
     </div>
     <small class="hint fr-note">Сірі — не з наших рецептів: у меню не підуть, але й купувати їх не будемо.</small>
   </div>
@@ -74,8 +75,33 @@
     b.appendChild(document.createTextNode(it.ingredient === 'other' ? it.name : (it.label || it.name)));
     if (it.amount) { var s = document.createElement('small'); s.textContent = it.amount; b.appendChild(s); }
     if (it.confident === false) b.title = 'Не впевнені — перевірте';
-    $('frChips').appendChild(b);
+    var x = document.createElement('b'); x.className = 'x'; x.setAttribute('aria-hidden', 'true'); x.textContent = '×'; b.appendChild(x);
+    b.setAttribute('aria-label', 'Прибрати: ' + (it.ingredient === 'other' ? it.name : (it.label || it.name)));
+    $('frChips').appendChild(b); count();
   }
+
+  // лічильник, «змінено» і повернення прибраного
+  var removed = [], undoTimer = null, saved = {{ 'true' if (p.fridge or p.fridge_other) else 'false' }};
+  function count() {
+    var n = $('frChips').querySelectorAll('.fr-chip:not(.gone)').length;
+    $('frN').textContent = n ? '· ' + n : ''; $('frAll').hidden = n < 2;
+  }
+  function dirty() { if (saved) $('frSave').textContent = '🍽 Зберегти й оновити меню'; }
+  function remove(list, label) {
+    removed = list.map(function (c) { return { el: c, next: c.nextSibling }; });
+    list.forEach(function (c) { c.classList.add('gone'); });
+    setTimeout(function () { list.forEach(function (c) { c.remove(); }); count(); if (!$('frChips').children.length && !removed.length) $('frFound').hidden = true; }, 220);
+    $('frUndoTxt').textContent = label; $('frUndo').hidden = false; tap(); dirty();
+    clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('frUndo').hidden = true; removed = []; if (!$('frChips').children.length) $('frFound').hidden = true; }, 5000);
+  }
+  $('frUndoBtn').onclick = function () {
+    removed.forEach(function (r) { r.el.classList.remove('gone', 'new'); $('frChips').insertBefore(r.el, r.next && r.next.parentNode ? r.next : null); });
+    removed = []; $('frUndo').hidden = true; count(); tap();
+  };
+  $('frAll').onclick = function () {
+    var all = [].slice.call($('frChips').querySelectorAll('.fr-chip:not(.gone)'));
+    if (all.length) remove(all, 'Прибрано все (' + all.length + ')');
+  };
 
   $('frFile').addEventListener('change', function () {
     var f = this.files && this.files[0]; if (!f) return;
@@ -96,9 +122,10 @@
   });
 
   $('frChips').addEventListener('click', function (e) {
-    var c = e.target.closest('.fr-chip'); if (!c) return;
-    c.classList.add('gone'); tap(); setTimeout(function () { c.remove(); if (!$('frChips').children.length) $('frFound').hidden = true; }, 220);
+    var c = e.target.closest('.fr-chip'); if (!c || c.classList.contains('gone')) return;
+    remove([c], 'Прибрано: ' + c.getAttribute('aria-label').replace('Прибрати: ', ''));
   });
+  count();
   form.querySelectorAll('[data-addkey]').forEach(function (b) { b.onclick = function () {
     $('frFound').hidden = false; chip({ ingredient: b.dataset.addkey, name: b.dataset.name, label: b.dataset.name, emoji: b.textContent.trim().split(' ')[0] }, 0); tap(); }; });
 

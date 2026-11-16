@@ -1320,6 +1320,22 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         analytics.track(conn, u["id"], "fridge_saved", have=len(p.fridge), other=len(p.fridge_other))
         return go("/menu?fresh=1" if p.fridge else "/menu")
 
+    @app.post("/fridge/remove")
+    async def fridge_remove(request: Request):
+        """«Немає» біля продукту з холодильника в меню: прибираємо його — і він знову йде в кошик."""
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        key = str(form.get("key", ""))
+        p.fridge = [k for k in p.fridge if k != key]
+        if not p.fridge and not p.fridge_other:
+            p.fridge_at = None
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "fridge_removed", key=key)
+        return go("/menu#list")
+
     # ---------- мої страви ----------
     def ing_choices() -> list[tuple[str, str, str]]:
         """(ключ, назва, одиниця для поля) — довідник інгредієнтів, з якими рахуємо ціни й акції."""
