@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Скласти меню — Кошик з акцій{% endblock %}
+{% block body %}
+{% set people_emoji = ["🧑", "👩", "👦", "👧", "👨", "👵", "👴", "🧒", "👱", "👩‍🦰", "🧔", "👶"] %}
+<form class="su" id="su" method="post" action="/menu/setup" data-turbo="false">
+  <input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}">
+  <input type="hidden" name="people" id="f-people" value="{{ p.household }}">
+  <input type="hidden" name="days" id="f-days" value="{{ days|join(',') }}">
+  <input type="hidden" name="minutes" id="f-minutes" value="{{ p.max_minutes }}">
+  <input type="hidden" name="likes" id="f-likes" value="{{ p.likes|select('in', tastes|map(attribute=0)|list)|join(',') }}">
+  <input type="hidden" name="hide" id="f-hide" value="{{ p.dislikes|select('in', hideable)|join(',') }}">
+  <input type="hidden" name="budget" id="f-budget" value="{{ (p.menu_budget or 0)|int }}">
+
+  <div class="su-top">
+    <a class="su-x" href="/menu" aria-label="Закрити">×</a>
+    <ol class="su-dots" id="suDots">
+      {% for e in ['👥', '📅', '⏱️', '😋', '💰'] %}<li><button type="button" data-go="{{ loop.index0 }}" aria-label="Крок {{ loop.index }}">{{ e }}</button></li>{% endfor %}
+    </ol>
+  </div>
+
+  <div class="su-view"><div class="su-track" id="suTrack">
+    <!-- 1. Скільки вас -->
+    <section class="su-step" data-step="0" style="--c:var(--p-citrus)">
+      <h1 class="xh">Скільки вас <span class="hl">за столом?</span></h1>
+      <div class="su-table" id="suTable" aria-hidden="true"></div>
+      <p class="su-say" id="saPeople"></p>
+      <div class="su-count">
+        <button type="button" class="su-pm" data-people="-1" aria-label="Менше">−</button>
+        <b id="suPeople">{{ p.household }}</b>
+        <button type="button" class="su-pm" data-people="1" aria-label="Більше">+</button>
+      </div>
+    </section>
+
+    <!-- 2. Дні -->
+    <section class="su-step" data-step="1" style="--c:var(--p-sky)">
+      <h1 class="xh">Коли <span class="hl">готуєте?</span></h1>
+      <div class="su-days" id="suDays">
+        {% for n in day_names %}<button type="button" data-day="{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.index0 in days else 'false' }}">{{ n }}</button>{% endfor %}
+      </div>
+      <div class="su-presets">
+        <button type="button" data-preset="0,1,2,3,4">Будні</button>
+        <button type="button" data-preset="0,2,4">Через день</button>
+        <button type="button" data-preset="0,1,2,3,4,5,6">Щодня</button>
+      </div>
+      <p class="su-say" id="saDays"></p>
+    </section>
+
+    <!-- 3. Час -->
+    <section class="su-step" data-step="2" style="--c:var(--p-basil)">
+      <h1 class="xh">Скільки часу <span class="hl">на кухні?</span></h1>
+      <div class="su-cards" id="suTime">
+        {% for v, e, t, s in [(30, '⚡', 'До 30 хв', 'швидко після роботи'), (45, '🍳', 'До 45 хв', 'спокійно, без поспіху'), (60, '🍲', 'До години', 'можна й запекти'), (180, '👨‍🍳', 'Не поспішаю', 'люблю готувати')] %}
+        <button type="button" data-min="{{ v }}" aria-pressed="{{ 'true' if (p.max_minutes <= 30 and v == 30) or (30 < p.max_minutes <= 45 and v == 45) or (45 < p.max_minutes <= 60 and v == 60) or (p.max_minutes > 60 and v == 180) else 'false' }}">
+          <span class="e">{{ e }}</span><b>{{ t }}</b><small>{{ s }}</small></button>
+        {% endfor %}
+      </div>
+      <p class="su-say" id="saTime"></p>
+    </section>
+
+    <!-- 4. Смак -->
+    <section class="su-step" data-step="3" style="--c:var(--p-berry)">
+      <h1 class="xh">Що <span class="hl">до смаку?</span></h1>
+      <p class="su-hint">Торкніться — <b>люблю</b> ❤️{% if hideable %}, ще раз — <b>не їм</b> 🚫{% endif %}</p>
+      <div class="su-tastes" id="suTastes">
+        {% for t, e, label in tastes %}<button type="button" data-tag="{{ t }}" data-hide="{{ 1 if t in hideable else 0 }}"
+          data-state="{{ 'like' if t in p.likes else ('hide' if t in p.dislikes else '') }}"><span class="e">{{ e }}</span><b>{{ label }}</b><i class="st" aria-hidden="true"></i></button>{% endfor %}
+      </div>
+      <p class="su-say" id="saTaste"></p>
+    </section>
+
+    <!-- 5. Бюджет -->
+    <section class="su-step" data-step="4" style="--c:var(--p-plum)">
+      <h1 class="xh">Скільки <span class="hl">на тиждень?</span></h1>
+      <div class="su-money"><b id="suBudget"></b><small id="suBudgetSub"></small></div>
+      <input type="range" id="suRange" min="0" max="4000" step="100" value="{{ (p.menu_budget or 0)|int }}" aria-label="Бюджет на тиждень, ₴">
+      <div class="su-range-l"><span>без обмежень</span><span>4000 ₴</span></div>
+      <p class="su-say" id="saBudget"></p>
+    </section>
+  </div></div>
+
+  <aside class="su-live" id="suLive" aria-live="polite">
+    <div class="su-live-h"><b>Ваше меню</b><span id="suStat">складаємо…</span></div>
+    <div class="su-plates" id="suPlates"></div>
+    <div class="su-nav">
+      <button type="button" class="btn alt" id="suBack">Назад</button>
+      <button type="button" class="btn" id="suNext">Далі</button>
+    </div>
+  </aside>
+  <div class="su-cook" id="suCook" hidden><div class="pot" aria-hidden="true">🍲</div><b>Складаємо меню з акцій…</b></div>
+</form>
+
+<script>
+(function () {
+  var form = document.getElementById('su'); if (!form) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var steps = [].slice.call(form.querySelectorAll('.su-step')), dots = [].slice.call(form.querySelectorAll('#suDots button'));
+  var cur = 0, last = steps.length - 1, timer = null, seq = 0, shown = {};
+  var PE = {{ people_emoji|tojson }}, DAYS = {{ day_names|tojson }};
+  var tap = function (ms) { if (window.haptic) haptic(ms || 8); };
+  var pop = function (el) { if (window.bump) bump(el); };
+
+  function go(i) {
+    cur = Math.max(0, Math.min(last, i));
+    $('suTrack').style.transform = 'translateX(' + (-100 * cur) + '%)';
+    $('suTrack').style.height = steps[cur].offsetHeight + 'px';   // висота — лише поточного кроку
+    steps.forEach(function (s, k) { s.setAttribute('aria-hidden', k !== cur); s.inert = k !== cur; });
+    dots.forEach(function (d, k) { d.parentNode.className = k < cur ? 'done' : (k === cur ? 'on' : ''); });
+    $('suBack').style.visibility = cur ? 'visible' : 'hidden';
+    $('suNext').textContent = cur === last ? 'Скласти меню ✨' : 'Далі';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  $('suNext').onclick = function () { tap(12); if (cur < last) go(cur + 1); else cook(); };
+  $('suBack').onclick = function () { tap(); go(cur - 1); };
+  dots.forEach(function (d) { d.onclick = function () { tap(); go(+d.dataset.go); }; });
+  // свайп між кроками
+  var sx = null;
+  $('suTrack').addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+  $('suTrack').addEventListener('touchend', function (e) {
+    if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; sx = null;
+    if (Math.abs(dx) > 60 && e.target.type !== 'range') go(cur + (dx < 0 ? 1 : -1));
+  });
+
+  // 1. Скільки вас
+  function people(n) {
+    n = Math.max(1, Math.min(12, n)); $('f-people').value = n; $('suPeople').textContent = n; pop($('suPeople'));
+    var t = $('suTable'), have = t.children.length;
+    for (var i = have; i < n; i++) { var s = document.createElement('span'); s.textContent = PE[i % PE.length]; s.style.animationDelay = (i - have) * 60 + 'ms'; t.appendChild(s); }
+    while (t.children.length > n) t.lastChild.remove();
+    $('saPeople').textContent = n === 1 ? 'Вечеря для себе — коротко й смачно 😌' : n === 2 ? 'Вечеря на двох 💛' :
+      n <= 4 ? 'Сімейна вечеря — порції рахуємо на всіх 👨‍👩‍👧' : 'Ціла команда! Купуватимемо більші упаковки 💪';
+  }
+  form.querySelectorAll('[data-people]').forEach(function (b) { b.onclick = function () { tap(); people(+$('f-people').value + +b.dataset.people); update(); }; });
+
+  // 2. Дні
+  function days(list) {
+    if (list) form.querySelectorAll('[data-day]').forEach(function (b) { b.setAttribute('aria-pressed', list.indexOf(+b.dataset.day) >= 0); });
+    var on = [].filter.call(form.querySelectorAll('[data-day]'), function (b) { return b.getAttribute('aria-pressed') === 'true'; }).map(function (b) { return +b.dataset.day; });
+    $('f-days').value = on.join(',');
+    var we = on.indexOf(5) < 0 && on.indexOf(6) < 0;
+    $('saDays').textContent = !on.length ? 'Оберіть хоча б один день' :
+      on.length + ' ' + (on.length === 1 ? 'вечеря' : on.length < 5 ? 'вечері' : 'вечерь') + (on.length === 7 ? ' — щодня свіже 🔥' : we ? ' — вихідні вільні 🎉' : '');
+  }
+  form.querySelectorAll('[data-day]').forEach(function (b) { b.onclick = function () {
+    var on = b.getAttribute('aria-pressed') === 'true';
+    if (on && $('f-days').value.split(',').length <= 1) { pop(b); return; }
+    b.setAttribute('aria-pressed', !on); pop(b); tap(); days(); update(); }; });
+  form.querySelectorAll('[data-preset]').forEach(function (b) { b.onclick = function () { tap(); days(b.dataset.preset.split(',').map(Number)); update(); }; });
+
+  // 3. Час
+  var TIME_SAY = { 30: 'Швидкі страви — омлети, паста, рис з овочами ⚡', 45: 'Встигнете й котлети, і гарнір 🍳', 60: 'Можна запекти курку чи хека 🍗', 180: 'Відкриваємо всі рецепти — навіть плов і борщ 🍛' };
+  function time(v) {
+    $('f-minutes').value = v;
+    form.querySelectorAll('[data-min]').forEach(function (b) { b.setAttribute('aria-pressed', +b.dataset.min === +v); });
+    $('saTime').textContent = TIME_SAY[v] || '';
+  }
+  form.querySelectorAll('[data-min]').forEach(function (b) { b.onclick = function () { tap(); pop(b); time(b.dataset.min); update(); }; });
+
+  // 4. Смак
+  function tastes() {
+    var like = [], hide = [];
+    form.querySelectorAll('[data-tag]').forEach(function (b) { if (b.dataset.state === 'like') like.push(b.dataset.tag); if (b.dataset.state === 'hide') hide.push(b.dataset.tag); });
+    $('f-likes').value = like.join(','); $('f-hide').value = hide.join(',');
+  }
+  form.querySelectorAll('[data-tag]').forEach(function (b) { b.onclick = function () {
+    var s = b.dataset.state, canHide = b.dataset.hide === '1';
+    b.dataset.state = s === '' ? 'like' : (s === 'like' && canHide ? 'hide' : '');
+    tap(b.dataset.state === 'hide' ? 20 : 10); pop(b); tastes(); update(); }; });
+
+  // 5. Бюджет
+  function budget() {
+    var v = +$('suRange').value; $('f-budget').value = v;
+    $('suBudget').textContent = v ? v.toLocaleString('uk-UA') + ' ₴' : 'Без обмежень';
+    $('suRange').style.setProperty('--p', (v / 4000 * 100) + '%');
+  }
+  $('suRange').addEventListener('input', function () { budget(); update(); });
+
+  // Живе меню знизу
+  function update() { clearTimeout(timer); timer = setTimeout(preview, 220); $('suStat').classList.add('busy'); }
+  function preview() {
+    var my = ++seq;
+    fetch('/menu/preview', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (my !== seq) return;
+        $('suStat').classList.remove('busy');
+        var plates = $('suPlates'), next = {}, frag = document.createDocumentFragment();
+        d.dishes.forEach(function (x, i) {
+          next[x.id] = 1;
+          var el = document.createElement('div'); el.className = 'su-plate' + (shown[x.id] ? '' : ' new');
+          el.style.animationDelay = (i * 45) + 'ms';
+          el.innerHTML = (x.photo ? '<img src="' + x.photo + '" alt="" loading="lazy">' : '<span class="pe">' + x.emoji + '</span>') +
+            '<small>' + x.day + '</small><b></b>';
+          el.querySelector('b').textContent = x.title; el.title = x.title + ' · ' + x.price + ' ₴/порція';
+          frag.appendChild(el);
+        });
+        plates.replaceChildren(frag); shown = next;
+        $('suStat').innerHTML = d.dishes.length ? '≈ <b>' + d.per_portion + ' ₴</b> порція · <span class="sv">−' + d.saving + ' ₴</span>' : 'немає страв — пом’якште умови';
+        pop($('suStat'));
+        $('saTaste').textContent = d.pool + ' ' + (d.pool % 10 === 1 && d.pool % 100 !== 11 ? 'страва підходить' : (d.pool % 10 >= 2 && d.pool % 10 <= 4 && (d.pool % 100 < 12 || d.pool % 100 > 14)) ? 'страви підходять' : 'страв підходять') + ' 🍽';
+        var p = +$('f-people').value, n = d.dishes.length || 1, v = +$('f-budget').value;
+        $('suBudgetSub').textContent = v ? '≈ ' + Math.round(v / (p * n)) + ' ₴ на порцію' : 'меню вийде ≈ ' + d.total + ' ₴';
+        $('saBudget').textContent = v && d.total > v ? 'Тісно — підберемо дешевші страви 🤏' : v ? 'Вкладаємось, ще й з запасом 👌' : 'Підберемо найвигідніше з акцій 🔥';
+      }).catch(function () { $('suStat').classList.remove('busy'); });
+  }
+
+  // Фінал: «готуємо» і зберігаємо
+  function cook() {
+    $('suCook').hidden = false; tap(30);
+    setTimeout(function () { form.submit(); }, 900);
+  }
+
+  window.addEventListener('resize', function () { $('suTrack').style.height = steps[cur].offsetHeight + 'px'; });
+  people(+$('f-people').value); days(); time((form.querySelector('[data-min][aria-pressed=true]') || form.querySelector('[data-min]')).dataset.min); tastes(); budget(); go(0); preview();
+})();
+</script>
+{% endblock %}

@@ -45,7 +45,18 @@ GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "dish_likes")
+              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes")
+# Конструктор меню: що можна любити / виключити (теги інгредієнтів)
+SETUP_TASTES = [("meat", "🍗", "М'ясо й птиця"), ("fish", "🐟", "Риба й морепродукти"), ("vegetables", "🥦", "Овочі"),
+                ("grains", "🌾", "Крупи й гарніри"), ("dairy", "🧀", "Молочне"), ("eggs", "🍳", "Яйця"),
+                ("pork", "🐖", "Свинина")]
+SETUP_HIDE = {"meat", "fish", "pork"}       # від чого можна відмовитись зовсім (не їмо)
+
+
+def day_labels(p: Profile) -> list[str]:
+    """Підписи днів меню: вибрані в конструкторі (Пн, Ср, Пт) або підряд з понеділка."""
+    days = sorted(set(d for d in p.menu_days if 0 <= d <= 6))
+    return [menu.DAYS[d] for d in days] if days and len(days) == p.dinners else menu.DAYS
 OFFERS_TTL = timedelta(hours=6)
 ERROR_PAGE = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
               "<title>Помилка — Кошик з акцій</title><body style='font:16px/1.5 system-ui;padding:32px;max-width:520px'>"
@@ -842,9 +853,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         stores=len(stores), dishes=len(m.dishes), promo_lines=len(m.promo_lines), total=m.total,
                         saving=m.saving, guest=not u)
         resp = render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
-                      days=menu.DAYS, fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
+                      days=day_labels(p), fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
                       stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
-                      photos=menu_photos(), swapped=request.query_params.get("swapped"))
+                      photos=menu_photos(), swapped=request.query_params.get("swapped"),
+                      fresh=bool(request.query_params.get("fresh")))
         return keep_guest(resp, p) if (changed and not u) else resp
 
     async def menu_form(request: Request):
@@ -868,7 +880,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 p.household = max(1, min(12, int(form["people"])))
             if form.get("dinners"):
                 p.dinners = max(1, min(7, int(form["dinners"])))
-                p.menu, p.menu_skip = [], []
+                p.menu, p.menu_skip, p.menu_days = [], [], []
             if form.get("max_minutes"):
                 p.max_minutes = max(15, min(180, int(form["max_minutes"])))
                 p.menu, p.menu_skip = [], []
@@ -877,6 +889,75 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         analytics.track(conn, u["id"] if u else None, "menu_settings", dinners=p.dinners, max_minutes=p.max_minutes,
                         people=p.household, guest=not u)
         return menu_done(u, p, health, "/menu")
+
+    # ---------- конструктор меню: по одному питанню, меню складається наживо ----------
+    def setup_apply(p: Profile, form) -> Profile:
+        """Відповіді конструктора → профіль (без збереження)."""
+        def num(key, lo, hi, default):
+            try:
+                return max(lo, min(hi, int(float(form.get(key) or default))))
+            except ValueError:
+                return default
+        p.household = num("people", 1, 12, p.household)
+        days = sorted({int(x) for x in str(form.get("days", "")).split(",") if x.strip().isdigit() and int(x) <= 6})
+        if days:
+            p.menu_days, p.dinners = days, len(days)
+        p.max_minutes = num("minutes", 15, 180, p.max_minutes)
+        budget = num("budget", 0, 20000, 0)
+        p.menu_budget = float(budget) if budget else None
+        tags = {t for t, _, _ in SETUP_TASTES}
+        likes = [t for t in str(form.get("likes", "")).split(",") if t in tags]
+        hide = [t for t in str(form.get("hide", "")).split(",") if t in SETUP_HIDE]
+        p.likes = [t for t in p.likes if t not in tags] + likes
+        p.dislikes = [t for t in p.dislikes if t not in SETUP_HIDE] + hide
+        return p
+
+    def setup_offers(u) -> tuple[list[Offer], bool]:
+        """Акції для живого прев'ю: лише кеш магазину (без запитів до «Сільпо») або демо."""
+        offers: list[Offer] = []
+        if u:
+            link = silpo_link(u["id"])
+            if link and link["store_id"]:
+                offers = cached_offers(link["store_id"], STALE_TTL) or []
+        return (planner.merge_nearby(offers), False) if offers else (planner.merge_nearby(demo.load()), True)
+
+    @app.get("/menu/setup", response_class=HTMLResponse)
+    def menu_setup_page(request: Request):
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        days = p.menu_days if len(p.menu_days) == p.dinners else list(range(p.dinners))
+        return render(request, "setup.html", u, p=p, days=days, day_names=menu.DAYS, tastes=SETUP_TASTES,
+                      hideable=SETUP_HIDE, guest=not u)
+
+    @app.post("/menu/preview")
+    async def menu_preview(request: Request):
+        """Живий підсумок у конструкторі: страви й ціна за поточними відповідями. Нічого не зберігає."""
+        form = await request.form()
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        p = setup_apply(p, form)
+        offers, is_demo = setup_offers(u)
+        p.menu, p.menu_skip = [], []
+        m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget, keep=[])
+        photos = menu_photos()
+        labels = day_labels(p)
+        return JSONResponse({
+            "dishes": [{"id": d.id, "title": d.title, "emoji": d.emoji, "photo": photos.get(d.id), "day": labels[i],
+                        "price": round(d.per_portion), "save": round(d.saving)} for i, d in enumerate(m.dishes)],
+            "per_portion": round(m.per_portion), "total": round(m.total), "saving": round(m.saving),
+            "pool": len([r for r in menu.RECIPES + menu.user_recipes(p) if menu.allowed(r, p, p.max_minutes)]),
+            "demo": is_demo})
+
+    @app.post("/menu/setup")
+    async def menu_setup_save(request: Request):
+        form, u, p, health, bad = await menu_form(request)
+        if bad:
+            return bad
+        p = setup_apply(p, form)
+        p.menu, p.menu_skip = [], []
+        analytics.track(conn, u["id"] if u else None, "menu_setup", people=p.household, dinners=p.dinners,
+                        max_minutes=p.max_minutes, budget=p.menu_budget, likes=len(p.likes), guest=not u)
+        return menu_done(u, p, health, "/menu?fresh=1")
 
     @app.post("/menu/swap")
     async def menu_swap(request: Request):
@@ -1376,7 +1457,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             m, changed = week_menu(p, offers)
             if changed:
                 save_profile(uid, p, health)
-            if m.dishes and await asyncio.to_thread(tg.send, chat, tgm.menu_text(m, menu.DAYS),
+            if m.dishes and await asyncio.to_thread(tg.send, chat, tgm.menu_text(m, day_labels(p)),
                                                     [("Відкрити меню", f"{base_url}/menu")]):
                 mark([wk])
                 st["menus"] += 1

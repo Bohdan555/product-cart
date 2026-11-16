@@ -2,7 +2,7 @@
 {% block title %}Меню з акцій — Кошик з акцій{% endblock %}
 {% block body %}
 {% include "_stale.html" %}
-<div id="menuroot">
+<div id="menuroot"{% if fresh %} class="fresh-in"{% endif %}>
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
 <nav class="mtabs" aria-label="Меню"><a href="/menu" aria-current="page">Меню тижня</a><a href="/dishes">Мої страви</a></nav>
 <section class="intro">
@@ -12,6 +12,7 @@
 </section>
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
 
+<a class="su-open" href="/menu/setup">✨ Налаштувати меню<small>скільки вас, дні, час, смаки, бюджет</small></a>
 <div class="mctl" aria-label="Налаштування меню">
   <form method="post" action="/menu/settings" class="ctl step">
     <input type="hidden" name="csrf" value="{{ user.csrf }}"><span>Нас</span>
@@ -274,4 +275,5 @@
   init();
 })();
 </script>
+{% if fresh %}<script>setTimeout(function () { if (window.celebrate) celebrate(); if (window.haptic) haptic([12, 40, 12]); }, 350);</script>{% endif %}
 {% endblock %}

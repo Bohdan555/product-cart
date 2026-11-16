@@ -831,3 +831,78 @@ details.more{border-top:0;background:var(--chip);border-radius:18px;padding:12px
 
 .irow select{padding:11px 8px}.nitem select,.ndef select{width:auto;padding:6px 8px}
 .sortbar select{width:auto}
+
+/* ---------- Конструктор меню ---------- */
+.su{position:relative}
+.su-view{overflow-x:clip;margin:0 -16px}
+.su-top{display:flex;align-items:center;gap:10px;margin:2px 0 8px}
+.su-x{font-size:28px;line-height:1;text-decoration:none;color:var(--muted);padding:4px 8px}
+.su-dots{display:flex;gap:6px;list-style:none;margin:0;padding:0;flex:1;justify-content:center}
+.su-dots button{width:40px;height:40px;border-radius:50%;border:0;background:var(--chip);font-size:20px;cursor:pointer;opacity:.45;transition:transform .25s,opacity .25s,background .25s}
+.su-dots li.done button{opacity:.9;background:var(--soft)}
+.su-dots li.on button{opacity:1;background:var(--sticker);transform:scale(1.12)}
+.su-track{display:flex;align-items:flex-start;transition:transform .45s cubic-bezier(.2,.8,.2,1),height .3s}
+.su-step{flex:0 0 100%;min-width:0;padding:4px 16px 18px;box-sizing:border-box}
+.su-step .xh{font-size:clamp(28px,7.5vw,44px);margin:4px 0 12px}
+.su-say{min-height:24px;font-weight:600;color:var(--ink);background:color-mix(in srgb,var(--c) 70%,transparent);display:inline-block;padding:8px 14px;border-radius:14px;margin-top:14px;animation:su-in .35s both}
+.su-say:empty{display:none}
+.su-hint{color:var(--muted);margin:-6px 0 12px}
+.su-table{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;min-height:52px;font-size:34px;padding:10px;background:color-mix(in srgb,var(--c) 60%,var(--card));border-radius:28px}
+.su-table span{animation:su-pop .35s cubic-bezier(.3,1.6,.5,1) both}
+.su-count{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:10px}
+.su-count b{font:800 52px/1 var(--display,inherit);min-width:64px;text-align:center}
+.su-pm{width:56px;height:56px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:32px;cursor:pointer}
+.su-pm:active{transform:scale(.92)}
+.su-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.su-days button{aspect-ratio:1;border-radius:50%;border:0;background:var(--chip);font:800 15px/1 var(--body);cursor:pointer;transition:background .2s,transform .2s}
+.su-days button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);transform:scale(1.04)}
+.su-presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.su-presets button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font:600 14px var(--body);cursor:pointer}
+.su-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.su-cards button,.su-tastes button{position:relative;border:2px solid transparent;background:color-mix(in srgb,var(--c) 55%,var(--card));border-radius:22px;padding:16px 12px;text-align:left;cursor:pointer;font:inherit;color:var(--ink);transition:transform .2s,border-color .2s,background .2s}
+.su-cards .e,.su-tastes .e{display:block;font-size:34px;margin-bottom:6px}
+.su-cards b,.su-tastes b{display:block;font-size:16px}
+.su-cards small{color:var(--muted)}
+.su-cards button[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--c) 85%,var(--card));transform:translateY(-2px)}
+.su-tastes{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.su-tastes button{padding:12px 10px;border-radius:18px}.su-tastes .e{font-size:26px;margin-bottom:4px}.su-tastes b{font-size:14px;line-height:1.2}
+.su-tastes .st{position:absolute;top:10px;right:12px;font-style:normal;font-size:20px}
+.su-tastes [data-state=like]{border-color:var(--accent);background:color-mix(in srgb,var(--c) 90%,var(--card))}
+.su-tastes [data-state=like] .st::after{content:"❤️"}
+.su-tastes [data-state=hide]{opacity:.55;background:var(--chip)}
+.su-tastes [data-state=hide] b{text-decoration:line-through}
+.su-tastes [data-state=hide] .st::after{content:"🚫"}
+.su-money{text-align:center;padding:18px;background:color-mix(in srgb,var(--c) 60%,var(--card));border-radius:28px}
+.su-money b{display:block;font:800 44px/1.1 var(--display,inherit)}
+.su-money small{color:var(--muted);font-weight:600}
+#suRange{width:100%;margin:18px 0 4px;accent-color:var(--accent);height:32px}
+.su-range-l{display:flex;justify-content:space-between;color:var(--muted);font-size:13px}
+.su-live{position:sticky;bottom:calc(var(--dock-h,76px) + 10px);margin-top:6px;background:var(--card);border-radius:24px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:12px;z-index:5}
+.su-live-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}
+#suStat{color:var(--muted);transition:opacity .2s}#suStat.busy{opacity:.4}#suStat b{color:var(--ink)}#suStat .sv{color:var(--accent);font-weight:700}
+.su-plates{display:flex;gap:8px;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:none;min-height:84px}
+.su-plates::-webkit-scrollbar{display:none}
+.su-plate{flex:0 0 68px;width:68px;min-width:0;text-align:center;font-size:11px}
+.su-plate img,.su-plate .pe{display:grid;place-items:center;width:68px;height:52px;border-radius:14px;object-fit:cover;background:var(--chip);font-size:26px}
+.su-plate small{display:block;font-weight:800;margin-top:4px}
+.su-plate b{display:block;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.su-plate.new{animation:su-pop .45s cubic-bezier(.3,1.5,.5,1) both}
+.su-nav{display:flex;gap:8px;margin-top:6px}.su-nav .btn{flex:1}
+.su-cook{position:fixed;inset:0;z-index:50;display:grid;place-content:center;justify-items:center;gap:14px;background:color-mix(in srgb,var(--bg) 92%,transparent);font-size:18px}
+.su-cook .pot{font-size:84px;animation:su-cook .6s ease-in-out infinite alternate}
+.su-open{display:flex;flex-direction:column;gap:2px;text-decoration:none;color:var(--ink);background:linear-gradient(120deg,var(--p-citrus),var(--p-berry));border-radius:20px;padding:14px 16px;margin:0 0 12px;font-weight:800;font-size:16px}
+.su-open small{font-weight:600;color:color-mix(in srgb,var(--ink) 65%,transparent);font-size:13px}
+.fresh-in .days .day{animation:su-pop .5s cubic-bezier(.3,1.4,.5,1) both}
+.fresh-in .days .day:nth-child(2){animation-delay:.08s}.fresh-in .days .day:nth-child(3){animation-delay:.16s}
+.fresh-in .days .day:nth-child(4){animation-delay:.24s}.fresh-in .days .day:nth-child(5){animation-delay:.32s}
+.fresh-in .days .day:nth-child(6){animation-delay:.4s}.fresh-in .days .day:nth-child(7){animation-delay:.48s}
+@keyframes su-pop{from{opacity:0;transform:scale(.6) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes su-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes su-cook{from{transform:rotate(-8deg) translateY(0)}to{transform:rotate(8deg) translateY(-10px)}}
+@media (prefers-reduced-motion:reduce){.su-track{transition:none}.su-plate.new,.su-table span,.fresh-in .days .day,.su-cook .pot,.su-say{animation:none}}
+.su-cards button{padding:12px 12px}.su-cards .e{font-size:28px;margin-bottom:4px}
+.su-step[data-step="0"] .su-say{margin-top:10px}
+@media (min-height:800px){.su-cards button{padding:16px 12px}}
+body:has(.su) .dock{display:none}
+body:has(.su) .su-live{bottom:10px}
+body:has(.su) footer{display:none}
