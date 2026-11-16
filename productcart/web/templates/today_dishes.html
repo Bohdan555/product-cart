@@ -18,7 +18,7 @@
       <span class="td-pill{% if not o.lines %} ok{% endif %}">{% if not o.lines %}✓ Є все{% elif got %}Є {{ got }} з {{ total }}{% else %}Усе купити{% endif %}</span>
       <span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв</span>
     </div>
-    {% if o.lines %}<p class="td-need">Докупити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}
+    {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}
       {% if not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}</p>
     {% else %}<p class="td-need">Нічого не треба купувати</p>{% endif %}
     <div class="td-price"><span>порція</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
@@ -26,6 +26,6 @@
   </article>
   {% endfor %}
 </div>
-<p class="td-hint">Гортайте вбік · спершу ті, де найменше докуповувати</p>
+<p class="td-hint">Гортайте вбік · спершу ті, де найменше треба купити</p>
 {% endif %}
 {% endblock %}

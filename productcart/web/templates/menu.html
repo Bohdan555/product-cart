@@ -106,16 +106,14 @@
       <form method="post" action="/fridge/remove" data-noajax data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Немає</button></form></div>
   {% endfor %}</div>
   {% endif %}
-  {% set waiting = m.pantry_lines|rejectattr('buy')|list %}
-  {% if waiting %}
-  <div class="group"><div class="gh"><b>Мабуть, є вдома</b></div>
-  {% for l in waiting %}
-    <div class="brow static"><span class="rmain"><b>{{ l.name }}</b><small>{{ fmt_qty(l.need, l.unit) }}</small></span>
-      <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Закінчилось</button></form></div>
+  {% if m.pantry_lines %}
+  <div class="group pantry"><div class="gh"><b>Запаси вдома</b><small>олія, крупи — зазвичай є</small></div>
+  {% for l in m.pantry_lines %}
+    <div class="brow static{% if l.buy %} buying{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}купуємо ✓ · {{ fmt_qty(l.need, l.unit) }}{% else %}є вдома{% endif %}</small></span>
+      <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}">
+        <button type="submit" class="switch{% if l.buy %} back{% endif %}">{{ 'Є вдома' if l.buy else 'Закінчилось' }}</button></form></div>
   {% endfor %}</div>
   {% endif %}
-  {% set added = m.pantry_lines|selectattr('buy')|list %}
-  {% if added %}<div class="added"><span>Докупити:</span>{% for l in added %}<form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="chipx" aria-label="Прибрати з кошика: {{ l.name|lower }}">{{ l.name|lower }}<span aria-hidden="true">✕</span></button></form>{% endfor %}</div>{% endif %}
 
 </section>
 

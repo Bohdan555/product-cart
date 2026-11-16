@@ -198,7 +198,8 @@ def test_menu_page_and_settings(client):
     # «закінчилось» додає запас у кошик і повертається назад
     key = re.search(r'name="key" value="([a-z_]+)"', client.get("/buy").text).group(1)
     client.post("/menu/pantry", data={"csrf": token, "key": key})
-    assert "Докупити:" in client.get("/buy").text
+    buy = client.get("/buy").text
+    assert "Запаси вдома" in buy and "купуємо ✓" in buy and ">Є вдома</button>" in buy and "Докупити" not in buy
     assert client.post("/menu/pantry", data={"csrf": token, "key": "evil"}).status_code == 400
     # збереження профілю не скидає меню
     client.post("/profile", data={"csrf": token, "household": "2", "min_discount": "10"})

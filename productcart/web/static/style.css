@@ -1191,3 +1191,9 @@ a.eat-open small{color:var(--muted)}
 .imp label{font-size:14.5px}
 .imp-row{display:flex;gap:8px}.imp-row input{flex:1;min-width:0}
 .imp-ok{margin:0 0 12px}
+
+.pantry .buying .rmain small{color:var(--accent);font-weight:700}
+.switch.back{background:var(--chip);color:var(--ink)}
+.pantry .brow.static{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;text-align:left}
+.pantry .brow.static .rmain{flex:1;min-width:0;text-align:left;order:0}
+.pantry .brow.static form{order:1;flex:none}
