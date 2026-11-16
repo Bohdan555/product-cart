@@ -119,14 +119,7 @@
 
 </section>
 
-{% if hot %}
-<section class="wk-hot" aria-label="Ще вигідне цього тижня">
-  <div class="wk-hot-h"><h2>Ще вигідне цього тижня</h2><a href="/list?sort=disc">Усі акції →</a></div>
-  <div class="wk-hot-grid">{% for o in hot %}{% set v = visual(o) %}
-    <a class="wk-deal" href="/list?sort=disc" style="--c:var(--{{ v.pastel }})"><span class="off">−{{ o.discount_pct|round|int }}%</span><span class="e" aria-hidden="true">{{ v.emoji }}</span><b>{{ o.name }}</b><span class="p">{{ uah(o.price) }}</span></a>
-  {% endfor %}</div>
-</section>
-{% endif %}
+
 {% endif %}
 <div class="toast" id="toast" hidden></div>
 <div hidden id="menudata" data-key="bought:{{ m.ids|join(",") }}:{{ m.people }}" data-menu="Меню: {% for d in m.dishes %}{{ days[loop.index0] }} {{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}"></div>

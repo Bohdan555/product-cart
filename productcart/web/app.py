@@ -868,12 +868,6 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu, p.menu_skip, p.menu_week = [], [], week
         return True
 
-    def hot_deals(offers: list[Offer], m, n: int = 4) -> list[Offer]:
-        """Крок ③ «Що купити»: найбільші знижки, яких ще немає в списку до меню."""
-        used = {l.source.offer.product_id for l in m.promo_lines if l.source.offer}
-        return sorted((o for o in offers if (o.discount_pct or 0) >= 15 and o.product_id not in used),
-                      key=lambda o: -(o.discount_pct or 0))[:n]
-
     def week_menu(p: Profile, offers: list[Offer]):
         """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
         new_week = roll_week(p)
@@ -906,7 +900,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       days=day_labels(p), fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
                       stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"),
-                      fresh=bool(request.query_params.get("fresh")), hot=hot_deals(offers, m),
+                      fresh=bool(request.query_params.get("fresh")),
                       view="buy" if view == "buy" else "eat")
         return keep_guest(resp, p) if (changed and not u) else resp
 
