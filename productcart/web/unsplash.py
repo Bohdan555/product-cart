@@ -32,9 +32,9 @@ QUERIES = {
     "plov": "plov pilaf rice chicken",
     "kotlety": "chicken cutlets buckwheat",
     "chicken-mush": "chicken mushrooms creamy sauce rice",
-    "liver": "buckwheat liver mushrooms",
+    "liver": "fried chicken liver onions",
     "flotski": "pasta with minced meat",
-    "casserole": "potato minced meat casserole",
+    "casserole": "shepherds pie casserole",
     "borscht": "borscht soup",
     "hake": "baked fish potatoes carrots",
     "puree": "mashed potatoes sausages",
@@ -44,7 +44,7 @@ QUERIES = {
     "buckwheat-mush": "buckwheat with mushrooms",
     "rice-veg": "fried rice vegetables egg",
     "bean-soup": "bean vegetable soup",
-    "lentils": "lentils with vegetables",
+    "lentils": "lentil stew bowl",
     "cabbage": "braised cabbage mushrooms",
     "ragu": "vegetable stew",
     "golubtsi": "cabbage rolls tomato sauce",
@@ -53,11 +53,11 @@ QUERIES = {
     "chicken-soup": "chicken noodle soup",
     "pork-stew": "pork stew potatoes",
     "chicken-pasta": "creamy chicken mushroom pasta",
-    "fish-cream": "fish fillet sour cream rice",
+    "fish-cream": "baked fish fillet rice plate",
     "solyanka": "braised cabbage sausages",
     "meatballs": "meatballs tomato sauce",
     "zrazy": "potato croquettes mushrooms",
-    "zucchini-stew": "stewed zucchini vegetables",
+    "zucchini-stew": "zucchini ratatouille",
     "chicken-zucchini": "chicken zucchini rice",
     "pancakes": "small fluffy pancakes sour cream",
     "liver-puree": "liver onions mashed potatoes",
@@ -66,6 +66,9 @@ QUERIES = {
     "mushroom-soup": "mushroom cream soup",
     "eggs-sausage": "fried eggs sausages vegetables",
 }
+
+# Невдалі перші підбори: перешукати (нові записи зберігають свій запит у "q").
+REDO = {"liver", "lentils", "casserole", "fish-cream", "zucchini-stew"}
 
 _lock = threading.Lock()
 _mem: dict = {}
@@ -92,18 +95,25 @@ def load(conn) -> dict:
     return _mem
 
 
-def pick(results: list[dict]) -> dict | None:
+def usable(d: str, p: dict) -> bool:
+    """Чи підходить збережене фото: старі записи без "q" — якщо страви немає в REDO, нові — якщо запит не змінився."""
+    return p.get("q") == QUERIES.get(d) if "q" in p else d not in REDO
+
+
+def pick(results: list[dict], used: set = frozenset()) -> dict | None:
     for r in results:
+        if r.get("id") in used:
+            continue     # одне фото — одній страві
         if r.get("urls", {}).get("raw") and not r.get("premium") and not r.get("plus"):
             return r
     return None
 
 
-def fetch_one(client: httpx.Client, query: str) -> dict | None:
+def fetch_one(client: httpx.Client, query: str, used: set = frozenset()) -> dict | None:
     r = client.get(f"{API}/search/photos", params={"query": query, "per_page": 10, "orientation": "landscape",
                                                    "content_filter": "high"})
     r.raise_for_status()
-    p = pick(r.json().get("results") or [])
+    p = pick(r.json().get("results") or [], used)
     if not p:
         return None
     dl = p.get("links", {}).get("download_location")
@@ -113,7 +123,7 @@ def fetch_one(client: httpx.Client, query: str) -> dict | None:
         except httpx.HTTPError:
             pass
     user = p.get("user") or {}
-    return {"raw": p["urls"]["raw"], "pid": p.get("id"), "by": user.get("name") or user.get("username") or "Unsplash",
+    return {"raw": p["urls"]["raw"], "pid": p.get("id"), "q": query, "by": user.get("name") or user.get("username") or "Unsplash",
             "by_url": (user.get("links") or {}).get("html") or "https://unsplash.com", "page": (p.get("links") or {}).get("html")}
 
 
@@ -126,10 +136,11 @@ def sync(conn, missing: list[str], client: httpx.Client | None = None) -> int:
     own = client is None
     client = client or httpx.Client(timeout=10, headers={"Authorization": f"Client-ID {key}", "Accept-Version": "v1"})
     found = {}
+    used = {p.get("pid") for d, p in load(conn).items() if usable(d, p)}
     try:
         for d in todo:
             try:
-                p = fetch_one(client, QUERIES[d])
+                p = fetch_one(client, QUERIES[d], used)
             except httpx.HTTPError as e:
                 if not found:
                     raise      # жодного — хай буде видно причину
@@ -137,6 +148,7 @@ def sync(conn, missing: list[str], client: httpx.Client | None = None) -> int:
                 break      # ліміт або мережа — решту пізніше
             if p:
                 found[d] = p
+                used.add(p["pid"])
     finally:
         if own:
             client.close()

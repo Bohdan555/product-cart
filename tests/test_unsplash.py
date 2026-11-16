@@ -42,3 +42,11 @@ def test_no_key_does_nothing(tmp_path, monkeypatch):
 def test_every_recipe_has_query():
     from productcart import menu
     assert {r.id for r in menu.RECIPES} <= set(unsplash.QUERIES)
+
+
+def test_skips_used_and_redo():
+    res = [{"id": "a", "urls": {"raw": "r"}}, {"id": "b", "urls": {"raw": "r"}}]
+    assert unsplash.pick(res, {"a"})["id"] == "b"
+    assert not unsplash.usable("liver", {"raw": "r"})
+    assert unsplash.usable("liver", {"raw": "r", "q": unsplash.QUERIES["liver"]})
+    assert unsplash.usable("plov", {"raw": "r"})

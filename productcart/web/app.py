@@ -116,7 +116,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         """id страви → адреса фото: свої (Wikimedia) або з Unsplash. Відсутні дошукуються у фоні."""
         photos = local_photos()
         for d, p in unsplash.load(conn).items():
-            photos.setdefault(d, unsplash.img_url(p["raw"]))
+            if unsplash.usable(d, p):
+                photos.setdefault(d, unsplash.img_url(p["raw"]))
         missing = [r.id for r in menu.RECIPES if r.id not in photos]
         if missing and (todo := unsplash.claim(conn, missing)):
             photo_job.set(todo)     # render() допише пошук фоновою задачею після відповіді
@@ -1068,7 +1069,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return render(request, "photos.html", user_of(request), credits=menu_credits(),
                       status_note=db.get_setting(conn, unsplash.ERR_KEY),
                       unsplash={d: dict(p, by_url=unsplash.with_utm(p["by_url"]), img=unsplash.img_url(p["raw"], 192, 144))
-                                for d, p in unsplash.load(conn).items() if d not in menu_credits()},
+                                for d, p in unsplash.load(conn).items() if d not in menu_credits() and unsplash.usable(d, p)},
                       unsplash_home=unsplash.with_utm("https://unsplash.com"),
                       titles={r.id: r.title for r in menu.RECIPES})
 
