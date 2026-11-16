@@ -72,11 +72,12 @@ def gateway_model() -> str:
         return os.environ["FRIDGE_MODEL"]
     if "id" not in _model_cache:
         ids = [m.get("id", "") for m in httpx.get(f"{GATEWAY}/v1/models", timeout=10).json().get("data", [])]
-        pick = next((i for i in ids if i in ("anthropic/claude-opus-5.5", "anthropic/claude-opus-5-5")), None) \
-            or next((i for i in ids if i.startswith("anthropic/claude-opus-5")), None)
-        if not pick:
-            raise RuntimeError("AI Gateway: немає моделі Claude Opus 5.5 у каталозі")
+        pick = next((i for i in ids if i in ("anthropic/claude-opus-5.5", "anthropic/claude-opus-5-5")), None)
+        if not pick:      # не підставляємо іншу модель мовчки — краще явна помилка в лозі
+            raise RuntimeError("AI Gateway: немає Claude Opus 5.5 у каталозі; схожі: "
+                               + ", ".join(i for i in ids if "opus" in i)[:300])
         _model_cache["id"] = pick
+        logs.event(log, "fridge.model", model=pick)
     return _model_cache["id"]
 
 
