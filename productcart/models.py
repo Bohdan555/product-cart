@@ -106,6 +106,10 @@ class Profile:
     menu_prev: list[str] = field(default_factory=list)     # меню минулого тижня — цього тижня пропонуємо інше
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо
+    # Сповіщення в Telegram
+    watch: list[str] = field(default_factory=list)         # слова «стежити»: «кава», «лосось»
+    tg_deals: bool = True                                   # цікаві акції (список «стежити» + великі знижки)
+    tg_weekly: bool = True                                  # щопонеділка — меню на тиждень
 
     @classmethod
     def from_dict(cls, d: dict) -> "Profile":

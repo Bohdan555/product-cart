@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import hashlib
+import hmac
 import time
 import logging
 import contextlib
@@ -33,6 +34,8 @@ from starlette.background import BackgroundTask
 from . import analytics, db, security, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
+from .telegram import Telegram
+from . import telegram as tgm
 from .silpo_oauth import SilpoGateway, expires_soon, pkce_pair
 
 HERE = Path(__file__).parent
@@ -53,7 +56,7 @@ HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 
 def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None,
                gateway: SilpoGateway | None = None, secure_cookies: bool | None = None,
-               google: GoogleAuth | None = None) -> FastAPI:
+               google: GoogleAuth | None = None, telegram: Telegram | None = None) -> FastAPI:
     app_secret = app_secret or os.environ.get("APP_SECRET", "")
     vercel_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")  # Vercel задає сам, без https://
     base_url = (base_url or os.environ.get("BASE_URL")
@@ -63,6 +66,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     gw = gateway or SilpoGateway(conn, redirect_uri=f"{base_url}/auth/silpo/callback")
     secure = base_url.startswith("https://") if secure_cookies is None else secure_cookies
     google = google or GoogleAuth(redirect_uri=f"{base_url}/auth/google/callback")
+    tg = telegram or Telegram()
 
     app = FastAPI(title="Кошик з акцій", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -105,6 +109,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     app.state.conn, app.state.gw = conn, gw
     analytics.init(conn)
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
+    tpl.env.globals.update(watch_word=watch_word)
     tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual, plural=plural,
                            name_visual=name_visual)
 
@@ -772,11 +777,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return go(url)
         return keep_guest(go(url), p)
 
-    @app.get("/menu", response_class=HTMLResponse)
-    async def menu_page(request: Request, refresh: int = 0):
-        u = user_of(request)
-        p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
-        link, stores, offers, notice, is_demo = await menu_offers(u, p, bool(refresh))
+    def week_menu(p: Profile, offers: list[Offer]):
+        """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
         week = "%d-W%02d" % date.today().isocalendar()[:2]
         new_week = p.menu_week != week
         if new_week:   # новий тиждень — нове меню, страви минулого тижня відсуваємо
@@ -787,6 +789,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       keep=p.menu, pantry_buy=p.pantry_buy)
         changed = m.ids != p.menu or new_week
         p.menu = m.ids
+        return m, changed
+
+    @app.get("/menu", response_class=HTMLResponse)
+    async def menu_page(request: Request, refresh: int = 0):
+        u = user_of(request)
+        p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
+        link, stores, offers, notice, is_demo = await menu_offers(u, p, bool(refresh))
+        m, changed = week_menu(p, offers)
         if changed and u:
             save_profile(u["id"], p, health)
         analytics.track(conn, u["id"] if u else None, "menu_viewed", source="demo" if is_demo else "silpo",
@@ -1120,6 +1130,166 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
 
+    # ---------- сповіщення в Telegram ----------
+    def tg_chat(user_id: int):
+        return conn.execute("SELECT chat_id, linked_at FROM tg_links WHERE user_id=?", (user_id,)).fetchone()
+
+    def add_watch(p: Profile, word: str) -> str | None:
+        word = " ".join(word.lower().split())[:40]
+        if len(word) < 2:
+            return None
+        if word not in p.watch:
+            p.watch = (p.watch + [word])[-30:]
+        return word
+
+    @app.get("/notify", response_class=HTMLResponse)
+    def notify_page(request: Request, saved: int = 0):
+        u, bad = need_user(request)
+        if bad:
+            return bad
+        p, _ = load_profile(u["id"])
+        return render(request, "notify.html", u, p=p, chat=tg_chat(u["id"]), tg_on=tg.enabled, bot=tg.bot,
+                      start_url=f"https://t.me/{tg.bot}?start={tgm.link_code(app_secret, u['id'])}",
+                      silpo=silpo_link(u["id"]), saved=saved)
+
+    @app.post("/notify")
+    async def notify_save(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, form.get("csrf", ""))
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        if form.get("action") == "unlink":
+            conn.execute("DELETE FROM tg_links WHERE user_id=?", (u["id"],))
+            return go("/notify")
+        p.tg_deals, p.tg_weekly = bool(form.get("tg_deals")), bool(form.get("tg_weekly"))
+        p.watch = []
+        for w in str(form.get("watch", "")).replace(";", ",").replace("\n", ",").split(","):
+            add_watch(p, w)
+        save_profile(u["id"], p, health)
+        return go("/notify?saved=1")
+
+    @app.post("/notify/watch")
+    async def notify_watch(request: Request):
+        """«🔔 Стежити» з картки акції: додає слово до списку (AJAX)."""
+        form = await request.form()
+        u, bad = need_user(request, form.get("csrf", ""))
+        if bad:
+            return JSONResponse({"ok": False}, status_code=400)
+        p, health = load_profile(u["id"])
+        word = add_watch(p, str(form.get("word", "")))
+        if not word:
+            return JSONResponse({"ok": False}, status_code=400)
+        save_profile(u["id"], p, health)
+        return JSONResponse({"ok": True, "word": word, "linked": bool(tg_chat(u["id"]))})
+
+    def tg_reply(chat: str, text: str, path: str | None = None, label: str = "Відкрити сайт"):
+        tg.send(chat, text, [(label, f"{base_url}{path}")] if path else None)
+
+    @app.post("/tg/webhook")
+    async def tg_webhook(request: Request):
+        """Повідомлення боту. Telegram підписує запити секретом, який ми задали в setWebhook."""
+        got = request.headers.get("x-telegram-bot-api-secret-token", "")
+        if not tg.enabled or not hmac.compare_digest(got, tgm.webhook_secret(app_secret)):
+            return JSONResponse({"ok": False}, status_code=403)
+        msg = (await request.json()).get("message") or {}
+        chat = msg.get("chat") or {}
+        cid, text = str(chat.get("id") or ""), (msg.get("text") or "").strip()
+        if not cid or chat.get("type") != "private":
+            return {"ok": True}
+        if text.startswith("/start"):
+            uid = tgm.check_code(app_secret, text[6:].strip())
+            if uid and conn.execute("SELECT id FROM users WHERE id=?", (uid,)).fetchone():
+                conn.execute("DELETE FROM tg_links WHERE chat_id=? OR user_id=?", (cid, uid))
+                conn.execute("INSERT INTO tg_links (user_id, chat_id, linked_at) VALUES (?, ?, ?)",
+                             (uid, cid, security.iso(security.now())))
+                analytics.track(conn, uid, "tg_linked")
+                await asyncio.to_thread(tg_reply, cid, "✅ <b>Готово!</b> Писатиму про акції, за якими ви стежите, "
+                                        "великі знижки на те, що ви купуєте, і щопонеділка — меню на тиждень.\n\n"
+                                        "Вимкнути: /stop", "/notify", "Налаштувати")
+            elif conn.execute("SELECT 1 FROM tg_links WHERE chat_id=?", (cid,)).fetchone():
+                await asyncio.to_thread(tg_reply, cid, "Ви вже підключені 👍 Налаштування — на сайті.", "/notify", "Налаштувати")
+            else:
+                await asyncio.to_thread(tg_reply, cid, "Привіт! Щоб отримувати сповіщення, відкрийте «Сповіщення» "
+                                        "на сайті й натисніть «Підключити Telegram».", "/notify")
+        elif text.startswith("/stop"):
+            conn.execute("DELETE FROM tg_links WHERE chat_id=?", (cid,))
+            await asyncio.to_thread(tg_reply, cid, "Сповіщення вимкнено. Повернутись — кнопка на сайті.", "/notify")
+        else:
+            await asyncio.to_thread(tg_reply, cid, "Я надсилаю сповіщення про акції. Налаштування — на сайті.", "/notify",
+                                    "Налаштувати")
+        return {"ok": True}
+
+    @app.get("/tg/setup")
+    def tg_setup():
+        """Під'єднує бота до сайту (setWebhook). Безпечно викликати повторно."""
+        if not tg.enabled:
+            return JSONResponse({"ok": False, "why": "немає TELEGRAM_BOT_TOKEN"}, status_code=503)
+        try:
+            tg.set_webhook(f"{base_url}/tg/webhook", tgm.webhook_secret(app_secret))
+        except Exception as e:
+            return JSONResponse({"ok": False, "why": str(e)[:200]}, status_code=502)
+        return {"ok": True, "bot": tg.bot}
+
+    async def notify_user(uid: int, chat: str, menu_day: bool, st: dict) -> None:
+        p, health = load_profile(uid)
+        if not silpo_link(uid) or not (p.tg_deals or (p.tg_weekly and menu_day)):
+            return
+        _, offers, _ = await silpo_list_input(uid, p, allow_stale=False)
+        if not offers:
+            return
+        offers = planner.merge_nearby(offers)
+        sent = {r["key"] for r in conn.execute("SELECT key FROM tg_sent WHERE user_id=?", (uid,)).fetchall()}
+        now = security.iso(security.now())
+
+        def mark(keys):
+            for k in keys:
+                conn.execute("INSERT INTO tg_sent (user_id, key, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+                             (uid, k, now))
+
+        if p.tg_deals:
+            items = tgm.pick_deals(offers, p, sent)
+            if items and await asyncio.to_thread(tg.send, chat, tgm.deals_text(items),
+                                                 [("Усі акції", f"{base_url}/list?sort=disc")]):
+                mark(tgm.offer_key(o) for o, _ in items)
+                st["deals"] += 1
+        wk = "w:%d-W%02d" % date.today().isocalendar()[:2]
+        if p.tg_weekly and menu_day and wk not in sent:
+            m, changed = week_menu(p, offers)
+            if changed:
+                save_profile(uid, p, health)
+            if m.dishes and await asyncio.to_thread(tg.send, chat, tgm.menu_text(m, menu.DAYS),
+                                                    [("Відкрити меню", f"{base_url}/menu")]):
+                mark([wk])
+                st["menus"] += 1
+
+    @app.get("/cron/notify")
+    async def cron_notify(request: Request):
+        """Раз на день (Vercel Cron): цікаві акції, а щопонеділка — меню на тиждень."""
+        secret = os.environ.get("CRON_SECRET")
+        allowed = (request.headers.get("authorization") == f"Bearer {secret}" if secret
+                   else request.headers.get("user-agent", "").startswith("vercel-cron"))
+        if not allowed:
+            return JSONResponse({"ok": False}, status_code=403)
+        if not tg.enabled:
+            return {"ok": False, "why": "немає TELEGRAM_BOT_TOKEN"}
+        last = db.get_setting(conn, "tg_cron_at")
+        if last and last > security.iso(security.now() - timedelta(hours=20)):
+            return {"ok": True, "skipped": "вже надсилали сьогодні"}
+        db.set_setting(conn, "tg_cron_at", security.iso(security.now()))
+        conn.execute("DELETE FROM tg_sent WHERE sent_at < ?", (security.iso(security.now() - timedelta(days=30)),))
+        st = {"users": 0, "deals": 0, "menus": 0, "errors": 0}
+        menu_day = tgm.is_menu_day()
+        for r in conn.execute("SELECT user_id, chat_id FROM tg_links").fetchall():
+            st["users"] += 1
+            try:
+                await notify_user(r["user_id"], r["chat_id"], menu_day, st)
+            except Exception as e:
+                st["errors"] += 1
+                log.warning("Telegram: розсилка користувачу: %s", str(root_error(e))[:300])
+        log.warning("Telegram: розсилка %s", st)
+        return st
+
     @app.get("/privacy", response_class=HTMLResponse)
     def privacy(request: Request):
         return render(request, "privacy.html", user_of(request))
@@ -1224,11 +1394,17 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
         dish_dislikes=[x for x in lst("dish_dislikes") if x in recipe_ids][:30],
     )
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
-    for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev"):
+    for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
+              "watch", "tg_deals", "tg_weekly"):
         setattr(p, k, getattr(prev, k))
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]
     return p, diets, consent
+
+
+def watch_word(name: str) -> str:
+    """Що стежити для товару: «Кава зернова Lavazza 1кг» → «кава зернова»."""
+    return silpo.generic_name(name) or " ".join(name.lower().split()[:2])
 
 
 def root_error(e: BaseException) -> BaseException:

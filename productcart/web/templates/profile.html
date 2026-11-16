@@ -20,6 +20,7 @@
     {% else %}
     <a class="autofill-alt" href="/silpo">✨ Підключіть «Сільпо» — заповнимо за вас →</a>
     {% endif %}
+    <a class="notify-link" href="/notify">🔔 Сповіщення в Telegram →</a>
     <div class="wiz-prog" aria-hidden="true"><i id="wizBar"></i></div>
     <ol class="wiz-dots" id="wizDots">
       {% for t in ['Сім\'я', 'Смак', 'Обмеження', 'Щотижня', 'Гроші', 'Готово'] %}<li><button type="button" data-go="{{ loop.index0 }}">{{ t }}</button></li>{% endfor %}

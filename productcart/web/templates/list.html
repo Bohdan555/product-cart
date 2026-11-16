@@ -69,6 +69,19 @@ document.getElementById('loc-btn').addEventListener('click', function () {
   var state = { sort: '{{ sort }}', cat: {{ cat|tojson }} }, loading = false, io = null;
 
   // «+ У кошик»: одна обробка для всіх карток, і довантажених теж
+  // «🔔»: стежити за таким товаром — пишемо в Telegram, коли буде знижка
+  feed.addEventListener('click', function (e) {
+    var b = e.target.closest('.pbell'); if (!b || b.disabled) return;
+    var fd = new FormData(); fd.append('csrf', CSRF); fd.append('word', b.dataset.word); b.disabled = true;
+    fetch('/notify/watch', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { b.disabled = false; return; }
+        document.querySelectorAll('.pbell').forEach(function (x) { if (x.dataset.word === d.word) { x.classList.add('on'); x.disabled = true; } });
+        if (window.haptic) haptic(12);
+        if (window.toast) toast(d.linked ? 'Стежимо: ' + d.word + ' 🔔' : 'Стежимо: ' + d.word + '. Підключіть Telegram у «Сповіщеннях»');
+      }).catch(function () { b.disabled = false; });
+  });
+
   feed.addEventListener('click', function (e) {
     var b = e.target.closest('.padd[data-pid]'); if (!b || b.disabled) return;
     var fd = new FormData(); fd.append('csrf', CSRF); fd.append('pid', b.dataset.pid); fd.append('name', b.dataset.name); fd.append('weighted', b.dataset.w);

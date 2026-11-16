@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Сповіщення — Кошик з акцій{% endblock %}
+{% block body %}
+<section class="intro">
+  <h1 class="xh">Сповіщення в <span class="hl">Telegram</span></h1>
+</section>
+{% if saved %}<div class="ok" style="margin-bottom:12px">Збережено ✓</div>{% endif %}
+
+<div class="card stack ntg" style="--c:var(--p-sky)">
+  {% if chat %}
+  <p class="ntg-on"><span aria-hidden="true">✅</span> <b>Telegram підключено</b> · бот <a href="https://t.me/{{ bot }}" target="_blank" rel="noopener">@{{ bot }}</a></p>
+  <form method="post" action="/notify" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="action" value="unlink">
+    <button type="submit" class="btn alt small">Відключити</button></form>
+  {% elif not tg_on %}
+  <p>Бот ще налаштовується — загляньте трохи згодом.</p>
+  {% else %}
+  <p><b>Отримуйте акції просто в Telegram</b></p>
+  <p><a class="btn" href="{{ start_url }}" target="_blank" rel="noopener" data-turbo="false"><span aria-hidden="true">✈️</span> Підключити Telegram</a></p>
+  <small class="hint">Відкриється бот @{{ bot }} — натисніть «Start». Потім оновіть цю сторінку.</small>
+  {% endif %}
+  {% if not silpo %}<div class="note warnbox">Акції надходять від «Сільпо» — <a href="/silpo">підключіть «Сільпо»</a>, щоб сповіщення працювали.</div>{% endif %}
+</div>
+
+<form method="post" action="/notify" class="card stack nset" data-turbo="false">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <label class="nrow"><input type="checkbox" name="tg_deals" value="1" {% if p.tg_deals %}checked{% endif %}>
+    <span><b>🔔 Цікаві акції</b><small>за вашим списком і великі знижки (від 25%) на те, що ви купуєте</small></span></label>
+  <label class="nrow"><input type="checkbox" name="tg_weekly" value="1" {% if p.tg_weekly %}checked{% endif %}>
+    <span><b>🍽 Меню на тиждень</b><small>щопонеділка зранку</small></span></label>
+  <div>
+    <b>Стежити за</b>
+    <div class="nchips" id="nchips">{% for w in p.watch %}<span class="nchip">{{ w }}<button type="button" aria-label="Прибрати {{ w }}">×</button></span>{% endfor %}</div>
+    <div class="nadd"><input id="nword" placeholder="кава, лосось, підгузки…" autocomplete="off" maxlength="40"><button type="button" class="btn alt small" id="nplus">Додати</button></div>
+    <small class="hint">Або натискайте «🔔» на картках акцій.</small>
+    <input type="hidden" name="watch" id="nwatch" value="{{ p.watch|join(', ') }}">
+  </div>
+  <div><button type="submit" class="btn">Зберегти</button></div>
+</form>
+<script>
+(function () {
+  var box = document.getElementById('nchips'), inp = document.getElementById('nword'), hid = document.getElementById('nwatch');
+  function sync() { hid.value = [].map.call(box.querySelectorAll('.nchip'), function (c) { return c.firstChild.textContent; }).join(', '); }
+  function add() {
+    var w = inp.value.trim().toLowerCase(); if (w.length < 2) return;
+    w.split(',').forEach(function (x) { x = x.trim(); if (x.length < 2) return;
+      var c = document.createElement('span'); c.className = 'nchip'; c.textContent = x;
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = '×'; b.setAttribute('aria-label', 'Прибрати ' + x); c.appendChild(b); box.appendChild(c); });
+    inp.value = ''; sync(); if (window.haptic) haptic(8);
+  }
+  document.getElementById('nplus').onclick = add;
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  box.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { b.parentNode.remove(); sync(); } });
+})();
+</script>
+{% endblock %}

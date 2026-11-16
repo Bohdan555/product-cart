@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS offers_cache (
   chain TEXT NOT NULL, store_id TEXT NOT NULL, fetched_at TEXT NOT NULL, data TEXT NOT NULL,
   PRIMARY KEY (chain, store_id)
 );
+-- Telegram: чат, який людина сама прив'язала через /start, і що вже надіслали (щоб не повторюватись).
+CREATE TABLE IF NOT EXISTS tg_links (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  chat_id TEXT NOT NULL,
+  linked_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tg_sent (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  sent_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
 """
 
 
