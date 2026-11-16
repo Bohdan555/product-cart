@@ -1098,3 +1098,18 @@ body:has(.su) footer{display:none}
 .eat-sum b{color:var(--ink)}.eat-sum .sv,.eat-sum .sv b{color:var(--accent);font-weight:800}
 .eat-sum .demo{background:var(--p-citrus);color:var(--ink);border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:700;text-decoration:none}
 .eat-next{display:flex;gap:8px;margin:6px 0 22px}.eat-next .btn{flex:1;text-align:center}
+
+/* ---------- «Що їмо»: рядок на вечір ---------- */
+.eat-list{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.eat-row{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:20px;box-shadow:0 1px 0 var(--line);padding:6px 6px 6px 8px}
+.eat-row.fresh{animation:su-pop .45s cubic-bezier(.3,1.4,.5,1) both}
+.eat-open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:none;padding:4px;text-align:left;color:var(--ink);font:inherit;cursor:pointer}
+.eat-day{width:28px;flex:none;font-weight:800;font-size:13px;color:var(--muted)}
+.eat-open img,.eat-em{width:56px;height:56px;border-radius:14px;object-fit:cover;flex:none}
+.eat-em{display:grid;place-items:center;background:var(--chip);font-size:28px}
+.eat-t{min-width:0}.eat-t b{display:block;font-size:15.5px;line-height:1.25}
+.eat-t small{color:var(--muted);font-size:13px}
+.eat-swap{width:40px;height:40px;border-radius:50%;border:0;background:var(--chip);color:var(--ink);display:grid;place-items:center;cursor:pointer;flex:none}
+.eat-swap svg{width:20px;height:20px}
+.eat-go{display:block;text-align:center;width:100%}
+.eat-own{text-align:center;margin:12px 0 20px}.eat-own a{color:var(--accent);font-weight:700;text-decoration:none}

@@ -886,8 +886,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu = m.ids
         return m, changed
 
+    @app.get("/buy", response_class=HTMLResponse)
+    async def buy_page(request: Request, refresh: int = 0):
+        """Крок ③ «Що купити»: список до меню цього тижня й кошик «Сільпо»."""
+        return await menu_page(request, refresh, view="buy")
+
     @app.get("/menu", response_class=HTMLResponse)
-    async def menu_page(request: Request, refresh: int = 0):
+    async def menu_page(request: Request, refresh: int = 0, view: str = "eat"):
         u = user_of(request)
         p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
         link, stores, offers, notice, is_demo = await menu_offers(u, p, bool(refresh))
@@ -901,7 +906,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       days=day_labels(p), fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
                       stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"),
-                      fresh=bool(request.query_params.get("fresh")), hot=hot_deals(offers, m))
+                      fresh=bool(request.query_params.get("fresh")), hot=hot_deals(offers, m),
+                      view="buy" if view == "buy" else "eat")
         return keep_guest(resp, p) if (changed and not u) else resp
 
     async def menu_form(request: Request):
@@ -1052,7 +1058,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if key not in menu.PANTRY:
             return HTMLResponse("Невідомий продукт.", status_code=400)
         p.pantry_buy = [k for k in p.pantry_buy if k != key] if key in p.pantry_buy else p.pantry_buy + [key]
-        return menu_done(u, p, health, "/menu#list")
+        return menu_done(u, p, health, "/buy")
 
     # ---------- перегляд кошика «Сільпо» ----------
     @app.get("/silpo/cart", response_class=HTMLResponse)
@@ -1477,7 +1483,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             p.fridge_at = None
         save_profile(u["id"], p, health)
         analytics.track(conn, u["id"], "fridge_removed", key=key)
-        return go("/menu#list")
+        return go("/buy")
 
     # ---------- мої страви ----------
     def ing_choices() -> list[tuple[str, str, str]]:

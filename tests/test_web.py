@@ -181,27 +181,28 @@ def test_nearby_stores_within_radius(client):
 def test_menu_page_and_settings(client):
     token = register(client)
     r = client.get("/menu")
-    assert r.status_code == 200 and "Що <span" in r.text and "демо-ціни" in r.text and "Список покупок" in r.text
-    assert r.text.count('<article class="day') == 5 and "Як готувати" in r.text
+    assert r.status_code == 200 and "Що <span" in r.text and "демо-ціни" in r.text and 'href="/buy"' in r.text
+    assert r.text.count('<li class="eat-row') == 5 and "Як готувати" in r.text and 'id="list"' not in r.text
+    assert 'id="list"' in client.get("/buy").text and "<i>3</i>Що купити" in client.get("/buy").text
     assert client.post("/menu/settings", data={"csrf": "bad", "dinners": "3"}).status_code == 400
     assert client.post("/menu/settings", data={"csrf": token, "dinners": "3"}).status_code == 303
     assert client.post("/menu/settings", data={"csrf": token, "max_minutes": "30"}).status_code == 303
     assert client.post("/menu/settings", data={"csrf": token, "people": "2"}).status_code == 303
     html = client.get("/menu").text
-    assert html.count('<article class="day') == 3 and "3 вечері · 2 людини" in html
-    titles = re.findall(r'<h3 class="dt">([^<]+)</h3>', html)
+    assert html.count('<li class="eat-row') == 3 and "3 вечері · 2 людини" in html
+    titles = re.findall(r'<span class="eat-t"><b>([^<]+)</b>', html)
     r = client.post("/menu/swap", data={"csrf": token, "i": "1"})
     assert r.status_code == 303 and r.headers["location"] == "/menu?swapped=1#d1"
-    after = re.findall(r'<h3 class="dt">([^<]+)</h3>', client.get("/menu").text)
+    after = re.findall(r'<span class="eat-t"><b>([^<]+)</b>', client.get("/menu").text)
     assert after[0] == titles[0] and after[1] != titles[1] and after[2] == titles[2]
     # «закінчилось» додає запас у кошик і повертається назад
-    key = re.search(r'name="key" value="([a-z_]+)"', client.get("/menu").text).group(1)
+    key = re.search(r'name="key" value="([a-z_]+)"', client.get("/buy").text).group(1)
     client.post("/menu/pantry", data={"csrf": token, "key": key})
-    assert "Докупити:" in client.get("/menu").text
+    assert "Докупити:" in client.get("/buy").text
     assert client.post("/menu/pantry", data={"csrf": token, "key": "evil"}).status_code == 400
     # збереження профілю не скидає меню
     client.post("/profile", data={"csrf": token, "household": "2", "min_discount": "10"})
-    assert re.findall(r'<h3 class="dt">([^<]+)</h3>', client.get("/menu").text) == after
+    assert re.findall(r'<span class="eat-t"><b>([^<]+)</b>', client.get("/menu").text) == after
     assert client.get("/photos").status_code == 200
 
 
@@ -215,7 +216,7 @@ def test_landing_and_guest_menu(client):
     assert r.status_code == 200 and "демо-ціни" in r.text and "pc_guest" in client.cookies
     assert client.post("/menu/settings", data={"people": "4"}).headers["location"] == "/menu"
     assert client.post("/menu/settings", data={"dinners": "3"}).status_code == 303
-    assert client.get("/menu").text.count('<article class="day') == 3
+    assert client.get("/menu").text.count('<li class="eat-row') == 3
     first = re.search(r'id="rec0".*?<h3[^>]*>([^<]+)<', client.get("/menu").text, re.S)
     assert client.post("/menu/swap", data={"i": "0"}).headers["location"].startswith("/menu?swapped=0")
     after = re.search(r'id="rec0".*?<h3[^>]*>([^<]+)<', client.get("/menu").text, re.S)
@@ -316,12 +317,12 @@ def test_menu_to_silpo_cart(tmp_path):
     app = create_app(db_path=str(tmp_path / "c.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
     with TestClient(app, follow_redirects=False) as c:
         token = register(c)
-        assert "Зробити кошик у «Сільпо»" in c.get("/menu").text               # без «Сільпо» — пропозиція підключити
+        assert "Зробити кошик у «Сільпо»" in c.get("/buy").text               # без «Сільпо» — пропозиція підключити
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
         c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
         c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
-        assert "Зібрати кошик у «Сільпо»" in c.get("/menu").text
+        assert "Зібрати кошик у «Сільпо»" in c.get("/buy").text
         r = c.post("/menu/silpo-cart", data={"csrf": token, "bought": ""})
         assert "вже 1 товар" in r.text and 'name="confirm"' in r.text   # попередження про наявний кошик
         assert shared.items == {"other": 1}                            # до підтвердження нічого не змінено
@@ -597,7 +598,9 @@ def test_my_dishes_in_menu_and_cart(client):
     page = client.get("/dishes").text
     assert "Мамині деруни" in page and "у меню" in page
     m = client.get("/menu").text
-    assert "Мамині деруни" in m and ">моя<" in m and "Для ваших страв" in m and "кріп" in m and "Натерти картоплю" in m
+    assert "Мамині деруни" in m and " · моя" in m and "Натерти картоплю" in m
+    buy = client.get("/buy").text
+    assert "Для ваших страв" in buy and "кріп" in buy
     # зберігається на 4 порції: 600 г на 2 порції → 1200 г
     p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
     assert '"potato": 1200.0' in p and "bogus" not in p
@@ -616,7 +619,7 @@ def test_menu_setup_wizard_guest_and_user(client):
     r = client.post("/menu/setup", data={"people": "3", "days": "0,2,4", "minutes": "30", "likes": "fish", "hide": "pork", "budget": "0"})
     assert r.headers["location"] == "/menu?fresh=1"
     m = client.get("/menu?fresh=1").text
-    assert "fresh-in" in m and "celebrate" in m and "Ср ·" in m
+    assert "fresh-in" in m and "celebrate" in m and '<span class="eat-day">Ср</span>' in m
     assert client.get("/menu/setup").text.count('aria-pressed="true"') >= 3      # вибрані дні збереглись у cookie гостя
     token = register(client)
     r = client.post("/menu/setup", data={"csrf": token, "people": "4", "days": "5,6", "minutes": "180", "budget": "1500"})
