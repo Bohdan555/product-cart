@@ -13,10 +13,11 @@
       <div class="hv-field" id="hvField">
         <span id="hvChips" class="hv-chips"></span>
         <input type="text" id="hvIn" placeholder="Напишіть: курка, рис, яйця…" autocomplete="off" autocapitalize="off" enterkeyhint="done" aria-label="Що є вдома" aria-describedby="hvHint">
+        <button type="button" class="hv-mic" id="hvMic" aria-label="Надиктувати, що є"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
       </div>
       <div class="hv-sug" id="hvSug" role="listbox" hidden></div>
     </div>
-    <p class="hv-hint" id="hvHint" aria-live="polite">Через кому або Enter. Можна й так: картошка, помідори, творог.</p>
+    <p class="hv-hint" id="hvHint" aria-live="polite">Напишіть або натисніть 🎤 і скажіть: «курка, рис, яйця і трохи сиру».</p>
 
     <p class="hv-lbl">Часто є вдома</p>
     <div class="hv-pop" id="hvPop">
@@ -82,12 +83,6 @@
     var x = document.createElement('i'); x.textContent = '×'; x.setAttribute('aria-hidden', 'true'); c.appendChild(x);
     c.onclick = function () { onRemove(); tap(); inp.focus(); }; return c;
   }
-  function add(text) {
-    var k = match(text), t = norm(text); if (!t) return;
-    if (k) { if (have.indexOf(k) < 0) have.push(k); $('hvHint').textContent = WORDS[k][0] + ' ✓'; }
-    else if (other.indexOf(t) < 0) { other.push(t); $('hvHint').textContent = '«' + t + '» немає в наших рецептах — врахуємо як «інше»'; }
-    tap(); sync();
-  }
   function suggest() {
     var t = norm(inp.value.split(',').pop()); sug.innerHTML = '';
     if (t.length < 1) { sug.hidden = true; return; }
@@ -96,10 +91,93 @@
       b.onmousedown = function (e) { e.preventDefault(); }; b.onclick = function () { if (have.indexOf(k) < 0) have.push(k); inp.value = ''; sug.hidden = true; tap(); sync(); inp.focus(); }; sug.appendChild(b); });
     sug.hidden = !hits.length;
   }
-  function flush() { inp.value.split(',').forEach(function (p) { if (norm(p)) add(p); }); inp.value = ''; sug.hidden = true; }
-  inp.addEventListener('input', function () { if (/,/.test(inp.value)) { var parts = inp.value.split(','); inp.value = parts.pop(); parts.forEach(add); } suggest(); });
+  // Фраза → продукти: «в мене є курка рис і трохи твердого сиру» → курка, рис, сир. Довші збіги (2–3 слова) — першими.
+  var STOP = ['є', 'в', 'у', 'мене', 'нас', 'вдома', 'дома', 'трохи', 'пів', 'кілька', 'ще', 'і', 'й', 'та', 'а', 'також', 'ну',
+    'так', 'десь', 'шт', 'штук', 'штуки', 'кг', 'кіло', 'грам', 'грамів', 'літр', 'літра', 'пачка', 'пачки', 'банка', 'упаковка',
+    'половина', 'одна', 'один', 'два', 'дві', 'три', 'чотири', "п'ять", 'багато', 'мало', 'для', 'з', 'із', 'ось', 'там', 'це',
+    'може', 'свіжий', 'свіжа', 'свіже', 'свіжі', 'залишки', 'треба', 'доїсти', 'ще', 'маю', 'є'];
+  // Слова в будь-якому відмінку: «сиру» = «сир», «курки» = «курка», «твердого сиру» = «твердий сир».
+  function stem(x) { return x.length > 4 ? x.slice(0, -2) : (x.length > 3 ? x.slice(0, -1) : x); }
+  function wordEq(a, b) {
+    if (a === b) return true;
+    var sa = stem(a), sb = stem(b);
+    return sa === sb || (sb.length >= 4 && a.indexOf(sb) === 0) || (sa.length >= 4 && b.indexOf(sa) === 0);
+  }
+  function gramKey(ws) {      // n слів → ключ продукту, якщо якась назва складається рівно з цих слів
+    for (var k in WORDS) for (var j = 0; j < WORDS[k][2].length; j++) {
+      var sw = WORDS[k][2][j].split(' ');
+      if (sw.length === ws.length && sw.every(function (x, i) { return wordEq(ws[i], x); })) return k;
+    }
+    return null;
+  }
+  function parsePhrase(text) {
+    var keys = [], others = [];
+    var t = norm(text).replace(/[.!?;:]/g, ',').replace(/\d+([.,]\d+)?/g, ' ');
+    t.split(/,|\s(?:і|й|та|а також|а|ще)\s/).forEach(function (part) {
+      var w = norm(part).split(' ').filter(function (x) { return x && STOP.indexOf(x) < 0; }), i = 0, unk = [];
+      while (i < w.length) {
+        var hit = null, len = 0;
+        for (var n = Math.min(3, w.length - i); n >= 1; n--) { var k = gramKey(w.slice(i, i + n)); if (k) { hit = k; len = n; break; } }
+        if (hit) { if (unk.length) { others.push(unk.join(' ')); unk = []; } if (keys.indexOf(hit) < 0) keys.push(hit); i += len; }
+        else { unk.push(w[i]); i++; }
+      }
+      if (unk.length) others.push(unk.join(' '));
+    });
+    return { keys: keys, others: others };
+  }
+  function addPhrase(text) {
+    var r = parsePhrase(text), n = 0;
+    r.keys.forEach(function (k) { if (have.indexOf(k) < 0) { have.push(k); n++; } });
+    r.others.forEach(function (o) { if (o.length > 1 && other.indexOf(o) < 0) other.push(o); });
+    sync(); return { added: n, others: r.others };
+  }
+  function flush() {
+    var txt = inp.value; inp.value = ''; sug.hidden = true; if (!norm(txt)) return;
+    var r = addPhrase(txt); tap();
+    $('hvHint').textContent = r.added ? 'Додали: ' + r.added + (r.others.length ? ' · «' + r.others.join('», «') + '» немає в рецептах' : '') : (r.others.length ? '«' + r.others.join('», «') + '» немає в наших рецептах' : '');
+  }
+
+  // 🎤 Диктування: розпізнавання мови браузера (безкоштовно, без ШІ). Де його немає — мікрофон клавіатури.
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false, mic = $('hvMic');
+  function hint(t) { $('hvHint').textContent = t; }
+  mic.addEventListener('click', function () {
+    if (!SR) { inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є — ми розберемо.'); return; }
+    if (listening && rec) { rec.stop(); return; }
+    var heard = '';
+    try {
+      rec = new SR(); rec.lang = 'uk-UA'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+    } catch (e) { inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є.'); return; }
+    rec.onresult = function (e) {
+      var interim = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) heard += e.results[i][0].transcript + ' '; else interim += e.results[i][0].transcript; }
+      inp.value = (heard + interim).trim();
+    };
+    rec.onerror = function (e) {
+      hint(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Дозвольте мікрофон для сайту в налаштуваннях браузера.'
+        : e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
+    };
+    rec.onend = function () {
+      listening = false; mic.classList.remove('on'); $('hvField').classList.remove('listening');
+      var txt = (heard || inp.value).trim(); inp.value = '';
+      if (txt) { var r = addPhrase(txt); hint(r.added ? '«' + txt + '» → додали ' + r.added : 'Почули «' + txt + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
+    };
+    try { rec.start(); } catch (e) { hint('Мікрофон зайнятий. Спробуйте ще раз.'); return; }
+    listening = true; mic.classList.add('on'); $('hvField').classList.add('listening'); hint('Слухаю… скажіть, що є'); tap(15);
+  });
+  inp.addEventListener('input', function () {
+    if (/,/.test(inp.value)) {      // кома — частина до неї готова: розбираємо як фразу («пів курки» → курка)
+      var parts = inp.value.split(','); inp.value = parts.pop();
+      var r = addPhrase(parts.join(',')); if (r.added) tap();
+      if (r.others.length) $('hvHint').textContent = '«' + r.others.join('», «') + '» немає в наших рецептах';
+    }
+    suggest();
+  });
   inp.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); var first = sug.querySelector('button'); if (first && !sug.hidden && !match(inp.value)) first.click(); else flush(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var first = sug.querySelector('button');      // підказку беремо, лише коли фраза сама нічого не дала («тв» → «Твердий сир»)
+      if (first && !sug.hidden && !parsePhrase(inp.value).keys.length) first.click(); else flush();
+    }
     if (e.key === 'Backspace' && !inp.value) { if (other.length) other.pop(); else have.pop(); sync(); }
   });
   inp.addEventListener('blur', function () { setTimeout(function () { if (inp.value.trim()) flush(); sug.hidden = true; }, 150); });

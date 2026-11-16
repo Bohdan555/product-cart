@@ -1135,3 +1135,11 @@ body:has(.su) footer{display:none}
 .hv-photo-t{flex:1;min-width:0}.hv-photo-t b{display:block}.hv-photo-t small{color:color-mix(in srgb,var(--ink) 65%,transparent)}
 .hv-photo .pick-row{margin-top:0}
 .hv-photo.scanning::after{content:"";position:absolute;left:0;right:0;height:40%;top:-40%;background:linear-gradient(transparent,color-mix(in srgb,var(--accent) 45%,transparent));animation:td-scan 1s ease-in-out infinite alternate}
+
+.hv-mic{flex:none;width:44px;height:44px;margin-left:auto;border:0;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;transition:transform .15s}
+.hv-mic svg{width:22px;height:22px}
+.hv-mic:active{transform:scale(.92)}
+.hv-mic.on{background:var(--bad);color:#fff;animation:hv-pulse 1.1s ease-out infinite}
+.hv-field.listening{border-color:var(--bad)}
+@keyframes hv-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bad) 55%,transparent)}100%{box-shadow:0 0 0 14px transparent}}
+@media (prefers-reduced-motion:reduce){.hv-mic.on{animation:none}}
