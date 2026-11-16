@@ -63,44 +63,58 @@ def dictionary() -> str:
     return "\n".join(f"{k}: {v[0]}" for k, v in sorted(menu.INGREDIENTS.items()))
 
 
-_model_cache: dict[str, str] = {}
+# Кандидати через AI Gateway — від кращої дешевої моделі. Безкоштовні кредити Vercel пускають не до всіх моделей
+# (Claude Opus 5.5 — лише на платних), тож беремо першу, яку шлюз дозволяє, і запам'ятовуємо її.
+PREFERRED = ["anthropic/claude-haiku-5.5", "anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5",
+             "anthropic/claude-sonnet-5", "anthropic/claude-opus-5.5"]
+NO_EFFORT = ("haiku-4.5", "sonnet-4.5", "haiku-4-5", "sonnet-4-5")   # ці моделі не знають output_config.effort
+
+_model_cache: dict = {}
 
 
-def gateway_model() -> str:
-    """Точний id Claude Opus 5.5 у каталозі AI Gateway (публічний /v1/models), з кешем на процес."""
+def gateway_candidates() -> list[str]:
+    """Моделі для спроби: FRIDGE_MODEL (якщо задано) або PREFERRED, що є в живому каталозі шлюзу."""
     if os.environ.get("FRIDGE_MODEL"):
-        return os.environ["FRIDGE_MODEL"]
-    if "id" not in _model_cache:
-        ids = [m.get("id", "") for m in httpx.get(f"{GATEWAY}/v1/models", timeout=10).json().get("data", [])]
-        pick = next((i for i in ids if i in ("anthropic/claude-opus-5.5", "anthropic/claude-opus-5-5")), None)
-        if not pick:      # не підставляємо іншу модель мовчки — краще явна помилка в лозі
-            raise RuntimeError("AI Gateway: немає Claude Opus 5.5 у каталозі; схожі: "
-                               + ", ".join(i for i in ids if "opus" in i)[:300])
-        _model_cache["id"] = pick
-        logs.event(log, "fridge.model", model=pick)
-    return _model_cache["id"]
+        return [os.environ["FRIDGE_MODEL"]]
+    if "ids" not in _model_cache:
+        _model_cache["ids"] = [m.get("id", "") for m in
+                               httpx.get(f"{GATEWAY}/v1/models", timeout=10).json().get("data", [])]
+    ids = _model_cache["ids"]
+    found = [m for m in PREFERRED if m in ids]
+    if not found:
+        raise RuntimeError("AI Gateway: немає жодної з моделей Claude; є: "
+                           + ", ".join(i for i in ids if i.startswith("anthropic/"))[:300])
+    good = _model_cache.get("good")
+    return ([good] if good in found else []) + [m for m in found if m != good and m not in _model_cache.get("blocked", set())]
+
+
+def _blocked(e: Exception) -> bool:
+    """Шлюз не пускає до цієї моделі (безкоштовний рівень, немає провайдера) — пробуємо наступну."""
+    text = str(e)
+    return any(x in text for x in ("Free tier", "no_providers_available", "model_not_found", "not found"))
 
 
 def make_client(oidc_token: str | None):
-    """(клієнт Anthropic, модель). Напряму — з ANTHROPIC_API_KEY; інакше через AI Gateway з OIDC або AI_GATEWAY_API_KEY."""
+    """(клієнт Anthropic, [моделі]). Напряму — з ANTHROPIC_API_KEY; інакше AI Gateway з OIDC або AI_GATEWAY_API_KEY."""
     import anthropic
 
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return anthropic.Anthropic(timeout=60, max_retries=1), DIRECT_MODEL
+        return anthropic.Anthropic(timeout=60, max_retries=1), [DIRECT_MODEL]
     token = oidc_token or os.environ.get("VERCEL_OIDC_TOKEN") or os.environ.get("AI_GATEWAY_API_KEY")
     if not token:
         raise NotConfigured("немає ключа для розпізнавання фото")
-    return anthropic.Anthropic(base_url=GATEWAY, auth_token=token, api_key=None, timeout=60, max_retries=1), gateway_model()
+    client = anthropic.Anthropic(base_url=GATEWAY, auth_token=token, api_key=None, timeout=60, max_retries=1)
+    return client, gateway_candidates()
 
 
-def recognize(image: bytes, media_type: str, oidc_token: str | None = None) -> list[dict]:
-    """Фото → [{name, ingredient, amount, confident}]."""
-    client, model = make_client(oidc_token)
-    t = time.perf_counter()
-    response = client.messages.create(
+def _ask(client, model: str, image: bytes, media_type: str):
+    out = {"format": {"type": "json_schema", "schema": schema()}}
+    if not any(x in model for x in NO_EFFORT):
+        out["effort"] = "low"
+    return client.messages.create(
         model=model,
         max_tokens=4000,
-        output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema()}},
+        output_config=out,
         system=SYSTEM + "\n\nДовідник інгредієнтів (ключ: назва):\n" + dictionary(),
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": media_type,
@@ -108,14 +122,37 @@ def recognize(image: bytes, media_type: str, oidc_token: str | None = None) -> l
             {"type": "text", "text": "Що з продуктів є на фото?"},
         ]}],
     )
-    if response.stop_reason == "refusal":
-        raise RuntimeError("модель відмовилась розпізнавати це фото")
-    text = next((b.text for b in response.content if b.type == "text"), "")
-    items = json.loads(text).get("items", []) if text else []
-    logs.event(log, "fridge.scan", model=model, items=len(items), ms=round((time.perf_counter() - t) * 1000),
-               in_tokens=getattr(response.usage, "input_tokens", None),
-               out_tokens=getattr(response.usage, "output_tokens", None))
-    return clean(items)
+
+
+def recognize(image: bytes, media_type: str, oidc_token: str | None = None) -> list[dict]:
+    """Фото → [{name, ingredient, amount, confident}]. Перша модель, до якої пускає шлюз."""
+    import anthropic
+
+    client, models = make_client(oidc_token)
+    t = time.perf_counter()
+    last: Exception | None = None
+    for model in models:
+        try:
+            response = _ask(client, model, image, media_type)
+        except (anthropic.PermissionDeniedError, anthropic.NotFoundError, anthropic.BadRequestError) as e:
+            if not _blocked(e) and not isinstance(e, anthropic.NotFoundError):
+                raise
+            _model_cache.setdefault("blocked", set()).add(model)
+            logs.event(log, "fridge.model_skipped", logging.WARNING, model=model, err=str(e)[:200])
+            last = e
+            continue
+        if _model_cache.get("good") != model:
+            _model_cache["good"] = model
+            logs.event(log, "fridge.model", model=model)
+        if response.stop_reason == "refusal":
+            raise RuntimeError("модель відмовилась розпізнавати це фото")
+        text = next((b.text for b in response.content if b.type == "text"), "")
+        items = json.loads(text).get("items", []) if text else []
+        logs.event(log, "fridge.scan", model=model, items=len(items), ms=round((time.perf_counter() - t) * 1000),
+                   in_tokens=getattr(response.usage, "input_tokens", None),
+                   out_tokens=getattr(response.usage, "output_tokens", None))
+        return clean(items)
+    raise last or RuntimeError("немає доступної моделі")
 
 
 def clean(items: list[dict]) -> list[dict]:

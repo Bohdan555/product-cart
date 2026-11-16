@@ -70,3 +70,41 @@ def test_schema_lists_dictionary():
     enum = s["properties"]["items"]["items"]["properties"]["ingredient"]["enum"]
     assert "chicken_thigh" in enum and enum[-1] == "other"
     assert json.dumps(s)   # серіалізується для API
+
+
+def test_skips_models_blocked_on_free_tier(monkeypatch):
+    import anthropic
+    import httpx2
+
+    req = httpx2.Request("POST", "https://ai-gateway.vercel.sh/v1/messages")
+    blocked = anthropic.PermissionDeniedError(
+        "Free tier users do not have access to this model", body=None,
+        response=httpx2.Response(403, request=req))
+
+    class Block:
+        type, text = "text", json.dumps({"items": [{"name": "Морква", "ingredient": "carrot", "amount": "", "confident": True}]})
+
+    class Resp:
+        stop_reason, content = "end_turn", [Block()]
+
+        class usage:
+            input_tokens, output_tokens = 10, 5
+
+    calls = []
+
+    class Client:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                calls.append(kw["model"])
+                if kw["model"] == "anthropic/claude-sonnet-5.5":
+                    raise blocked
+                return Resp()
+
+    fridge._model_cache.clear()
+    monkeypatch.setattr(fridge, "make_client", lambda token: (Client(), ["anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5"]))
+    items = fridge.recognize(b"x", "image/jpeg")
+    assert [i["ingredient"] for i in items] == ["carrot"]
+    assert calls == ["anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5"]
+    assert fridge._model_cache["good"] == "anthropic/claude-haiku-4.5"
+    fridge._model_cache.clear()
