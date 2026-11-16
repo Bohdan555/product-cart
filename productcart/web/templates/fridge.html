@@ -14,12 +14,15 @@
 <form class="fr" id="fr" method="post" action="/fridge/save" data-turbo="false">
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
 
-  <label class="fr-shot" id="frShot">
-    <input type="file" id="frFile" accept="image/*" capture="environment" hidden>
+  <div class="fr-shot" id="frShot">
     <img id="frImg" alt="" hidden>
     <span class="fr-scan" aria-hidden="true"></span>
-    <span class="fr-cta" id="frCta"><span class="cam" aria-hidden="true">📸</span><b>Сфотографувати холодильник</b><small>або обрати фото чеку чи полиці</small></span>
-  </label>
+    <span class="fr-cta" id="frCta"><span class="cam" aria-hidden="true">📸</span><b>Сфотографуйте холодильник</b><small>полиці, чек або продукти на столі</small></span>
+  </div>
+  <div class="pick-row">
+    <label class="btn pick-btn">📷 Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
+    <label class="btn alt pick-btn">🖼 Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
+  </div>
   <p class="fr-state" id="frState" aria-live="polite"></p>
 
   <div class="fr-found" id="frFound"{% if not p.fridge and not p.fridge_other %} hidden{% endif %}>
@@ -50,20 +53,6 @@
   var $ = function (id) { return document.getElementById(id); };
   var CSRF = form.querySelector('[name=csrf]').value;
   var tap = function (ms) { if (window.haptic) haptic(ms || 10); };
-
-  // зменшуємо фото в браузері: швидше завантаження і дешевше розпізнавання
-  function shrink(file) {
-    return new Promise(function (ok, bad) {
-      var img = new Image(), url = URL.createObjectURL(file);
-      img.onload = function () {
-        var k = Math.min(1, 1568 / Math.max(img.width, img.height)), c = document.createElement('canvas');
-        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-        c.toBlob(function (b) { b ? ok(b) : bad(); }, 'image/jpeg', 0.85);
-      };
-      img.onerror = function () { bad(); }; img.src = url;
-    });
-  }
 
   function chip(it, i) {
     if (it.ingredient !== 'other' && form.querySelector('.fr-chip[data-key="' + it.ingredient + '"]')) return;
@@ -103,12 +92,14 @@
     if (all.length) remove(all, 'Прибрано все (' + all.length + ')');
   };
 
-  $('frFile').addEventListener('change', function () {
+  function onPhoto() {
     var f = this.files && this.files[0]; if (!f) return;
-    $('frImg').src = URL.createObjectURL(f); $('frImg').hidden = false; $('frCta').hidden = true;
+    try { $('frImg').src = URL.createObjectURL(f); $('frImg').hidden = false; $('frCta').hidden = true; } catch (e) {}
     $('frShot').classList.add('scanning'); $('frState').textContent = 'Дивимось, що є…'; tap(15);
-    shrink(f).then(function (blob) {
-      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('photo', blob, 'fridge.jpg');
+    var input = this;
+    window.shrinkPhoto(f).then(function (blob) {
+      input.value = '';
+      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('photo', blob, blob.type === 'image/jpeg' ? 'fridge.jpg' : (f.name || 'fridge'));
       return fetch('/fridge/scan', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
     }).then(function (d) {
       $('frShot').classList.remove('scanning');
@@ -119,7 +110,8 @@
       d.items.forEach(chip); tap(25);
       if (window.celebrate && useful) celebrate();
     }).catch(function () { $('frShot').classList.remove('scanning'); $('frState').textContent = 'Не вдалося надіслати фото. Перевірте інтернет.'; });
-  });
+  }
+  form.querySelectorAll('[data-photo]').forEach(function (i) { i.addEventListener('change', onPhoto); });
 
   $('frChips').addEventListener('click', function (e) {
     var c = e.target.closest('.fr-chip'); if (!c || c.classList.contains('gone')) return;

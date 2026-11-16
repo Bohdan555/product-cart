@@ -28,7 +28,8 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert "Увійти, щоб спробувати" in c.get("/fridge").text
         assert c.post("/fridge/scan", files={"photo": ("f.png", PNG, "image/png")}).status_code == 401
         token = register(c)
-        assert "Сфотографувати холодильник" in c.get("/fridge").text
+        page = c.get("/fridge").text
+        assert "Сфотографуйте холодильник" in page and page.count("class=\"pick-in\" data-photo") == 2 and "capture=\"environment\"" in page
         assert c.post("/fridge/scan", data={"csrf": token}, files={"photo": ("f.txt", b"hi", "text/plain")}).status_code == 400
         r = c.post("/fridge/scan", data={"csrf": token}, files={"photo": ("f.png", PNG, "image/png")},
                    headers={"x-vercel-oidc-token": "oidc-1"})
