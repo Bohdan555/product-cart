@@ -1067,7 +1067,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def photo_credits(request: Request):
         menu_photos()
         return render(request, "photos.html", user_of(request), credits=menu_credits(),
-                      status_note=db.get_setting(conn, unsplash.ERR_KEY),
+                      status_note=f"{db.get_setting(conn, unsplash.ERR_KEY)} · спроба {db.get_setting(conn, unsplash.TRY_KEY)} · ключ {'є' if unsplash.access_key() else 'немає'}",
                       unsplash={d: dict(p, by_url=unsplash.with_utm(p["by_url"]), img=unsplash.img_url(p["raw"], 192, 144))
                                 for d, p in unsplash.load(conn).items() if d not in menu_credits() and unsplash.usable(d, p)},
                       unsplash_home=unsplash.with_utm("https://unsplash.com"),
