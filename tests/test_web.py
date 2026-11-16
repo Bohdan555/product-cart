@@ -699,3 +699,13 @@ def test_client_log_accepts_mic_reports(client):
     r = client.post("/client-log", data={"event": "mic", "error": "service-not-allowed", "extra": "mic=ok"},
                     headers={"user-agent": "Mozilla/5.0 (Linux; Android 14) SamsungBrowser/25.0 Chrome/121"})
     assert r.status_code == 204
+
+
+def test_today_maybe_have_can_be_bought(client):
+    q = {"have": "potato,onion,carrot,chicken_thigh", "t": "60", "n": "2"}
+    page = client.get("/today/dish/thighs", params=q).text
+    assert "мабуть, є" in page and ">Немає</a>" in page
+    url = re.search(r'href="(/today/dish/thighs\?[^"]*need=oil[^"]*)"', page).group(1).replace("&amp;", "&")
+    page2 = client.get(url).text
+    assert "Олія соняшникова" in page2 and ">Є</a>" in page2 and "мабуть, є" not in page2   # тепер у «докупити» з ціною
+    assert "Показати реальні ціни" in page2       # є що докупити — пропонуємо ціни й кошик

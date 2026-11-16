@@ -730,13 +730,14 @@ class Option:
         return round(sum(l.regular - l.cost for l in self.lines), 2)
 
 
-def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3) -> list[Option]:
+def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3, need=()) -> list[Option]:
     """Три страви, для яких найменше докуповувати: спершу кількість бракуючого, далі — скільки свого
-    використовуємо, далі — ціна докупки. Вподобання й «не їм» з профілю діють як завжди."""
+    використовуємо, далі — ціна докупки. Вподобання й «не їм» з профілю діють як завжди.
+    `need` — з «мабуть, є» (олія, борошно, томатна паста) людина сказала «немає»: їх докуповуємо."""
     have = set(have) & set(INGREDIENTS)
     ctx = _Ctx(offers, profile, max_minutes)
     ctx.have = have
-    home = have | ASSUMED
+    home = have | (ASSUMED - set(need))
     opts = []
     for r in ctx.pool:
         d = ctx.dish(r, [])

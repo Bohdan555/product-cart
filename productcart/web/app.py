@@ -1324,8 +1324,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             t, n = 30, 2
         return have, t, n
 
-    def today_qs(have, t, n) -> str:
-        return urlencode({"have": ",".join(have), "t": t, "n": n})
+    def today_qs(have, t, n, need=()) -> str:
+        q = {"have": ",".join(have), "t": t, "n": n}
+        if need:
+            q["need"] = ",".join(need)
+        return urlencode(q)
+
+    def today_need(src) -> list[str]:
+        """«Немає» біля «мабуть, є»: ці запаси докуповуємо (з query або з форми)."""
+        return [k for k in str(src.get("need", "")).split(",") if k in menu.ASSUMED]
 
     async def today_offers(request: Request, u, n):
         p = load_profile(u["id"])[0] if u else guest_profile(request)
@@ -1359,13 +1366,17 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     async def today_dish(request: Request, rid: str):
         u = user_of(request)
         have, t, n = today_args(request)
+        need = today_need(request.query_params)
         p, link, stores, is_demo, offers = await today_offers(request, u, n)
-        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999) if o.dish.id == rid]
+        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999, need=need) if o.dish.id == rid]
         if not opts:
             return go(f"/today/dishes?{today_qs(have, t, n)}")
+        # посилання «Немає» / «Є» для запасів, що «мабуть, є»: перемикаємо продукт у need
+        toggle = {k: f"/today/dish/{rid}?" + today_qs(have, t, n, [x for x in need if x != k] if k in need else need + [k])
+                  for k in opts[0].dish.recipe.ingredients if k in menu.ASSUMED}
         return render(request, "today_dish.html", u, o=opts[0], qs=today_qs(have, t, n), is_demo=is_demo,
                       link=link, photos=menu_photos(), ingredients=menu.INGREDIENTS, fmt_qty=menu.fmt_qty,
-                      t=t, n=n, have=have)
+                      t=t, n=n, have=have, need=need, toggle=toggle)
 
     @app.post("/today/cooked", response_class=HTMLResponse)
     async def today_cooked(request: Request):
@@ -1399,13 +1410,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         _, stores, offers, notice, is_demo = await current_offers(u["id"], p, False)
         if is_demo:
             return go("/silpo")
-        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999) if o.dish.id == rid]
+        need = today_need(form)
+        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999, need=need) if o.dish.id == rid]
         if not opts or not opts[0].lines:
             return go("/today")
         o = opts[0]
         wants = silpo_cart.wants_from_menu(o.lines)
         ctx = dict(bought="", wanted=len(wants), cart_action="/today/cart",
-                   cart_hidden={"id": rid, "have": ",".join(have), "n": n})
+                   cart_hidden={"id": rid, "have": ",".join(have), "n": n, "need": ",".join(need)})
         return await put_in_silpo_cart(request, u, form, tokens, stores, wants, ctx, "today_cart", o.buy_saving, dish=rid)
 
     # ---------- що в холодильнику: фото → продукти вдома → меню доїдає їх ----------

@@ -1154,3 +1154,7 @@ body:has(.su) footer{display:none}
 .mic-btns{display:grid;gap:8px}
 @keyframes mic-up{from{transform:translateY(30px);opacity:0}}
 @media (prefers-reduced-motion:reduce){.mic-sheet[open]{animation:none}}
+
+.td-right{display:inline-flex;align-items:center;gap:8px;flex:none}
+.td-toggle{border-radius:999px;padding:5px 11px;font-weight:700;font-size:13px;text-decoration:none;background:var(--chip);color:var(--ink)}
+.td-toggle.no{background:var(--p-tomato)}
