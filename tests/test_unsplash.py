@@ -35,7 +35,7 @@ def test_no_key_does_nothing(tmp_path, monkeypatch):
     monkeypatch.delenv("UNSPLASH_ACCESS_KEY", raising=False)
     conn = db.connect(tmp_path / "t.db")
     assert unsplash.sync(conn, ["plov"]) == 0
-    unsplash.ensure(conn, ["plov"])
+    assert unsplash.claim(conn, ["plov"]) == []
     assert db.get_setting(conn, unsplash.TRY_KEY) is None
 
 

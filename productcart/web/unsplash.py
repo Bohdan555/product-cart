@@ -20,10 +20,11 @@ log = logging.getLogger("productcart.unsplash")
 
 API = "https://api.unsplash.com"
 KEY = "unsplash_photos"
-TRY_KEY = "unsplash_try"
+TRY_KEY = "unsplash_try_at"
+ERR_KEY = "unsplash_err"
 UTM = "utm_source=koshyk_z_aktsiy&utm_medium=referral"
 BATCH = 20            # демо-ключ: 50 запитів/год, на страву йде 2 (пошук + download)
-RETRY = timedelta(hours=1)
+RETRY = timedelta(minutes=15)
 
 # Англійською Unsplash шукає значно краще.
 QUERIES = {
@@ -130,8 +131,10 @@ def sync(conn, missing: list[str], client: httpx.Client | None = None) -> int:
             try:
                 p = fetch_one(client, QUERIES[d])
             except httpx.HTTPError as e:
+                if not found:
+                    raise      # жодного — хай буде видно причину
                 log.warning("Unsplash: %s — %s", d, e)
-                break      # ліміт або мережа — спробуємо пізніше
+                break      # ліміт або мережа — решту пізніше
             if p:
                 found[d] = p
     finally:
@@ -145,24 +148,29 @@ def sync(conn, missing: list[str], client: httpx.Client | None = None) -> int:
     return len(found)
 
 
-def ensure(conn, missing: list[str]) -> None:
-    """Раз на годину у фоні дошукує фото для страв, яких ще немає. Сторінку не затримує."""
-    if not access_key() or not [d for d in missing if d in QUERIES]:
-        return
-    if not _lock.acquire(blocking=False):
-        return
-    now = datetime.now(timezone.utc)
-    last = db.get_setting(conn, TRY_KEY)
-    if last and datetime.fromisoformat(last) > now - RETRY:
+def claim(conn, missing: list[str]) -> list[str]:
+    """Чи пора дошукати фото: є ключ, є страви без фото і минуло RETRY від останньої спроби.
+    Повертає список страв для фонового sync (порожній — нічого не робити)."""
+    todo = [d for d in missing if d in QUERIES]
+    if not access_key() or not todo or not _lock.acquire(blocking=False):
+        return []
+    try:
+        now = datetime.now(timezone.utc)
+        last = db.get_setting(conn, TRY_KEY)
+        if last and datetime.fromisoformat(last) > now - RETRY:
+            return []
+        db.set_setting(conn, TRY_KEY, now.isoformat())
+        return todo
+    finally:
         _lock.release()
-        return
-    db.set_setting(conn, TRY_KEY, now.isoformat())
 
-    def run():
-        try:
-            sync(conn, missing)
-        except Exception:   # фото — не критично
-            log.exception("Unsplash: не вдалося")
-        finally:
-            _lock.release()
-    threading.Thread(target=run, daemon=True).start()
+
+def run(conn, todo: list[str]) -> None:
+    """Фонова задача після відповіді. Помилку пишемо в лог і в settings (unsplash_err)."""
+    try:
+        n = sync(conn, todo)
+        db.set_setting(conn, ERR_KEY, f"ok: +{n}")
+        print(f"Unsplash: додано {n}", flush=True)
+    except Exception as e:   # фото — не критично
+        db.set_setting(conn, ERR_KEY, f"{type(e).__name__}: {e}"[:300])
+        print(f"Unsplash: помилка {type(e).__name__}: {e}", flush=True)

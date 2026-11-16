@@ -16,4 +16,5 @@
   <div><b>{{ titles.get(id, id) }}</b><br><span class="hint">{{ c.author }} · <a href="{{ c.page }}" target="_blank" rel="noopener">{{ c.lic }}</a>{% if c.lic_url %} (<a href="{{ c.lic_url }}" target="_blank" rel="noopener">текст ліцензії</a>){% endif %}</span></div>
 {% endfor %}
 </div>
+{% if status_note %}<!-- unsplash: {{ status_note }} -->{% endif %}
 {% endblock %}

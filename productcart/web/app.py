@@ -28,6 +28,8 @@ from ..catalog import TAG_LABELS, enrich
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
+from starlette.background import BackgroundTask
+
 from . import analytics, db, security, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
@@ -116,15 +118,20 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         for d, p in unsplash.load(conn).items():
             photos.setdefault(d, unsplash.img_url(p["raw"]))
         missing = [r.id for r in menu.RECIPES if r.id not in photos]
-        if missing:
-            unsplash.ensure(conn, missing)
+        if missing and (todo := unsplash.claim(conn, missing)):
+            photo_job.set(todo)     # render() допише пошук фоновою задачею після відповіді
         return photos
 
     def render(request: Request, name: str, user=None, status: int = 200, **ctx):
         is_admin = bool(user) and user["email"].lower() in admin_emails
         n = request.cookies.get(CART_COOKIE, "")
+        todo, bg = photo_job.get(), None
+        if todo:
+            photo_job.set(None)
+            bg = BackgroundTask(unsplash.run, conn, todo)
         return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled,
-                                                        cart_n=int(n) if n.isdigit() else None), status_code=status)
+                                                        cart_n=int(n) if n.isdigit() else None), status_code=status,
+                                    background=bg)
 
     def go(url: str) -> RedirectResponse:
         return RedirectResponse(url, status_code=303)
@@ -1057,7 +1064,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     @app.get("/photos", response_class=HTMLResponse)
     def photo_credits(request: Request):
+        menu_photos()
         return render(request, "photos.html", user_of(request), credits=menu_credits(),
+                      status_note=db.get_setting(conn, unsplash.ERR_KEY),
                       unsplash={d: dict(p, by_url=unsplash.with_utm(p["by_url"]))
                                 for d, p in unsplash.load(conn).items() if d not in menu_credits()},
                       unsplash_home=unsplash.with_utm("https://unsplash.com"),
@@ -1241,6 +1250,8 @@ def menu_credits() -> dict:
     path = STATIC_DIR / "dishes" / "credits.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
+
+photo_job: contextvars.ContextVar[list | None] = contextvars.ContextVar("photo_job", default=None)
 
 def local_photos() -> dict[str, str]:
     return {d: f"/static/dishes/{d}.jpg" for d in menu_credits()}
