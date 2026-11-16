@@ -1197,3 +1197,21 @@ a.eat-open small{color:var(--muted)}
 .pantry .brow.static{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;text-align:left}
 .pantry .brow.static .rmain{flex:1;min-width:0;text-align:left;order:0}
 .pantry .brow.static form{order:1;flex:none}
+
+/* Список покупок: тап по товару — зелена галочка; прогрес «Куплено N з M · ще ≈ X ₴» */
+.mlist .brow .box{width:30px;height:30px;border-radius:50%;border:2px solid color-mix(in srgb,var(--ink) 25%,transparent);background:var(--card)}
+.mlist .brow .box svg{width:17px;height:17px}
+.brow:has(input:checked) .box{background:var(--accent);border-color:var(--accent);animation:tick-pop .25s cubic-bezier(.3,1.6,.5,1)}
+.brow:has(input:checked) .box svg{opacity:1}
+.brow:has(input:focus-visible) .box{outline:3px solid var(--accent);outline-offset:2px}
+.mlist .brow:has(input:checked){opacity:1;background:color-mix(in srgb,var(--soft) 70%,var(--chip))}
+.mlist .brow:has(input:checked) .rmain b{text-decoration:none;color:var(--muted)}
+.mlist .brow:has(input:checked) .ic,.mlist .brow:has(input:checked) .rprice{opacity:.55}
+@keyframes tick-pop{from{transform:scale(.6)}to{transform:scale(1)}}
+.buyprog{background:var(--card);border-radius:18px;padding:12px 14px;box-shadow:0 1px 0 var(--line)}
+.buyprog-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;font-variant-numeric:tabular-nums}
+.buyprog-h b{font-size:15px;font-weight:700;color:var(--muted)}
+.buyprog.on .buyprog-h b{color:var(--ink)}
+.buyprog-h span{color:var(--accent);font-weight:800;white-space:nowrap}
+.buyprog .progress{height:10px;margin:0}
+@media (prefers-reduced-motion:reduce){.brow:has(input:checked) .box{animation:none}}

@@ -63,7 +63,10 @@
 <section id="list" class="mlist">
   {% set step = 3 %}{% include "_week.html" %}
   <div class="list-h"><h1 class="xh">Що <span class="hl">купити</span></h1><button type="button" class="copy" id="copy">Скопіювати список</button></div>
-  <div><div class="progress"><i id="bar"></i></div><small class="hint" id="progressTxt"></small></div>
+  <div class="buyprog" aria-live="polite">
+    <div class="buyprog-h"><b id="progressTxt">Торкайтесь товарів, які вже купили</b><span id="progressLeft"></span></div>
+    <div class="progress"><i id="bar"></i></div>
+  </div>
   {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
   {% elif link and not is_demo %}
   <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
@@ -72,7 +75,7 @@
   </form>
   {% else %}<a class="scart-alt" href="/silpo">Зробити кошик у «Сільпо» →</a>{% endif %}
   {% macro row(l, price) %}
-  <label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ price }}">
+  <label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ price }}">
 {% set nv = name_visual(l.name) %}<span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
         <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
     <span class="rmain"><b>{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}</b>
@@ -160,9 +163,14 @@
     function progress(user) {
       var done = boxes.filter(function (b) { return b.checked; }).length;
       if (user && boxes.length && done === boxes.length) { if (window.celebrate) window.celebrate(); if (window.toast) window.toast('Усе куплено! 🎉'); if (window.haptic) haptic(30); }
-      var bar = document.getElementById('bar'), txt = document.getElementById('progressTxt');
+      var bar = document.getElementById('bar'), txt = document.getElementById('progressTxt'), left = document.getElementById('progressLeft');
       if (bar) bar.style.width = (boxes.length ? done / boxes.length * 100 : 0) + '%';
-      if (txt) txt.textContent = done ? done + ' з ' + boxes.length : '';
+      if (txt) txt.textContent = !done ? 'Торкайтесь товарів, які вже купили' : done === boxes.length ? 'Усе куплено 🎉' : 'Куплено ' + done + ' з ' + boxes.length;
+      if (left) {
+        var rest = boxes.filter(function (b) { return !b.checked; }).reduce(function (s, b) { return s + (+b.dataset.cost || 0); }, 0);
+        left.textContent = done && rest >= 1 ? 'ще ≈ ' + Math.round(rest) + ' ₴' : '';
+      }
+      var wrap = bar && bar.closest('.buyprog'); if (wrap) wrap.classList.toggle('on', done > 0);
     }
     boxes.forEach(function (b) {
       b.checked = !!saved[b.dataset.buy];
