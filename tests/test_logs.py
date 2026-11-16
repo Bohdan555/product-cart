@@ -18,7 +18,8 @@ def test_redact_secrets():
 
 
 def lines(capsys):
-    return [json.loads(l) for l in capsys.readouterr().out.splitlines() if l.startswith("{")]
+    c = capsys.readouterr()
+    return [json.loads(l) for l in (c.out + c.err).splitlines() if l.startswith("{")]
 
 
 def test_request_log_and_error_page(tmp_path, capsys):

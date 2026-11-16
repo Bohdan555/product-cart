@@ -58,15 +58,12 @@ class JsonFormatter(logging.Formatter):
 
 
 class _Stdout(logging.StreamHandler):
-    """Пише в поточний sys.stdout (його можуть підмінити — тести, сервер)."""
+    """INFO і нижче — у stdout, WARNING і вище — у stderr (Vercel позначає їх як помилки, їх легко відфільтрувати).
+    Потік беремо щоразу поточний: його можуть підмінити тести чи сервер."""
 
-    @property
-    def stream(self):
-        return sys.stdout
-
-    @stream.setter
-    def stream(self, _):
-        pass
+    def emit(self, record: logging.LogRecord) -> None:
+        self.stream = sys.stderr if record.levelno >= logging.WARNING else sys.stdout
+        super().emit(record)
 
 
 _done = False
