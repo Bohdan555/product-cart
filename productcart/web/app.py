@@ -20,7 +20,7 @@ from urllib.parse import quote, unquote, urlencode
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -417,6 +417,18 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                    likes=[TAG_LABELS.get(t, t) for t in p.likes][:4], hides=[TAG_LABELS.get(t, t) for t in p.dislikes][:3],
                    fridge_n=len(p.fridge) + len(p.fridge_other))
         return render(request, "me.html", u, **ctx)
+
+    @app.post("/client-log")
+    async def client_log(request: Request):
+        """Короткі звіти з браузера (напр. чому не спрацював мікрофон) — лише в лог, без персональних даних."""
+        form = await request.form()
+        ua = request.headers.get("user-agent", "")
+        browser = next((n for k, n in (("SamsungBrowser", "samsung"), ("Telegram", "telegram"), ("Instagram", "instagram"),
+                                         ("FBAN", "facebook"), ("Firefox", "firefox"), ("EdgA", "edge"), ("OPR", "opera"),
+                                         ("CriOS", "chrome-ios"), ("Chrome", "chrome"), ("Safari", "safari")) if k in ua), "other")
+        logs.event(log, "client." + str(form.get("event", ""))[:20], logging.WARNING, error=str(form.get("error", ""))[:60],
+                   extra=str(form.get("extra", ""))[:60], browser=browser, android="Android" in ua, ios="iPhone" in ua)
+        return Response(status_code=204)
 
     @app.get("/week")
     def week_start(request: Request):

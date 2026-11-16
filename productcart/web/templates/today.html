@@ -160,7 +160,9 @@
     if (INAPP) return ['Натисніть ⋮ або «…» угорі й оберіть «Відкрити в браузері»', 'У браузері натисніть 🎤 ще раз і дозвольте мікрофон'];
     if (IOS) return ['Відкрийте «Параметри» iPhone → Safari → Мікрофон', 'Оберіть «Дозволити» або «Запитувати»', 'Поверніться сюди й натисніть «Спробувати ще раз»'];
     if (SAMSUNG) return ['Натисніть ☰ внизу → Налаштування → Сайти й завантаження → Дозволи сайтів', 'Мікрофон → знайдіть цей сайт і дозвольте', 'Поверніться сюди й натисніть «Спробувати ще раз»'];
-    if (ANDROID) return ['Торкніться значка 🔒 або ⚙ ліворуч від адреси сайту', 'Дозволи → Мікрофон → «Дозволити»', 'Натисніть «Спробувати ще раз»'];
+    if (ANDROID) return ['Торкніться значка 🔒 або ⚙ ліворуч від адреси сайту → Дозволи → Мікрофон → «Дозволити»',
+                         'Якщо там уже дозволено: Налаштування телефона → Програми → ' + (SAMSUNG ? 'Samsung Internet' : 'Chrome') + ' → Дозволи → Мікрофон → «Дозволити»',
+                         'Натисніть «Спробувати ще раз»'];
     return ['Натисніть значок 🔒 ліворуч від адреси сайту', 'Мікрофон → «Дозволити»', 'Натисніть «Спробувати ще раз»'];
   }
   function showSheet(kind) {
@@ -173,6 +175,15 @@
       $('micT').textContent = 'Мікрофон вимкнено для сайту';
       $('micP').textContent = 'Щоб надиктувати продукти, увімкніть мікрофон:';
       deniedSteps().forEach(function (t) { var li = document.createElement('li'); li.textContent = t; steps.appendChild(li); });
+      steps.hidden = false;
+      $('micGo').textContent = 'Спробувати ще раз';
+    } else if (kind === 'nosr') {
+      $('micT').textContent = 'Тут голос не розпізнається';
+      $('micP').textContent = 'Мікрофон дозволено, але цей браузер не вміє перетворювати мову на текст. Два прості виходи:';
+      (SAMSUNG || !/Chrome\//.test(UA) || INAPP
+        ? ['Натисніть «Краще напишу», а потім 🎤 на клавіатурі телефона — диктування клавіатури працює всюди', 'Або відкрийте сайт у Google Chrome — там кнопка 🎤 працює напряму']
+        : ['Натисніть «Краще напишу», а потім 🎤 на клавіатурі телефона', 'Або перевірте, що в телефоні встановлено «Google» і увімкнено голосовий ввід Google']
+      ).forEach(function (t) { var li = document.createElement('li'); li.textContent = t; steps.appendChild(li); });
       steps.hidden = false;
       $('micGo').textContent = 'Спробувати ще раз';
     } else {
@@ -188,6 +199,30 @@
   $('micType').onclick = function () { closeSheet(); inp.focus(); hint('Напишіть через кому: курка, рис, яйця…'); };
   $('micGo').onclick = function () { closeSheet(); try { localStorage.setItem('pc-mic-asked', '1'); } catch (e) {} listen(); };
   sheet.addEventListener('click', function (e) { if (e.target === sheet) closeSheet(); });
+
+  // Чи справді є доступ до мікрофона (а не лише служби розпізнавання): коротко відкриваємо й одразу закриваємо
+  function micWorks() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve('unknown');
+    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+      st.getTracks().forEach(function (t) { t.stop(); }); return 'ok';
+    }, function (e) { return e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'denied' : (e && e.name === 'NotFoundError' ? 'nomic' : 'busy'); });
+  }
+  function report(err, extra) {     // у логи сайту — щоб бачити, що саме відповідає браузер на телефоні
+    try {
+      var fd = new FormData(); fd.append('event', 'mic'); fd.append('error', err || ''); fd.append('extra', extra || '');
+      if (navigator.sendBeacon) navigator.sendBeacon('/client-log', fd); else fetch('/client-log', { method: 'POST', body: fd });
+    } catch (e) {}
+  }
+  function explain(err) {           // помилка розпізнавання → правильне пояснення
+    micWorks().then(function (m) {
+      report(err, 'mic=' + m);
+      if (err === 'perm-denied' && m === 'ok') { listen(); return; }   // браузер помилився щодо дозволу — мікрофон працює
+      if (m === 'denied') { hint('Мікрофон вимкнено для сайту'); showSheet('denied'); }
+      else if (m === 'nomic') { hint('Мікрофон не знайдено'); showSheet('nomic'); }
+      else if (m === 'busy') showSheet('busy');
+      else { hint('Голос тут не розпізнається — напишіть або скористайтесь 🎤 клавіатури'); showSheet('nosr'); }
+    });
+  }
 
   function micState() {          // 'granted' | 'prompt' | 'denied' | 'unknown'
     try {
@@ -212,8 +247,7 @@
       inp.value = (heard + interim).trim();
     };
     rec.onerror = function (e) {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { hint('Мікрофон вимкнено для сайту'); showSheet('denied'); return; }
-      if (e.error === 'audio-capture') { hint('Мікрофон не знайдено'); showSheet('nomic'); return; }
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture' || e.error === 'language-not-supported') { explain(e.error); return; }
       hint(e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : e.error === 'network' ? 'Розпізнаванню мови потрібен інтернет. Спробуйте ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
     };
     rec.onend = function () {
@@ -221,7 +255,7 @@
       var txt = (heard || inp.value).trim(); inp.value = '';
       if (txt) { var r = addPhrase(txt); hint(r.added ? '«' + txt + '» → додали ' + r.added : 'Почули «' + txt + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
     };
-    try { rec.start(); } catch (e) { showSheet('busy'); return; }
+    try { rec.start(); } catch (e) { explain('start:' + (e && e.name)); return; }
     listening = true; mic.classList.add('on'); $('hvField').classList.add('listening'); hint('Слухаю… скажіть, що є'); tap(15);
   }
 
@@ -233,7 +267,7 @@
     if (listening && rec) { rec.stop(); return; }
     micState().then(function (st) {
       var asked = false; try { asked = localStorage.getItem('pc-mic-asked') === '1'; } catch (e) {}
-      if (st === 'denied') showSheet('denied');
+      if (st === 'denied') { explain('perm-denied'); return; }
       else if (st === 'prompt' || (st === 'unknown' && !asked)) showSheet('ask');   // пояснюємо перед системним запитом
       else listen();
     });

@@ -693,3 +693,9 @@ def test_dock_marks_section(client):
         return _re.search(r'data-sect="(\w+)" class="on"', client.get(path).text).group(1)
     assert on("/menu") == "cook" and on("/") == "cook" and on("/today") == "cook"
     assert on("/list") == "deals" and on("/me") == "me"
+
+
+def test_client_log_accepts_mic_reports(client):
+    r = client.post("/client-log", data={"event": "mic", "error": "service-not-allowed", "extra": "mic=ok"},
+                    headers={"user-agent": "Mozilla/5.0 (Linux; Android 14) SamsungBrowser/25.0 Chrome/121"})
+    assert r.status_code == 204
