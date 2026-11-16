@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ o.dish.title }} — Кошик з акцій{% endblock %}
+{% block body %}
+{% set d = o.dish %}
+<div class="td-top"><a class="td-back" href="/today/dishes?{{ qs }}" aria-label="Назад">←</a></div>
+<section class="td-hero">
+  {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="">{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+  <div><h1 class="xh">{{ d.title }}</h1><span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв · {{ n }} {{ plural(n, 'порція', 'порції', 'порцій') }}</span></div>
+</section>
+
+<h2 class="td-h">Продукти</h2>
+<div class="td-list">
+  {% for k, q in d.ingredients.items() %}{% set line = (o.lines|selectattr('key', 'equalto', k)|first) %}
+  <div class="td-li"><span>{{ name_visual(ingredients[k][0]).emoji }} {{ ingredients[k][0] }} <small>{{ fmt_qty(q, ingredients[k][1]) }}</small></span>
+    {% if line %}<span class="td-cost">{{ uah(line.cost) }}{% if line.regular > line.cost %}<s>{{ uah(line.regular) }}</s>{% endif %}</span>
+    {% elif k in have %}<span class="td-home">є вдома</span>{% else %}<span class="td-home soft">мабуть, є</span>{% endif %}</div>
+  {% endfor %}
+  {% for x in d.recipe.extras %}<div class="td-li"><span>{{ name_visual(x).emoji }} {{ x }}</span><span class="td-home soft">без ціни</span></div>{% endfor %}
+</div>
+
+{% if o.lines %}
+  {% if user and link and not is_demo %}
+  <form method="post" action="/today/cart" data-turbo="false">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="id" value="{{ d.id }}">
+    <input type="hidden" name="have" value="{{ have|join(',') }}"><input type="hidden" name="n" value="{{ n }}">
+    <button type="submit" class="btn td-cart">{{ ic("cart", "mid") }} Додати {{ o.lines|length }} в кошик «Сільпо» · {{ uah(o.buy_cost|round) }}</button>
+  </form>
+  {% else %}
+  <a class="td-gate" href="{{ '/silpo' if user else '/register' }}">
+    <span class="icotile">{{ ic("tag", "mid") }}</span>
+    <span><b>Показати реальні ціни у вашому «Сільпо»</b><small>і додати бракуюче в кошик одним дотиком</small></span>
+  </a>
+  {% endif %}
+{% endif %}
+
+{% if d.recipe.steps %}
+<h2 class="td-h">Як готувати</h2>
+<ol class="td-steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+{% endif %}
+
+<form method="post" action="/today/cooked" class="td-done-form">
+  {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}
+  <input type="hidden" name="id" value="{{ d.id }}">
+  <button type="submit" class="btn{% if o.lines %} alt{% endif %}">{{ 'Я все маю — готую!' if o.lines else 'Готую! 👩‍🍳' }}</button>
+</form>
+{% endblock %}

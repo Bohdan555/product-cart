@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Що приготувати сьогодні — Кошик з акцій{% endblock %}
+{% block body %}
+<form class="td" id="td" method="get" action="/today/dishes">
+  <input type="hidden" name="have" id="tdHave" value="{{ have|join(',') }}">
+  <input type="hidden" name="t" id="tdT" value="{{ t }}">
+  <input type="hidden" name="n" id="tdN" value="{{ n }}">
+
+  <section class="td-step" data-step="1">
+    <div class="td-top"><a class="td-back" href="/" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 1 з 3"><i class="on"></i><i></i><i></i></span></div>
+    <h1 class="xh">Що є <span class="hl">під рукою?</span></h1>
+    {% if user %}
+    <label class="td-shot" id="tdShot"><input type="file" id="tdFile" accept="image/*" capture="environment" hidden>
+      <span class="icotile lg">{{ ic("fridge", "big") }}</span><b id="tdShotTxt">Сфотографувати холодильник</b><small>або оберіть продукти нижче</small></label>
+    {% else %}
+    <a class="td-shot" href="/register"><span class="icotile lg">{{ ic("fridge", "big") }}</span><b>Сфотографувати холодильник</b>
+      <small class="td-lock">{{ ic("lock", "sm") }} після входу · або оберіть нижче</small></a>
+    {% endif %}
+    <p class="td-picked" id="tdPicked" aria-live="polite"></p>
+    <div class="td-tiles">
+      {% for k, name in food %}{% set v = name_visual(name) %}
+      <button type="button" class="td-tile" data-k="{{ k }}" aria-pressed="{{ 'true' if k in have else 'false' }}" style="--c:var(--{{ v.pastel }})"><span class="e" aria-hidden="true">{{ v.emoji }}</span>{{ name }}</button>{% endfor %}
+    </div>
+    <div class="td-nav"><button type="button" class="btn alt" data-skip>Пропустити</button><button type="button" class="btn" data-next>Далі</button></div>
+  </section>
+
+  <section class="td-step" data-step="2" hidden>
+    <div class="td-top"><button type="button" class="td-back" data-prev aria-label="Назад">←</button><span class="td-dots" aria-label="Крок 2 з 3"><i class="on"></i><i class="on"></i><i></i></span></div>
+    <h1 class="xh">Скільки часу <span class="hl">і на скількох?</span></h1>
+    <p class="td-lbl">Час</p>
+    <div class="td-chips" data-field="tdT">
+      {% for v, l in [(15, '⚡ 15 хв'), (30, '30 хв'), (60, '1 год'), (180, 'не важливо')] %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == t else 'false' }}">{{ l }}</button>{% endfor %}
+    </div>
+    <p class="td-lbl">Нас</p>
+    <div class="td-chips" data-field="tdN">
+      {% for v in (1, 2, 3, 4, 6) %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == n else 'false' }}">{{ v }}</button>{% endfor %}
+    </div>
+    <div class="td-nav"><button type="submit" class="btn">Показати страви</button></div>
+  </section>
+</form>
+<script>
+(function () {
+  var form = document.getElementById('td'); if (!form) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var steps = form.querySelectorAll('.td-step'), tap = function (ms) { if (window.haptic) haptic(ms || 8); };
+  function show(i) { steps.forEach(function (s, k) { s.hidden = k !== i; }); window.scrollTo(0, 0); }
+  function sync() {
+    var on = [].filter.call(form.querySelectorAll('.td-tile'), function (b) { return b.getAttribute('aria-pressed') === 'true'; });
+    $('tdHave').value = on.map(function (b) { return b.dataset.k; }).join(',');
+    $('tdPicked').textContent = on.length ? 'Є: ' + on.map(function (b) { return b.querySelector('.e').textContent; }).join(' ') + ' · ' + on.length : 'Нічого не обрано — теж можна';
+  }
+  form.querySelectorAll('.td-tile').forEach(function (b) { b.onclick = function () { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); tap(); sync(); }; });
+  form.querySelector('[data-next]').onclick = function () { tap(12); show(1); };
+  form.querySelector('[data-skip]').onclick = function () { form.querySelectorAll('.td-tile').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); }); sync(); show(1); };
+  form.querySelector('[data-prev]').onclick = function () { show(0); };
+  form.querySelectorAll('.td-chips').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
+    g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); $(g.dataset.field).value = b.dataset.v; tap(); }; }); });
+  // фото холодильника: розпізнаємо й позначаємо знайдене
+  var file = $('tdFile');
+  if (file) file.addEventListener('change', function () {
+    var f = file.files && file.files[0]; if (!f) return;
+    $('tdShot').classList.add('scanning'); $('tdShotTxt').textContent = 'Дивимось, що є…'; tap(15);
+    var img = new Image(), url = URL.createObjectURL(f);
+    img.onload = function () {
+      var k = Math.min(1, 1568 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(function (blob) {
+        var fd = new FormData(); fd.append('csrf', '{{ user.csrf if user else "" }}'); fd.append('photo', blob, 'fridge.jpg');
+        fetch('/fridge/scan', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+          $('tdShot').classList.remove('scanning');
+          if (d.error) { $('tdShotTxt').textContent = d.error; return; }
+          var n = 0;
+          d.items.forEach(function (it) { var b = form.querySelector('.td-tile[data-k="' + it.ingredient + '"]'); if (b && b.getAttribute('aria-pressed') !== 'true') { b.setAttribute('aria-pressed', 'true'); n++; } });
+          $('tdShotTxt').textContent = n ? 'Знайшли й позначили: ' + n : 'Нічого з цих продуктів не знайшли — оберіть вручну';
+          sync(); tap(25);
+        }).catch(function () { $('tdShot').classList.remove('scanning'); $('tdShotTxt').textContent = 'Не вдалося надіслати фото'; });
+      }, 'image/jpeg', 0.85);
+    };
+    img.src = url;
+  });
+  sync();
+})();
+</script>
+{% endblock %}

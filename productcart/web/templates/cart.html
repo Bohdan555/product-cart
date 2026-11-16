@@ -7,8 +7,9 @@
 <div class="card stack"><div class="err">{{ error }}</div><p><a class="btn alt" href="/menu#list">Назад до меню</a></p></div>
 
 {% elif confirm %}
-<form class="card stack cconf" method="post" action="/menu/silpo-cart" data-turbo="false">
+<form class="card stack cconf" method="post" action="{{ cart_action or '/menu/silpo-cart' }}" data-turbo="false">
   <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="{{ bought }}"><input type="hidden" name="confirm" value="1">
+  {% for k, v in (cart_hidden or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <h2>У вашому кошику вже {{ had }} {{ plural(had, 'товар', 'товари', 'товарів') }}</h2>
   {% if sample %}<p class="hint">{{ sample|join(', ') }}{% if had > sample|length %} та інші{% endif %}</p>{% endif %}
   <p>Додамо ще {{ wanted }} {{ plural(wanted, 'позицію', 'позиції', 'позицій') }}, нічого не видаляючи.</p>

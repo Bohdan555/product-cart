@@ -660,6 +660,52 @@ def plan(offers: list[Offer], profile: Profile, dinners: int = 5, max_minutes: i
     return ctx.menu(chosen, pantry_buy)
 
 
+# ---------- «Що приготувати сьогодні»: одна страва з того, що є ----------
+ASSUMED = {"oil", "flour", "tomato_paste"}      # олія, борошно, томатна паста — майже завжди є вдома
+
+
+@dataclass
+class Option:
+    """Варіант на сьогодні: страва, що з неї вже є, що докупити і скільки це коштує."""
+    dish: Dish
+    have: list[str]
+    lines: list[Line]                  # що докупити (з цінами й акціями)
+
+    @property
+    def buy_cost(self) -> float:
+        return round(sum(l.cost for l in self.lines), 2)
+
+    @property
+    def buy_saving(self) -> float:
+        return round(sum(l.regular - l.cost for l in self.lines), 2)
+
+
+def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3) -> list[Option]:
+    """Три страви, для яких найменше докуповувати: спершу кількість бракуючого, далі — скільки свого
+    використовуємо, далі — ціна докупки. Вподобання й «не їм» з профілю діють як завжди."""
+    have = set(have) & set(INGREDIENTS)
+    ctx = _Ctx(offers, profile, max_minutes)
+    ctx.have = have
+    home = have | ASSUMED
+    opts = []
+    for r in ctx.pool:
+        d = ctx.dish(r, [])
+        lines = [l for l in basket([d], ctx.sources, ctx.people, have=home) if l.buy or (l.pantry and l.key not in home)]
+        for l in lines:
+            l.buy = True
+        opts.append(Option(d, [k for k in r.ingredients if k in have], lines))
+    opts.sort(key=lambda o: (len(o.lines), -len(o.have), -ctx.score(o.dish.recipe, []) * 0.05 + o.buy_cost / 100))
+    out, proteins = [], set()
+    for o in opts:          # різноманітність: не три страви з курки
+        if o.dish.recipe.protein in proteins and len(opts) > n * 2:
+            continue
+        out.append(o)
+        proteins.add(o.dish.recipe.protein)
+        if len(out) == n:
+            break
+    return out
+
+
 def swap(offers: list[Offer], profile: Profile, current: list[str], i: int, max_minutes: int = 60,
          skip=()) -> list[str] | None:
     """Замінює i-ту страву на найкращу іншу з пулу (без уже вибраних і нещодавно відхилених).

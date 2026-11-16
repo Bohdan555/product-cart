@@ -625,3 +625,50 @@ def test_menu_setup_wizard_guest_and_user(client):
     assert '"menu_days": [5, 6]' in p and '"dinners": 2' in p and '"menu_budget": 1500.0' in p
     assert "Сб" in client.get("/menu").text
     assert client.post("/menu/setup", data={"csrf": "bad", "people": "2"}).status_code == 400
+
+
+def test_today_flow_guest_and_user(client):
+    page = client.get("/today").text
+    assert "Що є" in page and 'data-k="eggs"' in page and 'href="/register"' in page
+    r = client.get("/today/dishes", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2"})
+    assert r.status_code == 200 and "Омлет з перцем і сиром" in r.text and "✓ Є все" in r.text and "Демо-ціни" in r.text
+    assert r.text.count('class="td-dish"') == 3
+    d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
+    assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
+    d2 = client.get("/today/dish/flotski", params={"have": "", "t": "60", "n": "2"}).text
+    assert "Показати реальні ціни" in d2 and 'href="/register"' in d2
+    assert "Смачного" in client.post("/today/cooked", data={"id": "omelette"}).text
+    token = register(client)
+    assert "Смачного" in client.post("/today/cooked", data={"csrf": token, "id": "omelette"}).text
+    assert client.post("/today/cooked", data={"csrf": "bad", "id": "omelette"}).status_code == 400
+    assert client.get("/today/dish/nope").headers["location"].startswith("/today/dishes")
+
+
+def test_today_missing_to_silpo_cart(tmp_path):
+    from test_silpo_cart import CartMCP
+    shared = CartMCP()
+
+    class Combined(FakeMCP):
+        async def __call__(self, name, args):
+            if "cart" in name or name == "silpo_find_products_batch":
+                return await shared(name, args)
+            return await super().__call__(name, args)
+
+    class Gw(FakeGateway):
+        @contextlib.asynccontextmanager
+        async def session(self, access_token):
+            yield Combined()
+
+    app = create_app(db_path=str(tmp_path / "t.db"), app_secret="x" * 32, base_url="http://test", gateway=Gw())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c)
+        r = c.post("/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
+        page = c.get("/today/dish/flotski", params={"have": "onion", "t": "60", "n": "2"}).text
+        assert 'action="/today/cart"' in page and "в кошик «Сільпо»" in page
+        r = c.post("/today/cart", data={"csrf": token, "id": "flotski", "have": "onion", "n": "2"})
+        assert r.status_code == 200 and "Кошик у «Сільпо»" in r.text and "Немає в наявності: Макарони, Фарш" in r.text
+        ev = c.app.state.conn.execute("SELECT meta FROM events WHERE event='today_cart'").fetchone()
+        assert ev and '"dish": "flotski"' in ev["meta"]

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Смачного — Кошик з акцій{% endblock %}
+{% block body %}
+<section class="td-fin">
+  <span class="icotile lg">{{ ic("pan", "big") }}</span>
+  <h1 class="xh">Смачного!</h1>
+  <p class="lead">{% if title %}{{ title }} — {% endif %}сьогодні вирішено.</p>
+</section>
+<section class="td-upsell">
+  <b>Скласти так на весь тиждень?</b>
+  <p>Вечері з акцій, і спершу з того, що вже є вдома. Список і кошик — одним дотиком.</p>
+  <a class="btn" href="/week">Скласти план</a>
+</section>
+<p style="text-align:center"><a href="/">На головну</a></p>
+<script>setTimeout(function () { if (window.celebrate) celebrate(); }, 250);</script>
+{% endblock %}

@@ -1194,6 +1194,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         ctx = dict(bought=",".join(sorted(bought)), wanted=len(wants))
         if not wants:
             return render(request, "cart.html", u, error="Усе зі списку вже позначено як куплене — додавати нічого.", **ctx)
+        return await put_in_silpo_cart(request, u, form, tokens, stores, wants, ctx, "silpo_cart_built", m.saving)
+
+    async def put_in_silpo_cart(request: Request, u, form, tokens: dict, stores: list, wants: list, ctx: dict,
+                                event: str, saving: float, **extra):
+        """Кладе товари в кошик «Сільпо»: спершу попереджає про наявний кошик, потім додає. Спільне для меню й «Сьогодні»."""
         try:
             async with lazy_silpo(tokens["access_token"]) as get_call:
                 call = await get_call()
@@ -1203,7 +1208,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         sample = [n for n in cart.names.values() if n][:5]
                         return render(request, "cart.html", u, confirm=True, had=cart.count, sample=sample, **ctx)
                 branch = None
-                if stores:   # магазин для самовивозу, якщо кошика ще немає: найближчий із меню, з координатами
+                if stores:   # магазин для самовивозу, якщо кошика ще немає: найближчий, з координатами
                     branch = dict(stores[0])
                     if branch.get("lat") is None:
                         known = {b["id"]: b for b in await silpo_branches(get_call)}
@@ -1216,8 +1221,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: кошик не зібрався: %s: %s", type(err).__name__, str(err)[:1500])
             return render(request, "cart.html", u, status=502, **ctx,
                           error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
-        analytics.track(conn, u["id"], "silpo_cart_built", placed=len(res["placed"]), missing=len(res["missing"]),
-                        had=res["had"], total=res["total"], checkout=bool(res["checkout"]), saving=m.saving)
+        analytics.track(conn, u["id"], event, placed=len(res["placed"]), missing=len(res["missing"]),
+                        had=res["had"], total=res["total"], checkout=bool(res["checkout"]), saving=round(saving, 2), **extra)
         return remember_cart(render(request, "cart.html", u, res=res, **ctx), res["count"], u["id"])
 
     @app.get("/photos", response_class=HTMLResponse)
@@ -1276,6 +1281,105 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if u["email"].lower() not in admin_emails:
             return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
+
+    # ---------- «Що приготувати сьогодні»: продукти → час і люди → 3 страви → рецепт ----------
+    TODAY_FOOD = ["chicken_fillet", "chicken_thigh", "minced", "pork", "fish", "sausages", "eggs", "cheese", "cottage",
+                  "sour_cream", "milk", "potato", "carrot", "onion", "cabbage", "mushrooms", "pepper", "zucchini",
+                  "rice", "buckwheat", "pasta", "beans", "lentils", "kefir"]
+
+    def today_args(request: Request) -> tuple[list[str], int, int]:
+        q = request.query_params
+        have = [k for k in str(q.get("have", "")).split(",") if k in menu.INGREDIENTS]
+        try:
+            t = max(15, min(180, int(q.get("t") or 30)))
+            n = max(1, min(12, int(q.get("n") or 2)))
+        except ValueError:
+            t, n = 30, 2
+        return have, t, n
+
+    def today_qs(have, t, n) -> str:
+        return urlencode({"have": ",".join(have), "t": t, "n": n})
+
+    async def today_offers(request: Request, u, n):
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        p.household = n
+        link, stores, offers, notice, is_demo = await menu_offers(u, p)
+        return p, link, stores, is_demo, offers
+
+    @app.get("/today", response_class=HTMLResponse)
+    def today_page(request: Request):
+        u = user_of(request)
+        have, t, n = today_args(request)
+        if not request.query_params.get("have") and u:      # що вже є вдома з фото холодильника
+            p = load_profile(u["id"])[0]
+            have = [k for k in p.fridge if k in TODAY_FOOD]
+            n = p.household or n
+        food = [(k, menu.INGREDIENTS[k][0]) for k in TODAY_FOOD]
+        return render(request, "today.html", u, food=food, have=have, t=t, n=n)
+
+    @app.get("/today/dishes", response_class=HTMLResponse)
+    async def today_dishes(request: Request):
+        u = user_of(request)
+        have, t, n = today_args(request)
+        p, link, stores, is_demo, offers = await today_offers(request, u, n)
+        opts = menu.today(offers, p, have, max_minutes=t)
+        analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
+                        options=len(opts), guest=not u)
+        return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
+                      is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
+
+    @app.get("/today/dish/{rid}", response_class=HTMLResponse)
+    async def today_dish(request: Request, rid: str):
+        u = user_of(request)
+        have, t, n = today_args(request)
+        p, link, stores, is_demo, offers = await today_offers(request, u, n)
+        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999) if o.dish.id == rid]
+        if not opts:
+            return go(f"/today/dishes?{today_qs(have, t, n)}")
+        return render(request, "today_dish.html", u, o=opts[0], qs=today_qs(have, t, n), is_demo=is_demo,
+                      link=link, photos=menu_photos(), ingredients=menu.INGREDIENTS, fmt_qty=menu.fmt_qty,
+                      t=t, n=n, have=have)
+
+    @app.post("/today/cooked", response_class=HTMLResponse)
+    async def today_cooked(request: Request):
+        form = await request.form()
+        u = user_of(request)
+        if u and not secrets.compare_digest(str(form.get("csrf", "")), u["csrf"]):
+            return HTMLResponse("Сторінка застаріла. Оновіть її й спробуйте ще раз.", status_code=400)
+        rid = str(form.get("id", ""))
+        title = next((r.title for r in menu.RECIPES if r.id == rid), "")
+        analytics.track(conn, u["id"] if u else None, "cooked", dish=rid, guest=not u)
+        return render(request, "today_done.html", u, title=title)
+
+    @app.post("/today/cart")
+    async def today_cart(request: Request):
+        """Докупити бракуюче для обраної страви — у кошик «Сільпо»."""
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return bad
+        rid = str(form.get("id", ""))
+        have = [k for k in str(form.get("have", "")).split(",") if k in menu.INGREDIENTS]
+        try:
+            n = max(1, min(12, int(form.get("n") or 2)))
+        except ValueError:
+            n = 2
+        tokens = silpo_tokens(u["id"]) if silpo_link(u["id"]) else None
+        if not tokens:
+            return go("/silpo")
+        p, _ = load_profile(u["id"])
+        p.household = n
+        _, stores, offers, notice, is_demo = await current_offers(u["id"], p, False)
+        if is_demo:
+            return go("/silpo")
+        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999) if o.dish.id == rid]
+        if not opts or not opts[0].lines:
+            return go("/today")
+        o = opts[0]
+        wants = silpo_cart.wants_from_menu(o.lines)
+        ctx = dict(bought="", wanted=len(wants), cart_action="/today/cart",
+                   cart_hidden={"id": rid, "have": ",".join(have), "n": n})
+        return await put_in_silpo_cart(request, u, form, tokens, stores, wants, ctx, "today_cart", o.buy_saving, dish=rid)
 
     # ---------- що в холодильнику: фото → продукти вдома → меню доїдає їх ----------
     def fridge_scans_today(uid: int) -> int:

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Що можна приготувати — Кошик з акцій{% endblock %}
+{% block body %}
+{% set PAL = ["p-citrus", "p-tomato", "p-basil", "p-plum", "p-sky", "p-berry"] %}
+<div class="td-top"><a class="td-back" href="/today?{{ qs }}" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 3 з 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
+<h1 class="xh">Ось що <span class="hl">можна приготувати</span></h1>
+{% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни вашого «Сільпо» · {{ store }}</span>{% endif %}
+
+{% if not opts %}
+<div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
+{% else %}
+<div class="td-reel">
+  {% for o in opts %}{% set d = o.dish %}{% set total = d.recipe.ingredients|length %}{% set got = o.have|length %}
+  <article class="td-dish" style="--c:var(--{{ PAL[loop.index0 % 6] }})">
+    {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if loop.index0 %}loading="lazy"{% endif %}>{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+    <b class="t">{{ d.title }}</b>
+    <div class="td-meta">
+      <span class="td-pill{% if not o.lines %} ok{% endif %}">{% if not o.lines %}✓ Є все{% elif got %}Є {{ got }} з {{ total }}{% else %}Усе купити{% endif %}</span>
+      <span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв</span>
+    </div>
+    {% if o.lines %}<p class="td-need">Докупити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}
+      {% if not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}</p>
+    {% else %}<p class="td-need">Нічого не треба купувати</p>{% endif %}
+    <div class="td-price"><span>порція</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
+    <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}">Готую це</a>
+  </article>
+  {% endfor %}
+</div>
+<p class="td-hint">Гортайте вбік · спершу ті, де найменше докуповувати</p>
+{% endif %}
+{% endblock %}
