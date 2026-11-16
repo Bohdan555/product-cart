@@ -1295,7 +1295,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return JSONResponse({"error": "Розпізнавання фото ще налаштовується. Додайте продукти вручну нижче."}, status_code=503)
         except Exception as e:
             log.warning("Холодильник: не вдалося розпізнати: %s: %s", type(e).__name__, str(e)[:300])
-            if "customer_verification_required" in str(e) or "insufficient" in str(e).lower():
+            if any(x in str(e) for x in ("customer_verification_required", "no_providers_available", "Free tier",
+                                         "insufficient", "credit")):
                 return JSONResponse({"error": "Розпізнавання фото тимчасово недоступне. Додайте продукти вручну нижче."},
                                     status_code=503)
             return JSONResponse({"error": "Не вдалося розпізнати фото. Спробуйте ще раз або додайте продукти вручну."}, status_code=502)
