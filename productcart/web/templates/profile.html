@@ -10,7 +10,7 @@
 <form class="wiz{% if not welcome %} edit{% endif %}" id="wiz" method="post" action="/profile" novalidate>
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
   <div class="wiz-top">
-    <h1>{{ 'Про вас' if welcome else 'Профіль' }}</h1>
+    <h1 class="xh">{% if welcome %}Про <span class="hl">вас</span>{% else %}Ваш <span class="hl">профіль</span>{% endif %}</h1>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
     {% if silpo %}
     <div class="autofill" id="autofill">
@@ -141,11 +141,13 @@
       <input id="name" type="text" name="name" value="{{ p.name }}" maxlength="60"></div>
   </section>
 
+  <div class="wiz-foot">
   <div class="live" id="live" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="liveTxt">…</span></div>
   <div class="wiz-nav">
     <button type="button" class="btn alt" id="wizBack">Назад</button>
     <button type="button" class="btn" id="wizNext">Далі</button>
-    <button type="submit" class="btn" id="wizSave">{{ 'Готово — до акцій' if welcome else 'Зберегти профіль' }}</button>
+    <button type="submit" class="btn" id="wizSave">{{ 'Готово — до акцій' if welcome else 'Зберегти' }}</button>
+  </div>
   </div>
 </form>
 
