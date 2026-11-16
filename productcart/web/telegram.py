@@ -102,13 +102,14 @@ def offer_key(o: Offer) -> str:
 
 
 def pick_deals(offers: list[Offer], p: Profile, sent: set[str]) -> list[tuple[Offer, str]]:
-    """[(акція, чому)] — за списком «Стежити» будь-яка знижка, за «купую щотижня» лише велика. Без повторів."""
+    """[(акція, чому)] — обрані товари зі знижкою від їхнього порогу, «купую щотижня» — лише велика. Без повторів."""
     out, seen = [], set()
     for o in sorted(offers, key=lambda o: -(o.discount_pct or 0)):
         k = offer_key(o)
         if k in sent or k in seen or not o.discount_pct:
             continue
-        why = next((f"стежите: {w}" for w in p.watch if _has(o.name, w)), None)
+        why = next((f"обране: {w}" + (f", від {p.watch_min[w]}%" if p.watch_min.get(w) else "")
+                    for w in p.watch if _has(o.name, w) and (o.discount_pct or 0) >= p.watch_min.get(w, 0)), None)
         if not why and (o.discount_pct or 0) >= BIG_DISCOUNT:
             why = next((f"ви купуєте: {w}" for w in p.regulars if _has(o.name, w)), None)
         if why:

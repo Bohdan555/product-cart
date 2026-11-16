@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Профіль — Кошик з акцій{% endblock %}
 {% block body %}
-{% set EMO = {"dairy": "🥛", "meat": "🥩", "fish": "🐟", "eggs": "🥚", "vegetables": "🥦", "fruits": "🍎", "grains": "🌾",
+{% set EMO = {"dairy": "🥛", "meat": "🥩", "fish": "🦐", "eggs": "🥚", "vegetables": "🥦", "fruits": "🍎", "grains": "🌾",
               "coffee": "☕", "tea": "🍵", "sweets": "🍫", "alcohol": "🍷", "pork": "🐖", "household": "🧴"} %}
 {% set DIET_EMO = {"no_gluten": "🌾", "no_lactose": "🥛", "vegetarian": "🥕", "vegan": "🌱", "no_pork": "🐖",
                    "no_alcohol": "🍷", "no_sugar": "🍬"} %}
@@ -59,13 +59,17 @@
     </div>
     <details class="more" id="tasteMore"><summary>Ще за категоріями продуктів</summary>
     <p class="hint">Торкніться раз — <b>люблю</b>, ще раз — <b>не показувати</b>, втретє — байдуже.</p>
-    <div class="tiles" id="taste">
-      {% for t in taste_tags %}{% set st = 'like' if t in p.likes else ('hide' if t in p.dislikes else '') %}
+    <div id="taste">
+      {% for gname, gtags in taste_groups %}
+      <div class="tgroup"><small class="tgname">{{ gname }}</small><div class="tiles">
+      {% for t in gtags %}{% set st = 'like' if t in p.likes else ('hide' if t in p.dislikes else '') %}
       <button type="button" class="tile3" data-tag="{{ t }}" data-state="{{ st }}" data-can-like="{{ 1 if t in like_tags else 0 }}" data-can-hide="{{ 1 if t in hide_tags else 0 }}">
         <span class="te" aria-hidden="true">{{ EMO.get(t, '•') }}</span><span class="tl">{{ TAG_LABELS[t] }}</span><span class="ts"></span>
         {% if t in like_tags %}<input type="checkbox" name="likes" value="{{ t }}" hidden {% if st == 'like' %}checked{% endif %}>{% endif %}
         {% if t in hide_tags %}<input type="checkbox" name="dislikes" value="{{ t }}" hidden {% if st == 'hide' %}checked{% endif %}>{% endif %}
       </button>{% endfor %}
+      </div></div>
+      {% endfor %}
     </div>
     <p class="react" id="tasteTxt"></p>
     </details>

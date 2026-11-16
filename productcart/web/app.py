@@ -50,7 +50,11 @@ OFFERS_TTL = timedelta(hours=6)
 STALE_TTL = timedelta(days=7)   # старіший кеш не показуємо навіть тимчасово
 offers_stale = contextvars.ContextVar("offers_stale", default=False)  # показали акції з застарілого кешу
 MAX_NEARBY = 4  # щонайбільше магазинів поруч в одному списку
-LIKE_TAGS = ["dairy", "meat", "fish", "eggs", "vegetables", "fruits", "grains", "coffee", "tea", "sweets"]
+LIKE_TAGS = ["vegetables", "fruits", "coffee", "tea", "meat", "fish", "dairy", "eggs", "grains", "sweets"]
+# Плитки смаків групами: схожі поруч
+TASTE_GROUPS = [("Овочі й фрукти", ["vegetables", "fruits"]), ("Кава й чай", ["coffee", "tea"]),
+                ("М'ясо й риба", ["meat", "pork", "fish"]), ("Молочне й яйця", ["dairy", "eggs"]),
+                ("Крупи й солодке", ["grains", "sweets"]), ("Інше", ["alcohol", "household"])]
 HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 
 
@@ -469,7 +473,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def profile_page(request: Request, u, p: Profile, consent: bool, status: int = 200, **extra):
         photos = menu_photos()
         dishes = sorted(menu.RECIPES, key=lambda r: (r.id not in photos, r.minutes))   # спершу ті, що з фото
-        return render(request, "profile.html", u, p=p, consent=consent, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS,
+        return render(request, "profile.html", u, p=p, consent=consent, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS, taste_groups=TASTE_GROUPS,
                       diets=list(DIETS), silpo=silpo_link(u["id"]), status=status, photos=photos,
                       dishes=[{"id": r.id, "title": r.title, "emoji": r.emoji, "minutes": r.minutes} for r in dishes[:12]],
                       **extra)
@@ -715,6 +719,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             c = offer_visual(o)["cat"]
             if c not in cats:
                 cats.append(c)
+        cats.sort(key=lambda c: CAT_ORDER.index(c) if c in CAT_ORDER else len(CAT_ORDER))
         if cat:
             items = [x for x in items if offer_visual(x[0])["cat"] == cat]
         key = SORTS.get(sort)
@@ -1134,12 +1139,22 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def tg_chat(user_id: int):
         return conn.execute("SELECT chat_id, linked_at FROM tg_links WHERE user_id=?", (user_id,)).fetchone()
 
-    def add_watch(p: Profile, word: str) -> str | None:
+    def pct(x) -> int:
+        try:
+            return max(0, min(90, int(float(x or 0))))
+        except ValueError:
+            return 0
+
+    def add_watch(p: Profile, word: str, min_pct: int | None = None) -> str | None:
         word = " ".join(word.lower().split())[:40]
         if len(word) < 2:
             return None
         if word not in p.watch:
             p.watch = (p.watch + [word])[-30:]
+            p.watch_min[word] = p.watch_default if min_pct is None else min_pct
+        elif min_pct is not None:
+            p.watch_min[word] = min_pct
+        p.watch_min = {w: v for w, v in p.watch_min.items() if w in p.watch and v}
         return word
 
     @app.get("/notify", response_class=HTMLResponse)
@@ -1163,9 +1178,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             conn.execute("DELETE FROM tg_links WHERE user_id=?", (u["id"],))
             return go("/notify")
         p.tg_deals, p.tg_weekly = bool(form.get("tg_deals")), bool(form.get("tg_weekly"))
-        p.watch = []
-        for w in str(form.get("watch", "")).replace(";", ",").replace("\n", ",").split(","):
-            add_watch(p, w)
+        p.watch_default = pct(form.get("watch_default"))
+        p.watch, p.watch_min = [], {}
+        for w, m in zip(form.getlist("w"), form.getlist("wmin")):
+            add_watch(p, str(w), pct(m))
         save_profile(u["id"], p, health)
         return go("/notify?saved=1")
 
@@ -1181,7 +1197,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if not word:
             return JSONResponse({"ok": False}, status_code=400)
         save_profile(u["id"], p, health)
-        return JSONResponse({"ok": True, "word": word, "linked": bool(tg_chat(u["id"]))})
+        return JSONResponse({"ok": True, "word": word, "min": p.watch_min.get(word, 0), "linked": bool(tg_chat(u["id"]))})
 
     def tg_reply(chat: str, text: str, path: str | None = None, label: str = "Відкрити сайт"):
         tg.send(chat, text, [(label, f"{base_url}{path}")] if path else None)
@@ -1298,7 +1314,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
 
 # Іконка й колір плитки для товару без фото (за тегом), і підпис категорії для фільтра
-VISUALS = [("coffee", "☕", 28, "Кава"), ("tea", "🍵", 95, "Чай"), ("fish", "🐟", 200, "Риба"), ("meat", "🍗", 12, "М'ясо"),
+VISUALS = [("coffee", "☕", 28, "Кава"), ("tea", "🍵", 95, "Чай"), ("fish", "🐟", 200, "Риба й морепродукти"), ("meat", "🍗", 12, "М'ясо"),
            ("dairy", "🥛", 210, "Молочне"), ("eggs", "🥚", 45, "Яйця"), ("vegetables", "🥦", 120, "Овочі"),
            ("fruits", "🍎", 350, "Фрукти"), ("grains", "🌾", 40, "Крупи"), ("sweets", "🍫", 330, "Солодке"),
            ("alcohol", "🍷", 345, "Напої"), ("household", "🧴", 260, "Побут"), ("gluten", "🍞", 32, "Хліб і макарони")]
@@ -1320,7 +1336,8 @@ NAME_VISUALS = [
     (("свинин", "ялович", "телятин", "фарш", "ошийок", "ребр"), "🥩", "М'ясо"),
     (("ковбас", "сосиск", "сардельк", "шинк"), "🌭", "М'ясо"),
     ((" кур", "курят", "курк", "курч", "індич", "гомілк", "стегн"), "🍗", "М'ясо"),
-    (("скумбр", "лосос", "хек", "минта", "тріск", "оселед", "риб", "форел"), "🐟", "Риба"),
+    (("кревет", "мідії", "мідій", "кальмар", "восьмин", "краб", "морепрод", "устриц", "ікра"), "🦐", "Риба й морепродукти"),
+    (("скумбр", "лосос", "хек", "минта", "тріск", "оселед", "риб", "форел", "сьомг", "тунц", "тунец", "дорадо", "сибас"), "🐟", "Риба й морепродукти"),
     (("хліб", "батон", "багет", "лаваш"), "🍞", "Хліб і макарони"),
     (("рис",), "🍚", "Крупи"), (("гречк", "крупа", "пшон", "вівсян пластів", "булгур"), "🌾", "Крупи"),
     (("борошно",), "🌾", "Бакалія"), (("олія",), "🫒", "Бакалія"), (("цукор",), "🧂", "Бакалія"),
@@ -1333,9 +1350,14 @@ NAME_VISUALS = [
 CAT_HUE = {label: hue for _, _, hue, label in VISUALS} | {"Бакалія": 40}
 
 
-CAT_PASTEL = {"Молочне": "p-sky", "Яйця": "p-citrus", "М'ясо": "p-tomato", "Риба": "p-sky", "Овочі": "p-basil",
+CAT_PASTEL = {"Молочне": "p-sky", "Яйця": "p-citrus", "М'ясо": "p-tomato", "Риба й морепродукти": "p-sky", "Овочі": "p-basil",
               "Фрукти": "p-citrus", "Крупи": "p-citrus", "Хліб і макарони": "p-citrus", "Бакалія": "p-citrus",
               "Кава": "p-plum", "Чай": "p-basil", "Солодке": "p-berry", "Напої": "p-plum", "Побут": "p-sky"}
+
+
+# Порядок кнопок-категорій: схожі поруч (овочі з фруктами, кава з чаєм, м'ясо з рибою…)
+CAT_ORDER = ["Овочі", "Фрукти", "Кава", "Чай", "М'ясо", "Риба й морепродукти", "Молочне", "Яйця", "Крупи", "Хліб і макарони",
+             "Бакалія", "Солодке", "Напої", "Побут"]
 
 
 def name_visual(name: str) -> dict:
@@ -1395,7 +1417,7 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     )
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
     for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "watch", "tg_deals", "tg_weekly"):
+              "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly"):
         setattr(p, k, getattr(prev, k))
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]

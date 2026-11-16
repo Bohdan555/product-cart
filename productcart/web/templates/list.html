@@ -53,7 +53,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 </div>
 {% if cats|length > 1 %}
 <div class="filters" role="group" aria-label="Категорії">
-  {% set CEMO = {"Молочне": "🥛", "Яйця": "🥚", "М'ясо": "🥩", "Риба": "🐟", "Овочі": "🥦", "Фрукти": "🍎", "Крупи": "🌾", "Хліб і макарони": "🍞", "Бакалія": "🫒", "Кава": "☕", "Чай": "🍵", "Солодке": "🍫", "Напої": "🥤", "Побут": "🧴"} %}
+  {% set CEMO = {"Молочне": "🥛", "Яйця": "🥚", "М'ясо": "🥩", "Риба й морепродукти": "🐟", "Овочі": "🥦", "Фрукти": "🍎", "Крупи": "🌾", "Хліб і макарони": "🍞", "Бакалія": "🫒", "Кава": "☕", "Чай": "🍵", "Солодке": "🍫", "Напої": "🥤", "Побут": "🧴"} %}
   <button type="button" class="fchip{% if not cat %} on{% endif %}" data-cat=""><span aria-hidden="true">🔥</span>Усе</button>
   {% for c in cats %}<button type="button" class="fchip{% if cat == c %} on{% endif %}" data-cat="{{ c }}"><span aria-hidden="true">{{ CEMO.get(c, "🛒") }}</span>{{ c }}</button>{% endfor %}
 </div>

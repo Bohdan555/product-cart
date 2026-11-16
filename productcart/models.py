@@ -107,7 +107,9 @@ class Profile:
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо
     # Сповіщення в Telegram
-    watch: list[str] = field(default_factory=list)         # слова «стежити»: «кава», «лосось»
+    watch: list[str] = field(default_factory=list)         # обрані товари (слова): «кава», «лосось»
+    watch_min: dict[str, int] = field(default_factory=dict)  # слово → мінімальна знижка, %, щоб повідомити
+    watch_default: int = 0                                  # поріг для нових обраних (з «🔔» на картці)
     tg_deals: bool = True                                   # цікаві акції (список «стежити» + великі знижки)
     tg_weekly: bool = True                                  # щопонеділка — меню на тиждень
 

@@ -47,7 +47,7 @@ TAG_RULES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
 ]
 TAG_LABELS = {
     "dairy": "молочне", "lactose": "з лактозою", "gluten": "з глютеном", "meat": "м'ясо", "pork": "свинина",
-    "fish": "риба", "eggs": "яйця", "honey": "мед", "alcohol": "алкоголь", "sweets": "солодке", "coffee": "кава",
+    "fish": "риба й морепродукти", "eggs": "яйця", "honey": "мед", "alcohol": "алкоголь", "sweets": "солодке", "coffee": "кава",
     "tea": "чай", "vegetables": "овочі", "fruits": "фрукти", "grains": "крупи", "household": "побутове",
 }
 

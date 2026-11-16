@@ -51,7 +51,7 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
 
         # «🔔» з картки акції і стрічка показує кнопку
         assert 'class="pbell"' in c.get("/list").text
-        assert c.post("/notify/watch", data={"csrf": token, "word": "Молоко"}).json() == {"ok": True, "word": "молоко", "linked": True}
+        assert c.post("/notify/watch", data={"csrf": token, "word": "Молоко"}).json() == {"ok": True, "word": "молоко", "min": 0, "linked": True}
 
         assert c.get("/cron/notify").status_code == 403                       # не Vercel Cron
         monkeypatch.setattr(tgm, "is_menu_day", lambda: True)
@@ -59,7 +59,7 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         st = c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"}).json()
         assert st["deals"] == 1 and st["menus"] == 1
         deals = tg.sent[0][1]
-        assert "Молоко" in deals and "стежите: молоко" in deals and "Кава зернова" in deals and "ви купуєте" in deals
+        assert "Молоко" in deals and "обране: молоко" in deals and "Кава зернова" in deals and "ви купуєте" in deals
         assert "Меню на тиждень" in tg.sent[1][1]
 
         # наступного дня — без повторів
@@ -68,10 +68,22 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         assert c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"}).json()["deals"] == 0 and not tg.sent
 
         # налаштування і /stop
-        c.post("/notify", data={"csrf": token, "watch": "кава, сир", "tg_weekly": "1"})
-        assert "сир" in c.get("/notify").text
+        c.post("/notify", data={"csrf": token, "w": ["кава", "сир"], "wmin": ["20", "0"], "tg_weekly": "1",
+                                 "watch_default": "30"})
+        page = c.get("/notify").text
+        assert '<span class="nname">сир</span>' in page and '<option value="20" selected>' in page
+        assert c.post("/notify/watch", data={"csrf": token, "word": "хек"}).json()["min"] == 30
         hook(c, "/stop")
         assert "Підключити Telegram" in c.get("/notify").text
+
+
+def test_watch_threshold():
+    p = Profile(watch=["кава", "чай"], watch_min={"кава": 20})
+    offers = [Offer(chain="silpo", name="Кава мелена", price=90, old_price=100, product_id="a"),   # −10%
+              Offer(chain="silpo", name="Чай чорний", price=90, old_price=100, product_id="b"),
+              Offer(chain="silpo", name="Кава зернова", price=70, old_price=100, product_id="c")]   # −30%
+    got = {o.product_id: why for o, why in tgm.pick_deals(offers, p, set())}
+    assert set(got) == {"b", "c"} and got["c"] == "обране: кава, від 20%"
 
 
 def test_codes_and_matching():
