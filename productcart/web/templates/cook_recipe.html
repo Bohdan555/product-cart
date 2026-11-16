@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ it.recipe.title }} — рецепт · Кошик з акцій{% endblock %}
+{% block body %}
+{% set r = it.recipe %}{% set d = it.dish %}
+<div class="td-top"><a class="td-back" href="/cook" aria-label="До списку «Готую»">←</a></div>
+<section class="td-hero">
+  {% if r.id in photos %}<img src="{{ photos[r.id] }}" alt="">{% else %}<span class="e" aria-hidden="true">{{ r.emoji }}</span>{% endif %}
+  <div><h1 class="xh">{{ r.title }}</h1><span class="td-pill">{{ ic("clock", "sm") }} {{ r.minutes }} хв · {{ d.people }} {{ plural(d.people, 'порція', 'порції', 'порцій') }}</span></div>
+</section>
+
+<h2 class="td-h">Продукти</h2>
+<div class="td-list">
+  {% for k, q in d.ingredients.items() %}
+  <div class="td-li"><span>{{ name_visual(ingredients[k][0]).emoji }} {{ ingredients[k][0] }}</span><span class="td-cost">{{ fmt_qty(q, ingredients[k][1]) }}</span></div>
+  {% endfor %}
+  {% for x in r.extras %}<div class="td-li"><span>{{ name_visual(x).emoji }} {{ x }}</span><span class="td-home soft">за смаком</span></div>{% endfor %}
+</div>
+
+{% if r.steps %}
+<h2 class="td-h">Як готувати</h2>
+<ol class="td-steps ck-steps">{% for s in r.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+{% endif %}
+
+{% if saved %}
+<form method="post" action="/cook/done" class="td-done-form"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="id" value="{{ r.id }}">
+  <button type="submit" class="btn">✓ Приготовано</button></form>
+{% endif %}
+{% endblock %}

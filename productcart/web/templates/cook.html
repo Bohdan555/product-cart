@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Готую — Кошик з акцій{% endblock %}
+{% block body %}
+<h1 class="xh">Що <span class="hl">готую</span></h1>
+{% if bought %}<div class="ok ck-welcome">З покупками! 🛍 Ось рецепти — відкривайте, коли час готувати.</div>{% endif %}
+{% if request.query_params.get('done') %}<div class="ok ck-welcome">Смачного! Записали в «Приготовано» ✓</div>{% endif %}
+
+{% if items %}
+<ol class="eat-list">
+  {% for it in items %}{% set r = it.recipe %}{% set d = it.dish %}
+  <li class="eat-row">
+    <a class="eat-open" href="/cook/{{ r.id }}">
+      {% if r.id in photos %}<img src="{{ photos[r.id] }}" alt="" {% if loop.index0 > 2 %}loading="lazy"{% endif %}>{% else %}<span class="eat-em" aria-hidden="true">{{ r.emoji }}</span>{% endif %}
+      <span class="eat-t"><b>{{ r.title }}</b><small>{{ r.minutes }} хв · {{ d.people }} {{ plural(d.people, 'порція', 'порції', 'порцій') }}{% if it.c.src == 'week' %} · з меню тижня{% endif %}</small></span>
+    </a>
+    <form method="post" action="/cook/done"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="id" value="{{ r.id }}">
+      <button type="submit" class="ck-done" aria-label="Приготовано: {{ r.title }}">✓</button></form>
+  </li>
+  {% endfor %}
+</ol>
+<p class="hint ck-hint">Рецепти зберігаються 2 тижні. ✓ — «приготовано».</p>
+{% else %}
+<div class="card stack">
+  <p><b>Тут з'являться рецепти, які ви оберете</b></p>
+  <p class="hint">Оберіть страву на сьогодні або зберіть кошик з меню тижня — рецепти збережуться самі.</p>
+  <div class="row"><a class="btn" href="/today">Що приготувати сьогодні?</a><a class="btn alt" href="/week">План на тиждень</a></div>
+</div>
+{% endif %}
+{% endblock %}

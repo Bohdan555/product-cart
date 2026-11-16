@@ -1160,3 +1160,20 @@ body:has(.su) footer{display:none}
 .td-toggle.no{background:var(--p-tomato)}
 
 .inapp ol{margin:8px 0 0;padding-left:20px}.inapp li{margin:4px 0}
+
+/* ---------- «Готую» ---------- */
+.ck-welcome{margin:0 0 12px}
+.ck-done{width:44px;height:44px;border-radius:50%;border:0;background:var(--soft);color:var(--accent);font:800 20px var(--body);cursor:pointer;flex:none}
+.ck-done:active{transform:scale(.92)}
+.ck-hint{text-align:center}
+.ck-steps li{margin:10px 0;font-size:16.5px;line-height:1.5}
+.ck-card{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px 14px;margin:0 0 12px}
+.ck-thumbs{display:flex;flex:none}.ck-thumbs i{font-style:normal;width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:var(--p-tomato);border:2px solid var(--card);margin-left:-8px;font-size:20px}
+.ck-thumbs i:first-child{margin-left:0}
+.ck-t{min-width:0}.ck-t b{display:block;font-size:15px;line-height:1.3}.ck-t small{color:var(--accent);font-weight:700}
+.ck-back{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--bg);border-radius:20px;padding:10px 10px 10px 16px;box-shadow:0 14px 30px -10px var(--shadow);width:min(440px,calc(100% - 32px));animation:su-in .3s both}
+.ck-back span{flex:1;font-weight:700}
+.ck-back .btn{background:var(--sticker);color:var(--sticker-ink)}
+.ck-back button{border:0;background:none;color:var(--bg);font-size:22px;cursor:pointer;padding:4px 8px}
+a.eat-open,a.eat-open *{text-decoration:none;color:var(--ink)}
+a.eat-open small{color:var(--muted)}

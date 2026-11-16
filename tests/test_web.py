@@ -331,6 +331,8 @@ def test_menu_to_silpo_cart(tmp_path):
         cart_page = c.get("/silpo/cart").text
         assert "Оплатити на сайті «Сільпо»" in cart_page and "https://silpo.ua/pay/c1" in cart_page and "hcart" in cart_page
         assert shared.items["other"] == 1 and len(shared.items) > 1
+        cook = c.get("/cook").text
+        assert cook.count('class="eat-row"') == 5 and "з меню тижня" in cook        # рецепти тижня збережено
         assert c.post("/menu/silpo-cart", data={"csrf": "bad"}).status_code == 400
 
 
@@ -682,6 +684,7 @@ def test_me_profile_page(client):
     assert "Ви поки гість" in g and "Реальні ціни вашого «Сільпо»" in g and 'href="/register"' in g
     token = register(client)
     client.post("/today/cooked", data={"csrf": token, "id": "omelette"})
+    client.post("/cook/done", data={"csrf": token, "id": "omelette"})
     me = client.get("/me").text
     assert "Ваш профіль" in me and "Приготовано" in me and "<b>1</b>" in me and "«Сільпо» не підключено" in me
     assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
@@ -719,3 +722,20 @@ def test_checkout_link_shape_and_in_app_browser():
     class R:
         headers = {"user-agent": "Mozilla/5.0 (iPhone) AppleWebKit Telegram-iOS/10.0"}
     assert in_app_browser(R()) == "Telegram"
+
+
+
+def test_cook_list_saves_recipes_for_guest_and_user(client):
+    assert "Тут з'являться рецепти" in client.get("/cook").text
+    r = client.post("/today/cooked", data={"id": "omelette", "n": "3"})
+    assert 'href="/cook/omelette"' in r.text
+    home = client.get("/").text
+    assert "Готуєте: Омлет з перцем і сиром" in home
+    page = client.get("/cook/omelette").text
+    assert "3 порції" in page and "Як готувати" in page and "✓ Приготовано" in page
+    assert client.post("/cook/done", data={"id": "omelette"}).headers["location"] == "/cook?done=1"
+    assert "Тут з'являться рецепти" in client.get("/cook").text
+    token = register(client)
+    client.post("/today/cooked", data={"csrf": token, "id": "plov", "n": "2"})
+    assert "Плов з куркою" in client.get("/cook").text and "1 рецепт збережено" in client.get("/me").text
+    assert "Як готувати" in client.get("/cook/borscht").text      # не з мого списку — теж відкривається

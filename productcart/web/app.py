@@ -46,7 +46,7 @@ GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes")
+              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking")
 # Конструктор меню: що можна любити / виключити (теги інгредієнтів)
 SETUP_TASTES = [("meat", "🍗", "М'ясо й птиця"), ("fish", "🐟", "Риба й морепродукти"), ("vegetables", "🥦", "Овочі"),
                 ("grains", "🌾", "Крупи й гарніри"), ("dairy", "🧀", "Молочне"), ("eggs", "🍳", "Яйця"),
@@ -387,7 +387,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         """Головна «Що готуємо?»: разово на сьогодні або план на тиждень."""
         u = user_of(request)
         analytics.track(conn, u["id"] if u else None, "home_viewed", guest=not u)
-        return render(request, "home.html", u, st=user_stats(u["id"]) if u else None)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        return render(request, "home.html", u, st=user_stats(u["id"]) if u else None, cooking=cooking_items(p)[:3])
 
     def user_stats(uid: int) -> dict:
         """Для головної й профілю: зекономлено цього місяця (з кошиків), скільки страв приготовано."""
@@ -416,7 +417,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         ctx = dict(p=p, mine=mine, days=days, st=user_stats(u["id"]) if u else None,
                    link=silpo_link(u["id"]) if u else None, chat=tg_chat(u["id"]) if u else None,
                    likes=[TAG_LABELS.get(t, t) for t in p.likes][:4], hides=[TAG_LABELS.get(t, t) for t in p.dislikes][:3],
-                   fridge_n=len(p.fridge) + len(p.fridge_other))
+                   fridge_n=len(p.fridge) + len(p.fridge_other), cook_n=len(cooking_items(p)))
         return render(request, "me.html", u, **ctx)
 
     @app.post("/client-log")
@@ -1223,6 +1224,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return go("/silpo")
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
+        p_save, health_save = load_profile(u["id"])
+        remember_cooking(p_save, m.ids, m.people, "week")
+        save_profile(u["id"], p_save, health_save)
         bought = {k for k in str(form.get("bought", "")).split(",") if k}
         wants = silpo_cart.wants_from_menu(m.cart, bought)
         wants += [silpo_cart.Want("x:" + x, x, 1, "pcs") for x in m.extras if "x:" + x not in bought]   # з моїх страв
@@ -1256,6 +1260,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: кошик не зібрався: %s: %s", type(err).__name__, str(err)[:1500])
             return render(request, "cart.html", u, status=502, **ctx,
                           error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
+        chat = tg_chat(u["id"])
+        if chat and res["placed"]:
+            await asyncio.to_thread(tg.send, chat["chat_id"],
+                                    f"🛒 Кошик у «Сільпо» зібрано: {len(res['placed'])} "
+                                    f"{plural(len(res['placed']), 'товар', 'товари', 'товарів')}.\n"
+                                    "Після оплати повертайтесь — рецепти вже збережено 🍳",
+                                    [("Мої рецепти", f"{base_url}/cook?bought=1")])
         analytics.track(conn, u["id"], event, placed=len(res["placed"]), missing=len(res["missing"]),
                         had=res["had"], total=res["total"], checkout=bool(res["checkout"]), saving=round(saving, 2), **extra)
         return remember_cart(render(request, "cart.html", u, res=res, **ctx), res["count"], u["id"])
@@ -1316,6 +1327,64 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if u["email"].lower() not in admin_emails:
             return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
+
+    # ---------- «Готую»: рецепти страв, які людина обрала (сьогодні або на тиждень) ----------
+    COOK_TTL = timedelta(days=14)
+
+    def remember_cooking(p: Profile, ids: list[str], n: int, src: str) -> None:
+        """Додає рецепти нагору списку «Готую» (без повторів), старші за 2 тижні забуваємо."""
+        now = security.iso(security.now())
+        old = security.iso(security.now() - COOK_TTL)
+        keep = [c for c in p.cooking if c.get("id") not in ids and c.get("at", "") >= old]
+        p.cooking = ([{"id": i, "n": n, "at": now, "src": src} for i in ids] + keep)[:21]
+
+    def cooking_items(p: Profile) -> list[dict]:
+        """[{c, recipe, dish}] — для сторінки «Готую»; рецепти, яких уже немає, пропускаємо."""
+        mine = {r.id: r for r in menu.user_recipes(p)}
+        out = []
+        for c in p.cooking:
+            r = menu.RECIPE_BY_ID.get(c.get("id")) or mine.get(c.get("id"))
+            if r:
+                out.append({"c": c, "recipe": r, "dish": menu.Dish(r, max(1, int(c.get("n") or 2)))})
+        return out
+
+    def save_any(request: Request, u, p: Profile, health: bool, resp):
+        """Зберегти профіль: у базу для користувача або в cookie для гостя."""
+        if u:
+            save_profile(u["id"], p, health)
+            return resp
+        return keep_guest(resp, p)
+
+    @app.get("/cook", response_class=HTMLResponse)
+    def cook_page(request: Request):
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        return render(request, "cook.html", u, items=cooking_items(p), photos=menu_photos(),
+                      bought=bool(request.query_params.get("bought")))
+
+    @app.get("/cook/{rid}", response_class=HTMLResponse)
+    def cook_recipe(request: Request, rid: str):
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        it = next((x for x in cooking_items(p) if x["recipe"].id == rid), None)
+        if it is None:          # рецепт, якого немає у списку, теж показуємо — на 2 людей
+            r = menu.RECIPE_BY_ID.get(rid) or {x.id: x for x in menu.user_recipes(p)}.get(rid)
+            if not r:
+                return go("/cook")
+            it = {"c": {"id": rid, "n": p.household or 2}, "recipe": r, "dish": menu.Dish(r, p.household or 2)}
+        return render(request, "cook_recipe.html", u, it=it, photos=menu_photos(), ingredients=menu.INGREDIENTS,
+                      fmt_qty=menu.fmt_qty, saved=any(c.get("id") == rid for c in p.cooking))
+
+    @app.post("/cook/done")
+    async def cook_done(request: Request):
+        """«Приготовано»: прибираємо зі списку й рахуємо в «Приготовано» профілю."""
+        form, u, p, health, bad = await menu_form(request)
+        if bad:
+            return bad
+        rid = str(form.get("id", ""))
+        p.cooking = [c for c in p.cooking if c.get("id") != rid]
+        analytics.track(conn, u["id"] if u else None, "cooked", dish=rid, guest=not u)
+        return save_any(request, u, p, health, go("/cook?done=1"))
 
     # ---------- «Що приготувати сьогодні»: продукти → час і люди → 3 страви → рецепт ----------
     def today_args(request: Request) -> tuple[list[str], int, int]:
@@ -1389,9 +1458,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if u and not secrets.compare_digest(str(form.get("csrf", "")), u["csrf"]):
             return HTMLResponse("Сторінка застаріла. Оновіть її й спробуйте ще раз.", status_code=400)
         rid = str(form.get("id", ""))
-        title = next((r.title for r in menu.RECIPES if r.id == rid), "")
-        analytics.track(conn, u["id"] if u else None, "cooked", dish=rid, guest=not u)
-        return render(request, "today_done.html", u, title=title)
+        p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
+        title = next((r.title for r in menu.RECIPES + menu.user_recipes(p) if r.id == rid), "")
+        try:
+            n = max(1, min(12, int(form.get("n") or p.household or 2)))
+        except ValueError:
+            n = 2
+        if title:
+            remember_cooking(p, [rid], n, "today")
+        analytics.track(conn, u["id"] if u else None, "cook_started", dish=rid, guest=not u)
+        return save_any(request, u, p, health, render(request, "today_done.html", u, title=title, rid=rid))
 
     @app.post("/today/cart")
     async def today_cart(request: Request):
@@ -1419,6 +1495,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if not opts or not opts[0].lines:
             return go("/today")
         o = opts[0]
+        p2, health2 = load_profile(u["id"])
+        remember_cooking(p2, [rid], n, "today")
+        save_profile(u["id"], p2, health2)
         wants = silpo_cart.wants_from_menu(o.lines)
         ctx = dict(bought="", wanted=len(wants), cart_action="/today/cart",
                    cart_hidden={"id": rid, "have": ",".join(have), "n": n, "need": ",".join(need)})
@@ -1866,7 +1945,7 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
     for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
               "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly", "my_dishes",
-              "fridge", "fridge_other", "fridge_at", "menu_days"):
+              "fridge", "fridge_other", "fridge_at", "menu_days", "cooking"):
         setattr(p, k, getattr(prev, k))
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]

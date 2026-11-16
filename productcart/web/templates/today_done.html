@@ -5,6 +5,7 @@
   <span class="icotile lg">{{ ic("pan", "big") }}</span>
   <h1 class="xh">Смачного!</h1>
   <p class="lead">{% if title %}{{ title }} — {% endif %}сьогодні вирішено.</p>
+  {% if rid %}<a class="btn" href="/cook/{{ rid }}">Відкрити рецепт</a><p class="hint">Рецепт збережено в «Готую» — він чекатиме на головній.</p>{% endif %}
 </section>
 <section class="td-upsell">
   <b>Скласти так на весь тиждень?</b>

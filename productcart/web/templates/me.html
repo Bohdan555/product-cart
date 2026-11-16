@@ -35,6 +35,7 @@
 
 <h2 class="ph">Кухня</h2>
 <div class="pgroup">
+  {{ row("/cook", "pan", "tomato", "Готую", (cook_n ~ " " ~ plural(cook_n, 'рецепт', 'рецепти', 'рецептів') ~ " збережено") if cook_n else "рецепти страв, які ви обрали") }}
   {{ row("/menu/setup", "family", "citrus", "Сім'я і дні", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей') ~ " · " ~ (days|join(', '))) }}
   {{ row("/menu/setup", "clock", "sky", "Час і бюджет", "до " ~ p.max_minutes ~ " хв · " ~ ((p.menu_budget|int ~ " ₴ на тиждень") if p.menu_budget else "без обмежень")) }}
   <a class="prow" href="/menu/setup"><span class="icotile" style="--t:var(--p-berry);--ic:var(--s-berry)">{{ ic("taste") }}</span>

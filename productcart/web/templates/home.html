@@ -5,6 +5,12 @@
   <h1 class="xh">Що <span class="hl">готуємо?</span></h1>
   <p class="lead">Страви з того, що є вдома, і з акцій «Сільпо» поруч.</p>
 
+  {% if cooking %}
+  <a class="ck-card" href="/cook">
+    <span class="ck-thumbs" aria-hidden="true">{% for it in cooking %}<i>{{ it.recipe.emoji }}</i>{% endfor %}</span>
+    <span class="ck-t"><b>Готуєте: {{ cooking|map(attribute='recipe')|map(attribute='title')|join(', ')|truncate(48) }}</b><small>рецепти збережено →</small></span>
+  </a>
+  {% endif %}
   <a class="door today" href="/today">
     <span class="icotile lg">{{ ic("pan", "big") }}</span>
     <b>Що приготувати сьогодні?</b>

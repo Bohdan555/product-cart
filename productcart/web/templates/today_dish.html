@@ -42,7 +42,7 @@
 
 <form method="post" action="/today/cooked" class="td-done-form">
   {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}
-  <input type="hidden" name="id" value="{{ d.id }}">
+  <input type="hidden" name="id" value="{{ d.id }}"><input type="hidden" name="n" value="{{ n }}">
   <button type="submit" class="btn{% if o.lines %} alt{% endif %}">{{ 'Я все маю — готую!' if o.lines else 'Готую! 👩‍🍳' }}</button>
 </form>
 {% endblock %}

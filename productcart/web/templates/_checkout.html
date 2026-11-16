@@ -9,15 +9,34 @@
   {% endif %}
   {% if cart.checkout or cart.checkout_mobile %}
   <div class="row">
-    {% if cart.checkout_mobile %}<a class="btn" href="{{ cart.checkout_mobile }}" rel="noopener">Оплатити в застосунку «Сільпо»</a>{% endif %}
-    {% if cart.checkout %}<a class="btn{% if cart.checkout_mobile %} alt{% endif %}" href="{{ cart.checkout }}" target="_blank" rel="noopener">Оплатити на сайті «Сільпо»</a>{% endif %}
+    {% if cart.checkout_mobile %}<a class="btn" href="{{ cart.checkout_mobile }}" target="_blank" rel="noopener" data-pay>Оплатити в застосунку «Сільпо»</a>{% endif %}
+    {% if cart.checkout %}<a class="btn{% if cart.checkout_mobile %} alt{% endif %}" href="{{ cart.checkout }}" target="_blank" rel="noopener" data-pay>Оплатити на сайті «Сільпо»</a>{% endif %}
   </div>
   {% else %}
   <p>Кошик уже у вашому «Сільпо» — оформіть його в застосунку або на сайті.</p>
   <div class="row">
-    <a class="btn" href="https://silpo.ua/cart" target="_blank" rel="noopener">Відкрити кошик на silpo.ua</a>
+    <a class="btn" href="https://silpo.ua/cart" target="_blank" rel="noopener" data-pay>Відкрити кошик на silpo.ua</a>
   </div>
   {% endif %}
   <p class="hint">Не відкривається або «сторінку не знайдено»? Відкрийте застосунок «Сільпо» → <b>Кошик</b>: усі товари вже там. «Сільпо» просить увійти — тим самим номером, що й тут.</p>
 </section>
 <p><a class="btn alt" href="/buy">До списку покупок</a></p>
+<div class="ck-back" id="ckBack" hidden role="status">
+  <span>Купили? 🛍</span><a class="btn small" href="/cook?bought=1">Мої рецепти →</a>
+  <button type="button" aria-label="Закрити" id="ckBackX">×</button>
+</div>
+<script>
+(function () {
+  // Оплата відкривається в новій вкладці «Сільпо». Коли людина повертається сюди — пропонуємо рецепти.
+  var K = 'pc-paying', bar = document.getElementById('ckBack'); if (!bar) return;
+  function get() { try { return +sessionStorage.getItem(K) || 0; } catch (e) { return 0; } }
+  function set(v) { try { if (v) sessionStorage.setItem(K, v); else sessionStorage.removeItem(K); } catch (e) {} }
+  document.querySelectorAll('[data-pay]').forEach(function (a) { a.addEventListener('click', function () { set(Date.now()); }); });
+  function check() { var t = get(); if (t && Date.now() - t > 3000 && Date.now() - t < 3 * 3600e3) { bar.hidden = false; if (window.haptic) haptic(10); } }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+  window.addEventListener('pageshow', check); window.addEventListener('focus', check);
+  document.getElementById('ckBackX').onclick = function () { bar.hidden = true; set(0); };
+  bar.querySelector('a').addEventListener('click', function () { set(0); });
+  check();
+})();
+</script>
