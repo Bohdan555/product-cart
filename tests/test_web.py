@@ -207,8 +207,9 @@ def test_menu_page_and_settings(client):
 
 def test_landing_and_guest_menu(client):
     r = client.get("/")
-    assert r.status_code == 200 and "Скласти меню" in r.text and r.text.count('class="l-plan"') == 3
-    assert "прототип" not in r.text
+    assert r.status_code == 200 and 'href="/today"' in r.text and 'href="/week"' in r.text
+    assert "прототип" not in r.text and 'href="/me"' in r.text
+    assert client.get("/week").headers["location"] == "/fridge"
     # гість відкриває меню без реєстрації, на демо-цінах
     r = client.get("/menu")
     assert r.status_code == 200 and "Демо-ціни" in r.text and "pc_guest" in client.cookies
@@ -517,7 +518,7 @@ def test_onboarding_start_and_auto_store(client):
 
 def test_cart_tab_for_guest(client):
     page = client.get("/silpo/cart").text
-    assert 'href="/register">Увійти' in page and 'href="/silpo/cart"' in client.get("/").text
+    assert 'href="/register">Увійти' in page and 'href="/register"' in client.get("/").text   # значок кошика веде гостя на вхід
 
 
 def test_add_deal_to_silpo_cart(tmp_path):

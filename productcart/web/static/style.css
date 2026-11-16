@@ -11,11 +11,14 @@
   /* пастельні «продуктові» тони під темний текст */
   --p-tomato:#f4ddd5;--p-citrus:#f5ebcc;--p-basil:#d9eadf;--p-plum:#e4e0ef;--p-berry:#f1dde3;--p-sky:#d9e7ef;
   --shadow:rgba(25,30,28,.14);--heart:#d0466b;
+  /* насичені пари до пастелей — пляма під контуром іконок */
+  --s-tomato:#f2957a;--s-citrus:#f4c84a;--s-basil:#72c495;--s-plum:#a98ee0;--s-sky:#72aee0;--s-berry:#ec8db4;
   --display:"Unbounded",system-ui,sans-serif;--body:"Onest",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#141716;--card:#1b1f1d;--ink:#eef1ee;--muted:#9ba29d;--line:#262b28;--accent:#5cc48f;
   --accent-ink:#0d1f15;--soft:#21322a;--chip:#1d211f;--bad:#f2b8b5;--bad-soft:#3a1d1b;--sticker:#e2c660;
   --p-tomato:#3a2a25;--p-citrus:#38321f;--p-basil:#21322a;--p-plum:#2b2836;--p-berry:#36252b;--p-sky:#22303a;
-  --shadow:rgba(0,0,0,.5);--heart:#ff6b93;color-scheme:dark}}
+  --shadow:rgba(0,0,0,.5);--heart:#ff6b93;
+  --s-tomato:#c4664d;--s-citrus:#c9a233;--s-basil:#3f9a68;--s-plum:#7c63b5;--s-sky:#4a84b5;--s-berry:#b8618a;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body)}
 a{color:var(--accent)}
@@ -544,7 +547,7 @@ nav.top + .hcart,.logo + .hcart{margin-left:6px}
 body.tabbed .wrap{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))}
 nav.top a.tabbed,.hcart{display:none!important}
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:0 max(14px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));pointer-events:none}
-.dock nav{pointer-events:auto;max-width:460px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr;align-items:center;gap:4px;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:28px;padding:7px;box-shadow:0 14px 30px -18px var(--shadow)}
+.dock nav{pointer-events:auto;max-width:460px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:4px;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:28px;padding:7px;box-shadow:0 14px 30px -18px var(--shadow)}
 .dock a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);text-decoration:none;font-size:11.5px;font-weight:700;padding:7px 4px;border-radius:20px;transition:background .2s,color .2s,transform .12s}
 .dock a:active{transform:scale(.95)}
 .dock a svg{width:22px;height:22px}
@@ -948,3 +951,24 @@ body:has(.su) footer{display:none}
 .fr-n{color:var(--muted);font-weight:600}
 .fr-undo{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--ink);color:var(--bg);border-radius:14px;padding:8px 8px 8px 14px;margin-top:10px;font-size:14px;animation:su-in .25s both}
 .fr-undo button{border:0;background:var(--sticker);color:var(--sticker-ink,#2b2410);border-radius:10px;padding:7px 12px;font:700 13.5px var(--body);cursor:pointer}
+
+/* ---------- Двоколірні іконки ---------- */
+.ico{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none;overflow:visible}
+.ico .f{fill:var(--ic,var(--s-basil));stroke:none;transform:translate(2px,2px)}
+.ico.sm{width:16px;height:16px;stroke-width:2.6}.ico.mid{width:22px;height:22px}.ico.big{width:46px;height:46px;stroke-width:1.7}
+.dock a .ico{width:24px;height:24px;--ic:transparent}
+.dock a.on .ico{--ic:var(--s-citrus)}
+.icotile{display:grid;place-items:center;width:44px;height:44px;border-radius:15px;background:var(--t,var(--chip));flex:none}
+.icotile.lg{width:68px;height:68px;border-radius:22px;background:var(--card)}
+/* ---------- Головна «Що готуємо?» ---------- */
+.home h1{margin-bottom:6px}
+.door{display:block;position:relative;text-decoration:none;color:var(--ink);border-radius:28px;padding:22px 20px;margin-bottom:12px;overflow:hidden;transition:transform .15s}
+.door:active{transform:scale(.98)}
+.door b{display:block;font:800 22px/1.15 var(--display);margin:12px 0 6px;max-width:15ch}
+.door small{color:color-mix(in srgb,var(--ink) 70%,transparent);font-size:14.5px}
+.door .go{position:absolute;right:18px;bottom:18px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--bg);font-size:20px}
+.door.today{background:var(--p-citrus)}.door.today .ico{--ic:var(--s-citrus)}
+.door.week{background:var(--p-basil)}.door.week .ico{--ic:var(--s-basil)}
+.saved{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px 16px}
+.saved b{font:800 22px var(--display);color:var(--accent);font-variant-numeric:tabular-nums}
+.home .note{color:var(--muted);font-size:13.5px;text-align:center;margin:10px 0}

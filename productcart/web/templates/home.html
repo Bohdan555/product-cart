@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Кошик з акцій — що приготувати з того, що є, і з акцій «Сільпо»{% endblock %}
+{% block body %}
+<section class="home">
+  <h1 class="xh">Що <span class="hl">готуємо?</span></h1>
+  <p class="lead">Страви з того, що є вдома, і з акцій «Сільпо» поруч.</p>
+
+  <a class="door today" href="/today">
+    <span class="icotile lg">{{ ic("pan", "big") }}</span>
+    <b>Що приготувати сьогодні?</b>
+    <small>З того, що є під рукою · 30 секунд</small>
+    <span class="go" aria-hidden="true">→</span>
+  </a>
+  <a class="door week" href="/week">
+    <span class="icotile lg">{{ ic("calendar", "big") }}</span>
+    <b>План на тиждень</b>
+    <small>Вечері з акцій і готовий кошик</small>
+    <span class="go" aria-hidden="true">→</span>
+  </a>
+
+  {% if st and st.saved > 0 %}
+  <div class="saved"><span>Ви зекономили за {{ st.month }}</span><b>−{{ st.saved }} ₴</b></div>
+  {% elif not user %}
+  <p class="note">Без реєстрації · ціни поки демонстраційні</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -12,10 +12,11 @@
 // Не завантажуємо наперед те, що ходить у «Сільпо» або має побічні дії.
 // Нижня панель постійна між переходами — підсвічуємо поточну вкладку самі
 function markTab() {
-  var path = location.pathname;
-  document.querySelectorAll('.tabs a').forEach(function (a) {
-    var h = a.getAttribute('href');
-    var on = h === '/silpo/cart' ? path.indexOf('/silpo') === 0 : h === '/login' ? (path === '/login' || path === '/register') : path === h;
+  var p = location.pathname;
+  var sect = /^\/(list|go)/.test(p) ? 'deals'
+    : /^\/(me|profile|notify|silpo|login|register|dishes|privacy|photos)/.test(p) ? 'me' : 'cook';
+  document.querySelectorAll('.dock a').forEach(function (a) {
+    var on = a.dataset.sect === sect;
     a.classList.toggle('on', on);
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
@@ -32,10 +33,9 @@ document.addEventListener('turbo:before-prefetch', function (e) {
   <a class="logo" href="/"><i>%</i>Кошик з акцій</a>
   {% if user %}
   <nav class="top">
-    <a class="tabbed{% if request.url.path == '/list' %} on{% endif %}" href="/list">Мій список</a>
-    <a class="tabbed{% if request.url.path == '/menu' %} on{% endif %}" href="/menu">Меню</a>
-    <a class="tabbed{% if request.url.path == '/profile' %} on{% endif %}" href="/profile">Профіль</a>
-    <a class="tabbed{% if request.url.path == '/silpo' %} on{% endif %}" href="/silpo">Сільпо</a>
+    <a class="tabbed" href="/">Готуємо</a>
+    <a class="tabbed" href="/list">Акції</a>
+    <a class="tabbed" href="/me">Профіль</a>
     {% if is_admin %}<a href="/admin/stats" {% if request.url.path == '/admin/stats' %}class="on"{% endif %}>Статистика</a>{% endif %}
     <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button type="submit">Вийти</button></form>
   </nav>
@@ -52,10 +52,9 @@ document.addEventListener('turbo:before-prefetch', function (e) {
 </div>
 {% set path = request.url.path %}
 <div class="tabs dock" id="tabs-{{ 'u' if user else 'g' }}" data-turbo-permanent><nav aria-label="Розділи">
-  <a href="/menu" {% if path == '/menu' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="7"/><circle cx="12" cy="13" r="3"/><path d="M12 3v2"/></svg>Меню</a>
-  <a href="/list" {% if path == '/list' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>Акції</a>
-  <a href="/silpo/cart" class="dcart{% if path.startswith('/silpo') %} on{% endif %}" {% if path.startswith('/silpo') %}aria-current="page"{% endif %}><span class="tico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg><b class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b></span>Кошик</a>
-{% if user %}  <a href="/profile" {% if path == '/profile' %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Профіль</a>{% else %}  <a href="/login" {% if path in ('/login', '/register') %}class="on" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5M15 12H4"/></svg>Увійти</a>{% endif %}
+  <a href="/" data-sect="cook">{{ ic("pan") }}Готуємо</a>
+  <a href="/list" data-sect="deals">{{ ic("tag") }}Акції</a>
+  <a href="/me" data-sect="me">{{ ic("user") }}Профіль</a>
 </nav></div><script>
 window.setCartCount = function (n) {   // цифра на значку кошика (шапка й нижня панель)
   document.querySelectorAll('.cartN').forEach(function (b) { b.textContent = n > 99 ? '99+' : n; b.hidden = !n; });

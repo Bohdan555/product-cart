@@ -31,7 +31,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask
 
-from . import analytics, db, fridge, logs, security, silpo_identity, unsplash
+from . import analytics, db, fridge, icons, logs, security, silpo_identity, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -147,7 +147,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     app.state.conn, app.state.gw = conn, gw
     analytics.init(conn)
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
-    tpl.env.globals.update(watch_word=watch_word)
+    tpl.env.globals.update(watch_word=watch_word, ic=icons.ic)
     tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual, plural=plural,
                            name_visual=name_visual)
 
@@ -383,15 +383,32 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     # ---------- сторінки ----------
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
+        """Головна «Що готуємо?»: разово на сьогодні або план на тиждень."""
         u = user_of(request)
-        if u:
-            return go("/list")
-        offers = planner.merge_nearby(demo.load())
-        analytics.track(conn, None, "landing_viewed")
-        previews = [(n, menu.plan(offers, Profile(name="Гість", household=n), dinners=5, max_minutes=60)) for n in (1, 2, 4)]
-        hot = sorted((o for o in offers if o.discount_pct), key=lambda o: -(o.discount_pct or 0))[:4]
-        return render(request, "index.html", previews=previews, days=menu.DAYS, photos=menu_photos(),
-                      recipes=len(menu.RECIPES), hot=hot)
+        analytics.track(conn, u["id"] if u else None, "home_viewed", guest=not u)
+        return render(request, "home.html", u, st=user_stats(u["id"]) if u else None)
+
+    def user_stats(uid: int) -> dict:
+        """Для головної й профілю: зекономлено цього місяця (з кошиків), скільки страв приготовано."""
+        today = date.today()
+        since = f"{today.year:04d}-{today.month:02d}-01"
+        saved = cooked = 0
+        for r in conn.execute("SELECT event, meta FROM events WHERE user_id=? AND ts >= ? AND event IN "
+                              "('silpo_cart_built', 'today_cart', 'cooked')", (uid, since)).fetchall():
+            if r["event"] == "cooked":
+                cooked += 1
+            try:
+                saved += float(json.loads(r["meta"] or "{}").get("saving") or 0)
+            except (ValueError, TypeError):
+                pass
+        months = ["січень", "лютий", "березень", "квітень", "травень", "червень", "липень", "серпень", "вересень",
+                  "жовтень", "листопад", "грудень"]
+        return {"saved": round(saved), "cooked": cooked, "month": months[today.month - 1]}
+
+    @app.get("/week")
+    def week_start(request: Request):
+        """План на тиждень починається з «що є вдома» (крок ①); далі меню (②) і покупки (③)."""
+        return go("/fridge")
 
     @app.get("/register", response_class=HTMLResponse)
     def register_form(request: Request):
@@ -1200,7 +1217,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return render(request, "cart.html", u, status=502, **ctx,
                           error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
         analytics.track(conn, u["id"], "silpo_cart_built", placed=len(res["placed"]), missing=len(res["missing"]),
-                        had=res["had"], total=res["total"], checkout=bool(res["checkout"]))
+                        had=res["had"], total=res["total"], checkout=bool(res["checkout"]), saving=m.saving)
         return remember_cart(render(request, "cart.html", u, res=res, **ctx), res["count"], u["id"])
 
     @app.get("/photos", response_class=HTMLResponse)
