@@ -694,8 +694,6 @@ PANTRY_WORDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "flour": ("Борошно", "🌾", ("борошно", "мука")),
     "oil": ("Олія", "🫒", ("олія", "соняшникова олія")),
 }
-POPULAR_HAVE = ["eggs", "potato", "onion", "carrot", "chicken_fillet", "cheese", "rice", "pasta", "buckwheat",
-                "tomatoes_can", "sour_cream", "minced", "milk", "mushrooms"]
 
 
 def word_to_key(text: str) -> str | None:

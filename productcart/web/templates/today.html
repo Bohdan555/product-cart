@@ -19,11 +19,6 @@
     </div>
     <p class="hv-hint" id="hvHint" aria-live="polite">Напишіть або натисніть 🎤 і скажіть: «курка, рис, яйця і трохи сиру».</p>
 
-    <p class="hv-lbl">Часто є вдома</p>
-    <div class="hv-pop" id="hvPop">
-      {% for k in popular %}<button type="button" data-k="{{ k }}" aria-pressed="{{ 'true' if k in have else 'false' }}"><span aria-hidden="true">{{ words[k][1] }}</span>{{ words[k][0] }}</button>{% endfor %}
-    </div>
-
     {% if user %}
     <div class="hv-photo" id="tdShot">
       <span class="icotile">{{ ic("fridge", "mid") }}</span>
@@ -85,7 +80,6 @@
     var box = $('hvChips'); box.innerHTML = '';
     have.forEach(function (k) { box.appendChild(chipEl(WORDS[k][1] + ' ' + WORDS[k][0], function () { have = have.filter(function (x) { return x !== k; }); sync(); })); });
     other.forEach(function (t) { var c = chipEl(t, function () { other = other.filter(function (x) { return x !== t; }); sync(); }); c.classList.add('other'); c.title = 'Цього немає в наших рецептах'; box.appendChild(c); });
-    document.querySelectorAll('#hvPop button').forEach(function (b) { b.setAttribute('aria-pressed', have.indexOf(b.dataset.k) >= 0); });
     inp.placeholder = have.length || other.length ? 'Ще щось?' : 'Напишіть: курка, рис, яйця…';
   }
   function chipEl(text, onRemove) {
@@ -290,8 +284,6 @@
   });
   inp.addEventListener('blur', function () { setTimeout(function () { if (inp.value.trim()) flush(); sug.hidden = true; }, 150); });
   $('hvField').addEventListener('click', function (e) { if (e.target === $('hvField')) inp.focus(); });
-  document.querySelectorAll('#hvPop button').forEach(function (b) { b.onclick = function () {
-    var k = b.dataset.k; if (have.indexOf(k) >= 0) have = have.filter(function (x) { return x !== k; }); else have.push(k); tap(); sync(); }; });
   form.querySelector('[data-next]').onclick = function () { if (inp.value.trim()) flush(); tap(12); show(1); };
   form.querySelector('[data-skip]').onclick = function () { have = []; other = []; sync(); show(1); };
   form.querySelector('[data-prev]').onclick = function () { show(0); };

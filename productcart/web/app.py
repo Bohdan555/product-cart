@@ -1342,7 +1342,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             have = [k for k in p.fridge if k in menu.PANTRY_WORDS]
             n = p.household or n
         words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
-        return render(request, "today.html", u, words=words, popular=menu.POPULAR_HAVE, have=have, t=t, n=n)
+        return render(request, "today.html", u, words=words, have=have, t=t, n=n)
 
     @app.get("/today/dishes", response_class=HTMLResponse)
     async def today_dishes(request: Request):

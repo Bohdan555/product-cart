@@ -632,7 +632,7 @@ def test_menu_setup_wizard_guest_and_user(client):
 
 def test_today_flow_guest_and_user(client):
     page = client.get("/today").text
-    assert "Що є" in page and 'data-k="eggs"' in page and 'href="/register"' in page
+    assert "Що є" in page and 'id="hvIn"' in page and 'id="hvMic"' in page and "Часто є вдома" not in page and 'href="/register"' in page
     r = client.get("/today/dishes", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2"})
     assert r.status_code == 200 and "Омлет з перцем і сиром" in r.text and "✓ Є все" in r.text and "Демо-ціни" in r.text
     assert r.text.count('class="td-dish"') == 3
