@@ -321,8 +321,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         offers = planner.merge_nearby(demo.load())
         analytics.track(conn, None, "landing_viewed")
         previews = [(n, menu.plan(offers, Profile(name="Гість", household=n), dinners=5, max_minutes=60)) for n in (1, 2, 4)]
+        hot = sorted((o for o in offers if o.discount_pct), key=lambda o: -(o.discount_pct or 0))[:4]
         return render(request, "index.html", previews=previews, days=menu.DAYS, photos=menu_photos(),
-                      recipes=len(menu.RECIPES))
+                      recipes=len(menu.RECIPES), hot=hot)
 
     @app.get("/register", response_class=HTMLResponse)
     def register_form(request: Request):

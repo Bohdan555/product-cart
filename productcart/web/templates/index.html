@@ -1,54 +1,82 @@
 {% extends "base.html" %}
 {% block title %}Кошик з акцій — вечері на тиждень з акцій «Сільпо»{% endblock %}
-{% block wrapcls %} wide{% endblock %}
 {% block body %}
-<section class="l-hero">
-  <div>
-    <span class="l-eyebrow"><b></b>Акції «Сільпо» на цей тиждень</span>
-    <h1 class="l-h1">Вечері на тиждень <em>з акцій</em></h1>
-    <p class="l-sub">Меню і список покупок з акцій «Сільпо».</p>
-    <div class="l-cta">
-      <a class="l-btn" href="/menu">Скласти меню
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      <span class="l-note">Без реєстрації</span>
-    </div>
-  </div>
-
-  <div class="l-demo" aria-label="Приклад меню">
-    <div class="l-demo-h">
-      <div class="l-seg" role="group" aria-label="Скільки вас"><span>Скільки вас</span>
-        {% for n, m in previews %}<button type="button" data-p="{{ n }}" aria-pressed="{{ 'true' if n == 2 else 'false' }}">{{ n }}</button>{% endfor %}</div>
-      <small>Демо-ціни</small>
-    </div>
-    {% for n, m in previews %}
-    <div class="l-plan" data-for="{{ n }}" {% if n != 2 %}hidden{% endif %}>
-      <div class="l-sum">
-        <div><div class="lbl">Порція</div><div class="big">≈ {{ m.per_portion|round|int }}<small>₴</small></div></div>
-        {% if m.saving >= 1 %}<div class="l-save"><span>Економія</span><b>−{{ uah(m.saving|round) }}</b></div>{% endif %}
-        <div class="line">Разом ≈ <b>{{ uah(m.total|round) }}</b></div>
-      </div>
-      <div class="l-days">
-      {% for d in m.dishes[:3] %}
-        <a class="l-day" href="/menu">
-          {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" width="76" height="76">{% else %}<span class="l-emoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
-          <div class="l-dbody"><div class="l-dmeta"><b>{{ days[loop.index0] }}</b>{{ d.minutes }} хв</div>
-            <div class="l-dt">{{ d.title }}</div>
-            {% if d.saving >= 1 %}<span class="l-dtag">−{{ uah(d.saving|round) }}</span>{% endif %}</div>
-        </a>
-      {% endfor %}
-      </div>
-    </div>
-    {% endfor %}
-    <div class="l-demo-f"><span></span><a href="/menu">Усе меню →</a></div>
+{% set PAL = ["p-tomato", "p-citrus", "p-basil", "p-plum", "p-sky"] %}
+<section class="lx-hero">
+  <span class="lx-eyebrow"><b></b>Акції «Сільпо» на цей тиждень</span>
+  <h1 class="xh lx-h1">Вечері на тиждень <span class="hl">з акцій</span></h1>
+  <p class="lx-sub">Меню з того, що зараз зі знижкою, і готовий кошик до нього.</p>
+  <div class="lx-cta">
+    <a class="lx-btn" href="/menu">Скласти меню
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    <span class="lx-note">Без реєстрації · {{ recipes }} рецептів</span>
   </div>
 </section>
 
+<section class="lx-demo" aria-label="Приклад меню">
+  <div class="lx-demo-h">
+    <div class="lx-seg" role="group" aria-label="Скільки вас"><span>Скільки вас</span>
+      {% for n, m in previews %}<button type="button" data-p="{{ n }}" aria-pressed="{{ 'true' if n == 2 else 'false' }}">{{ n }}</button>{% endfor %}</div>
+    <small>демо-ціни</small>
+  </div>
+  {% for n, m in previews %}
+  <div class="l-plan" data-for="{{ n }}" {% if n != 2 %}hidden{% endif %}>
+    <div class="stats">
+      <div class="stat" style="--c:var(--p-tomato)"><small>Порція</small><b>≈ <span data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</span><em>₴</em></b></div>
+      <div class="stat" style="--c:var(--p-basil)"><small>Економія</small><b>−<span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span><em>₴</em></b></div>
+      <div class="stat" style="--c:var(--p-plum)"><small>Разом</small><b><span data-count="{{ m.total|round|int }}">{{ m.total|round|int }}</span><em>₴</em></b></div>
+    </div>
+    <div class="lx-reel">
+      {% for d in m.dishes %}
+      <a class="lx-dish{% if d.id not in photos %} nophoto{% endif %}" href="/menu" style="--c:var(--{{ PAL[loop.index0 % 5] }})">
+        {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" {% if loop.index0 > 1 %}loading="lazy"{% endif %}>{% else %}<span class="lx-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+        <span class="dprice"><small>порція</small><b>{{ d.per_portion|round|int }} ₴</b></span>
+        {% if d.saving >= 1 %}<span class="dsave">−{{ d.saving|round|int }} ₴</span>{% endif %}
+        <span class="lx-cap"><span class="lx-day">{{ days[loop.index0] }} · {{ d.minutes }} хв</span><b>{{ d.title }}</b></span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+{% if hot %}
+<section class="lx-sec">
+  <div class="lx-sec-h"><h2>Гарячі акції</h2><a href="/list">Усі →</a></div>
+  <div class="lx-hot">
+    {% for o in hot %}{% set v = visual(o) %}
+    <a class="lx-deal" href="/list" style="--c:var(--{{ v.pastel }})">
+      <span class="lx-off">−{{ o.discount_pct|round|int }}%</span>
+      <span class="lx-big" aria-hidden="true">{{ v.emoji }}</span>
+      <b>{{ o.name }}</b>
+      <span class="lx-pr">{{ uah(o.price) }}{% if o.old_price %} <s>{{ uah(o.old_price) }}</s>{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="lx-sec">
+  <h2 class="lx-h2">Як це працює</h2>
+  <div class="lx-how">
+    <div style="--c:var(--p-citrus)"><span aria-hidden="true">👥</span><b>Скажіть, скільки вас</b><small>і на скільки вечорів</small></div>
+    <div style="--c:var(--p-basil)"><span aria-hidden="true">🥘</span><b>Меню з акцій тижня</b><small>ціна порції й економія</small></div>
+    <div style="--c:var(--p-sky)"><span aria-hidden="true">🛒</span><b>Кошик у «Сільпо»</b><small>одним дотиком</small></div>
+  </div>
+</section>
+
+<section class="lx-final">
+  <h2>Що на вечерю цього тижня?</h2>
+  <a class="lx-btn light" href="/menu">Скласти меню</a>
+</section>
 <p class="l-foot">Акції з офіційного каналу «Сільпо» · дані не продаємо</p>
 
 <script>
-document.querySelectorAll(".l-seg button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll(".l-seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
-  document.querySelectorAll(".l-plan").forEach(p => p.hidden = p.dataset.for !== b.dataset.p);
-}));
+document.querySelectorAll('.lx-seg button').forEach(function (b) { b.addEventListener('click', function () {
+  document.querySelectorAll('.lx-seg button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
+  document.querySelectorAll('.l-plan').forEach(function (p) { p.hidden = p.dataset.for !== b.dataset.p; });
+  var on = document.querySelector('.l-plan:not([hidden])'); if (on && window.uiRefresh) uiRefresh(on);
+  if (window.haptic) haptic(8);
+}); });
 </script>
 {% endblock %}
