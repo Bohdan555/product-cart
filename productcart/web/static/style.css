@@ -1158,3 +1158,5 @@ body:has(.su) footer{display:none}
 .td-right{display:inline-flex;align-items:center;gap:8px;flex:none}
 .td-toggle{border-radius:999px;padding:5px 11px;font-weight:700;font-size:13px;text-decoration:none;background:var(--chip);color:var(--ink)}
 .td-toggle.no{background:var(--p-tomato)}
+
+.inapp ol{margin:8px 0 0;padding-left:20px}.inapp li{margin:4px 0}

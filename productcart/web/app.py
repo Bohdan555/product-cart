@@ -12,6 +12,7 @@ import time
 import logging
 import contextlib
 import json
+import re
 import os
 import secrets
 from datetime import date, timedelta
@@ -1085,8 +1086,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: перегляд кошика: %s: %s", type(e).__name__, str(e)[:800])
             err = f"«Сільпо» не відповіло: {str(e)[:150]}"
         analytics.track(conn, u["id"], "silpo_cart_viewed", items=cart.count if cart else 0)
+        if cart and (cart.checkout or cart.checkout_mobile):
+            logs.event(log, "silpo.checkout_link", web=link_shape(cart.checkout), mobile=link_shape(cart.checkout_mobile),
+                       inapp=in_app_browser(request) or None)
         resp = render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed,
-                      store=link["store_title"],
+                      store=link["store_title"], inapp=in_app_browser(request),
                       cleared=bool(cleared))
         return remember_cart(resp, cart.count if cart else 0, u["id"]) if not err else resp
 
@@ -1867,6 +1871,30 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]
     return p, diets, consent
+
+
+def in_app_browser(request) -> str | None:
+    """Вбудований браузер месенджера (там людина не увійшла на silpo.ua): назва або None."""
+    ua = request.headers.get("user-agent", "")
+    for key, name in (("Telegram", "Telegram"), ("Instagram", "Instagram"), ("FBAN", "Facebook"), ("FBAV", "Facebook"),
+                      ("Viber", "Viber"), ("TikTok", "TikTok")):
+        if key in ua:
+            return name
+    return None
+
+
+def link_shape(url: str | None) -> str | None:
+    """Адреса без ідентифікаторів: https://silpo.ua/cart/<id>?token=… → https://silpo.ua/cart/#?token=…"""
+    if not url:
+        return None
+    from urllib.parse import urlsplit
+    try:
+        u = urlsplit(url)
+    except ValueError:
+        return "?"
+    path = re.sub(r"[0-9a-fA-F-]{6,}|\d+", "#", u.path)
+    params = ",".join(sorted({kv.split("=")[0] for kv in u.query.split("&") if kv}))
+    return f"{u.scheme}://{u.netloc}{path}" + (f"?{params}" if params else "")
 
 
 def watch_word(name: str) -> str:

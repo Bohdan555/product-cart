@@ -13,7 +13,7 @@
   <h2>У вашому кошику вже {{ had }} {{ plural(had, 'товар', 'товари', 'товарів') }}</h2>
   {% if sample %}<p class="hint">{{ sample|join(', ') }}{% if had > sample|length %} та інші{% endif %}</p>{% endif %}
   <p>Додамо ще {{ wanted }} {{ plural(wanted, 'позицію', 'позиції', 'позицій') }}, нічого не видаляючи.</p>
-  <div class="row"><button class="btn" type="submit" id="go">Додати до кошика</button><a class="btn alt" href="/menu#list">Скасувати</a></div>
+  <div class="row"><button class="btn" type="submit" id="go">Додати до кошика</button><a class="btn alt" href="/buy">Скасувати</a></div>
 </form>
 
 {% else %}

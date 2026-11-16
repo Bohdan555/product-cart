@@ -709,3 +709,13 @@ def test_today_maybe_have_can_be_bought(client):
     page2 = client.get(url).text
     assert "Олія соняшникова" in page2 and ">Є</a>" in page2 and "мабуть, є" not in page2   # тепер у «докупити» з ціною
     assert "Показати реальні ціни" in page2       # є що докупити — пропонуємо ціни й кошик
+
+
+def test_checkout_link_shape_and_in_app_browser():
+    from productcart.web.app import link_shape, in_app_browser
+    assert link_shape("https://silpo.ua/cart/8f3a9c12-77ab?token=abc&utm_source=x") == "https://silpo.ua/cart/#?token,utm_source"
+    assert link_shape(None) is None
+
+    class R:
+        headers = {"user-agent": "Mozilla/5.0 (iPhone) AppleWebKit Telegram-iOS/10.0"}
+    assert in_app_browser(R()) == "Telegram"

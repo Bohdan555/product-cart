@@ -1,6 +1,12 @@
 {# Оплата: посилання дає «Сільпо». Сайт «Сільпо» відкриває кошик лише тим, хто там увійшов тим самим номером. #}
 <section class="card stack pay">
   <h2>Оплата</h2>
+  {% if inapp %}
+  <div class="note warnbox inapp">
+    <b>Ви у вбудованому браузері {{ inapp }}.</b> Тут «Сільпо» не знає, що ви увійшли, і може показати «сторінку не знайдено».
+    <ol><li>Натисніть <b>⋯</b> угорі → <b>«Відкрити в браузері»</b> (Safari чи Chrome)</li><li>Або просто відкрийте застосунок «Сільпо» → <b>Кошик</b> — товари вже там</li></ol>
+  </div>
+  {% endif %}
   {% if cart.checkout or cart.checkout_mobile %}
   <div class="row">
     {% if cart.checkout_mobile %}<a class="btn" href="{{ cart.checkout_mobile }}" rel="noopener">Оплатити в застосунку «Сільпо»</a>{% endif %}
@@ -12,6 +18,6 @@
     <a class="btn" href="https://silpo.ua/cart" target="_blank" rel="noopener">Відкрити кошик на silpo.ua</a>
   </div>
   {% endif %}
-  <p class="hint">«Сільпо» просить увійти? Тим самим номером, що й тут.</p>
+  <p class="hint">Не відкривається або «сторінку не знайдено»? Відкрийте застосунок «Сільпо» → <b>Кошик</b>: усі товари вже там. «Сільпо» просить увійти — тим самим номером, що й тут.</p>
 </section>
-<p><a class="btn alt" href="/menu#list">До меню</a></p>
+<p><a class="btn alt" href="/buy">До списку покупок</a></p>
