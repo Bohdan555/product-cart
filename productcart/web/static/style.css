@@ -1185,3 +1185,9 @@ a.eat-open small{color:var(--muted)}
 
 .eat-t small.eat-home{display:block;color:var(--accent);font-weight:700;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .home-ok{color:var(--accent);font-weight:700}
+
+/* Імпорт рецепта за посиланням */
+.imp{background:var(--p-sky);border-radius:22px;padding:14px;margin:0 0 14px;display:grid;gap:8px}
+.imp label{font-size:14.5px}
+.imp-row{display:flex;gap:8px}.imp-row input{flex:1;min-width:0}
+.imp-ok{margin:0 0 12px}

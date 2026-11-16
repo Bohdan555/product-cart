@@ -32,7 +32,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask
 
-from . import analytics, db, fridge, icons, logs, security, silpo_identity, unsplash
+from . import analytics, db, fridge, icons, logs, recipe_import, security, silpo_identity, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -1373,7 +1373,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 return go("/cook")
             it = {"c": {"id": rid, "n": p.household or 2}, "recipe": r, "dish": menu.Dish(r, p.household or 2)}
         return render(request, "cook_recipe.html", u, it=it, photos=menu_photos(), ingredients=menu.INGREDIENTS,
-                      fmt_qty=menu.fmt_qty, saved=any(c.get("id") == rid for c in p.cooking))
+                      fmt_qty=menu.fmt_qty, saved=any(c.get("id") == rid for c in p.cooking),
+                      src=next((d.get("src") for d in p.my_dishes if d.get("id") == rid and d.get("src")), None))
 
     @app.post("/cook/done")
     async def cook_done(request: Request):
@@ -1621,7 +1622,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             did = menu.MY_PREFIX + secrets.token_hex(4)
         d = {"id": did, "title": str(form.get("title", "")).strip()[:80], "emoji": str(form.get("emoji", "")),
              "minutes": max(5, min(240, int(float(form.get("minutes") or 45)))), "ing": ing, "extra": extra,
-             "steps": str(form.get("steps", ""))[:2000]}
+             "steps": str(form.get("steps", ""))[:2000],
+             "src": str(form.get("src", ""))[:300] if str(form.get("src", "")).startswith(("http://", "https://")) else ""}
         if not menu.user_recipe(d):
             cur = dict(d, servings=serv)
             return render(request, "dishes.html", u, mine=menu.user_recipes(p), cur=cur, choices=ing_choices(),
@@ -1635,6 +1637,31 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         save_profile(u["id"], p, health)
         analytics.track(conn, u["id"], "my_dish_saved", ingredients=len(ing), extras=len(extra))
         return go(f"/dishes?saved={did}")
+
+    @app.post("/dishes/import", response_class=HTMLResponse)
+    async def dishes_import(request: Request):
+        """Посилання на рецепт → заповнена форма «моєї страви» (людина перевіряє й зберігає)."""
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return bad
+        p, _ = load_profile(u["id"])
+        url = str(form.get("url", ""))[:500]
+        ctx = dict(mine=menu.user_recipes(p), choices=ing_choices(), emojis=menu.MY_EMOJI, in_menu=set(p.menu), imp_url=url)
+        try:
+            draft = await asyncio.to_thread(recipe_import.import_recipe, url, request.headers.get("x-vercel-oidc-token"))
+        except recipe_import.ImportError_ as e:
+            analytics.track(conn, u["id"], "recipe_import", ok=False)
+            return render(request, "dishes.html", u, cur=None, imp_error=str(e), status=422, **ctx)
+        except Exception as e:
+            log.warning("Рецепт: імпорт не вдався: %s: %s", type(e).__name__, str(e)[:300])
+            analytics.track(conn, u["id"], "recipe_import", ok=False)
+            return render(request, "dishes.html", u, cur=None, status=502, **ctx,
+                          imp_error="Не вдалося розібрати сторінку. Спробуйте інше посилання або заповніть вручну.")
+        analytics.track(conn, u["id"], "recipe_import", ok=True, ingredients=len(draft["ing"]), extras=len(draft["extra"]))
+        if draft["emoji"] not in menu.MY_EMOJI:
+            draft["emoji"] = menu.MY_EMOJI[0]
+        return render(request, "dishes.html", u, cur=draft, imported=draft["host"], **ctx)
 
     @app.post("/dishes/delete")
     async def dishes_delete(request: Request):

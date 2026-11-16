@@ -21,6 +21,7 @@
 <ol class="td-steps ck-steps">{% for s in r.steps %}<li>{{ s }}</li>{% endfor %}</ol>
 {% endif %}
 
+{% if src %}<p class="hint">Рецепт з <a href="{{ src }}" target="_blank" rel="noopener">{{ src.split('/')[2] }}</a></p>{% endif %}
 {% if saved %}
 <form method="post" action="/cook/done" class="td-done-form"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="id" value="{{ r.id }}">
   <button type="submit" class="btn">✓ Приготовано</button></form>
