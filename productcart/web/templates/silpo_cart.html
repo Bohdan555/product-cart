@@ -25,7 +25,7 @@
 {% else %}
 <section class="msum scsum" aria-label="Підсумок кошика">
   <div><span class="lbl">У кошику {{ cart.lines|length }} {{ plural(cart.lines|length, 'товар', 'товари', 'товарів') }}</span>
-    <div class="big">{% if cart.products_total is not none %}{{ cart.products_total|round|int }}<small>₴</small>{% elif cart.total %}{{ cart.total|round|int }}<small>₴</small>{% else %}—{% endif %}</div>
+    <div class="big">{% if cart.products_total is not none %}<span data-count="{{ cart.products_total|round|int }}">{{ cart.products_total|round|int }}</span><small>₴</small>{% elif cart.total %}{{ cart.total|round|int }}<small>₴</small>{% else %}—{% endif %}</div>
     {% if cart.delivery %}<div class="sub">+ доставка {{ uah(cart.delivery) }} · разом {{ uah(cart.total) }}</div>{% endif %}
     <div class="sub">{{ DT.get(cart.delivery_type, cart.delivery_type or '') }}{% if cart.slot_start %} · {{ cart.slot_start[8:10] }}.{{ cart.slot_start[5:7] }}, {{ cart.slot_start[11:16] }}–{{ (cart.slot_end or '')[11:16] }} (UTC){% endif %}</div></div>
 </section>

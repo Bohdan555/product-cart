@@ -32,9 +32,9 @@
 
 {% if m.dishes %}
 <section class="msum" aria-label="Підсумок">
-  <div><span class="lbl">Порція</span><div class="big">≈ {{ m.per_portion|round|int }}<small>₴</small></div></div>
-  {% if m.saving >= 1 %}<div class="save"><span>економія</span><b>−{{ uah(m.saving|round) }}</b></div>{% endif %}
-  <div class="pay"><span>Разом <b>{{ uah(m.total|round) }}</b></span><a href="#list">Список ↓</a></div>
+  <div><span class="lbl">Порція</span><div class="big">≈ <span data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</span><small>₴</small></div></div>
+  {% if m.saving >= 1 %}<div class="save"><span>економія</span><b>−<span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span> ₴</b></div>{% endif %}
+  <div class="pay"><span>Разом <b><span data-count="{{ m.total|round|int }}">{{ m.total|round|int }}</span> ₴</b></span><a href="#list">Список ↓</a></div>
 </section>
 
 <div class="sec-h"><h2>Меню</h2></div>
@@ -49,6 +49,7 @@
       <h3 class="dt">{{ d.title }}</h3>
       {% if d.saving >= 1 %}<div class="tags"><span class="tag money">−{{ uah(d.saving|round) }}</span></div>{% endif %}
       <div class="dact">
+        <button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
         <button type="button" data-open="rec{{ i }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Рецепт</button>
         <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}">
           <button type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>Замінити</button></form>
@@ -71,6 +72,7 @@
     <h4>Як готувати</h4>
     <ol class="steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>
     <div class="ract">
+      <button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
       <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}"><button type="submit">Інша страва</button></form>
       <button type="button" class="primary" data-close>Готово</button>
     </div>
@@ -144,14 +146,15 @@
     var key = data.dataset.key, saved = {};
     try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
     var boxes = Array.prototype.slice.call(root.querySelectorAll('[data-buy]'));
-    function progress() {
+    function progress(user) {
       var done = boxes.filter(function (b) { return b.checked; }).length;
+      if (user && boxes.length && done === boxes.length) { if (window.celebrate) window.celebrate(); if (window.toast) window.toast('Усе куплено! 🎉'); if (window.haptic) haptic(30); }
       document.getElementById('bar').style.width = (boxes.length ? done / boxes.length * 100 : 0) + '%';
       document.getElementById('progressTxt').textContent = done ? done + ' з ' + boxes.length : '';
     }
     boxes.forEach(function (b) {
       b.checked = !!saved[b.dataset.buy];
-      b.addEventListener('change', function () { saved[b.dataset.buy] = b.checked; try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {} progress(); });
+      b.addEventListener('change', function () { saved[b.dataset.buy] = b.checked; try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {} progress(true); if (window.haptic) haptic(8); });
     });
     progress();
     var copy = document.getElementById('copy');
@@ -169,6 +172,24 @@
     });
   }
 
+  // ♡ страві: одразу перемикаємо сердечко, запит іде у фоні; вподобані частіше потраплятимуть у меню
+  root.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-like]'); if (!b) return;
+    e.preventDefault();
+    var id = b.dataset.like, on = !b.classList.contains('on');
+    root.querySelectorAll('[data-like="' + id + '"]').forEach(function (x) { x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); if (window.bump) bump(x); });
+    if (window.haptic) haptic(on ? 15 : 8);
+    var fd = new FormData(); fd.append('id', id);
+    var c = root.querySelector('input[name=csrf]'); if (c) fd.append('csrf', c.value);
+    fetch('/menu/like', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) throw new Error(d.error);
+      if (window.toast) window.toast(d.liked ? 'Частіше пропонуватимемо ❤' : 'Прибрали з улюблених');
+    }).catch(function () {
+      root.querySelectorAll('[data-like="' + id + '"]').forEach(function (x) { x.classList.toggle('on', !on); x.setAttribute('aria-pressed', !on); });
+      if (window.toast) window.toast('Не вдалося зберегти');
+    });
+  });
+
   // Налаштування, заміна страви й «закінчилось» — без перезавантаження сторінки:
   // кнопка реагує одразу, запит іде у фоні, а меню оновлюється на місці.
   var seq = 0, timer = null;
@@ -185,8 +206,11 @@
         var fresh = doc.getElementById('menuroot');
         if (!fresh) throw new Error('no menu');
         document.querySelectorAll('dialog[open]').forEach(function (d) { d.close(); });
+        var old = {}; root.querySelectorAll('[data-count]').forEach(function (x, k) { old[k] = x.dataset.count; });
         root.innerHTML = fresh.innerHTML;
+        root.querySelectorAll('[data-count]').forEach(function (x, k) { if (old[k] !== undefined) x.dataset.from = old[k]; });
         init();
+        if (window.uiRefresh) uiRefresh(root);
         root.classList.remove('busy');
         var f = root.querySelector('.day.fresh'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       })

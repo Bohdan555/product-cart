@@ -195,7 +195,7 @@ def test_menu_page_and_settings(client):
     after = re.findall(r'<h3 class="dt">([^<]+)</h3>', client.get("/menu").text)
     assert after[0] == titles[0] and after[1] != titles[1] and after[2] == titles[2]
     # «закінчилось» додає запас у кошик і повертається назад
-    key = re.search(r'name="key" value="([a-z_]+)"', html).group(1)
+    key = re.search(r'name="key" value="([a-z_]+)"', client.get("/menu").text).group(1)
     client.post("/menu/pantry", data={"csrf": token, "key": key})
     assert "Докупити:" in client.get("/menu").text
     assert client.post("/menu/pantry", data={"csrf": token, "key": "evil"}).status_code == 400
@@ -567,3 +567,16 @@ def test_deals_infinite_feed(client):
     # категорія
     coffee = client.get("/list?cat=Кава&partial=1").text
     assert coffee.count('class="pcard"') >= 1 and "Кава" in coffee and "Молоко" not in coffee
+
+
+def test_dish_likes(client):
+    r = client.post("/menu/like", data={"id": "plov"})                  # гість — у cookie
+    assert r.json() == {"liked": True, "count": 1}
+    assert 'data-like="' in client.get("/menu").text
+    assert client.post("/menu/like", data={"id": "plov"}).json()["liked"] is False
+    assert client.post("/menu/like", data={"id": "nope"}).status_code == 400
+    token = register(client)
+    assert client.post("/menu/like", data={"id": "borscht", "csrf": "bad"}).status_code == 400
+    assert client.post("/menu/like", data={"id": "borscht", "csrf": token}).json()["liked"] is True
+    prof = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
+    assert '"borscht"' in prof

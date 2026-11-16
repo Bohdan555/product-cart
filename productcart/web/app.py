@@ -39,7 +39,8 @@ COOKIE = "pc_session"
 GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
-GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev")
+GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
+              "dish_likes")
 OFFERS_TTL = timedelta(hours=6)
 STALE_TTL = timedelta(days=7)   # старіший кеш не показуємо навіть тимчасово
 offers_stale = contextvars.ContextVar("offers_stale", default=False)  # показали акції з застарілого кешу
@@ -95,7 +96,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return resp
     tpl = Jinja2Templates(directory=HERE / "templates")
     css_v = hashlib.sha1((HERE / "static" / "style.css").read_bytes()).hexdigest()[:10]
-    tpl.env.globals.update(css_v=css_v)
+    js_v = hashlib.sha1((HERE / "static" / "ui.js").read_bytes()).hexdigest()[:10]
+    tpl.env.globals.update(css_v=css_v, js_v=js_v)
     tpl.env.globals.update(uah=uah, chain_name=lambda k: CHAIN_NAMES.get(k.split(" · ")[0], k.split(" · ")[0]),
                            DIET_LABELS=DIET_LABELS, TAG_LABELS=TAG_LABELS)
     app.state.conn, app.state.gw = conn, gw
@@ -825,6 +827,26 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu = new
         analytics.track(conn, u["id"] if u else None, "menu_swap", dish_from=current[i], dish_to=new[i], guest=not u)
         return menu_done(u, p, health, f"/menu?swapped={i}#d{i}")
+
+    @app.post("/menu/like")
+    async def menu_like(request: Request):
+        """♡ страві: вподобані частіше потрапляють у меню. Відповідь — JSON, сторінка не перезавантажується."""
+        form, u, p, health, bad = await menu_form(request)
+        if bad:
+            return JSONResponse({"error": "Оновіть сторінку"}, status_code=400)
+        rid = str(form.get("id", ""))
+        if rid not in menu.RECIPE_BY_ID:
+            return JSONResponse({"error": "Невідома страва"}, status_code=400)
+        liked = rid not in p.dish_likes
+        p.dish_likes = ([rid] + [x for x in p.dish_likes if x != rid])[:30] if liked else [x for x in p.dish_likes if x != rid]
+        if liked:
+            p.dish_dislikes = [x for x in p.dish_dislikes if x != rid]
+        analytics.track(conn, u["id"] if u else None, "dish_like" if liked else "dish_unlike", dish=rid, guest=not u)
+        resp = JSONResponse({"liked": liked, "count": len(p.dish_likes)})
+        if u:
+            save_profile(u["id"], p, health)
+            return resp
+        return keep_guest(resp, p)
 
     @app.post("/menu/pantry")
     async def menu_pantry(request: Request):
