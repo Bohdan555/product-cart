@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Мій список — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>{{ "Популярні акції" if guest else "Акції для вас" }}</h1>
+<h1 class="xh">{% if guest %}Популярні <span class="hl">акції</span>{% else %}Акції <span class="hl">для вас</span>{% endif %}</h1>
 {% include "_stale.html" %}
 {% if link and p.lat is none %}
 <form class="card stack" method="post" action="/location" id="loc-form" style="margin-bottom:14px">
@@ -53,8 +53,9 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 </div>
 {% if cats|length > 1 %}
 <div class="filters" role="group" aria-label="Категорії">
-  <button type="button" class="fchip{% if not cat %} on{% endif %}" data-cat="">Усе</button>
-  {% for c in cats %}<button type="button" class="fchip{% if cat == c %} on{% endif %}" data-cat="{{ c }}">{{ c }}</button>{% endfor %}
+  {% set CEMO = {"Молочне": "🥛", "Яйця": "🥚", "М'ясо": "🥩", "Риба": "🐟", "Овочі": "🥦", "Фрукти": "🍎", "Крупи": "🌾", "Хліб і макарони": "🍞", "Бакалія": "🫒", "Кава": "☕", "Чай": "🍵", "Солодке": "🍫", "Напої": "🥤", "Побут": "🧴"} %}
+  <button type="button" class="fchip{% if not cat %} on{% endif %}" data-cat=""><span aria-hidden="true">🔥</span>Усе</button>
+  {% for c in cats %}<button type="button" class="fchip{% if cat == c %} on{% endif %}" data-cat="{{ c }}"><span aria-hidden="true">{{ CEMO.get(c, "🛒") }}</span>{{ c }}</button>{% endfor %}
 </div>
 {% endif %}
 <div class="grid" id="feed">

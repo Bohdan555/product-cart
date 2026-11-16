@@ -4,7 +4,7 @@
 {% set DT = {"SelfPickup": "Самовивіз", "DeliveryHome": "Доставка додому", "DeliveryFlat": "Доставка в квартиру",
              "DeliveryOffice": "Доставка в офіс", "DeliveryExpress": "Експрес-доставка", "WideAssortDelivery": "Доставка"} %}
 <section class="intro">
-  <h1>Кошик</h1>
+  <h1 class="xh">Кошик <span class="hl">«Сільпо»</span></h1>
   {% if store %}<p class="storeline">{{ store }} · <a href="/silpo">змінити магазин</a></p>{% elif user and not connect %}<p class="storeline"><a href="/silpo">Вибрати магазин</a></p>{% endif %}
 </section>
 
@@ -31,7 +31,12 @@
 </section>
 {% if cleared %}<div class="ok" style="margin-bottom:12px">Кошик очищено.</div>{% endif %}
 {% if notice %}<div class="err" style="margin-bottom:12px">{{ notice }}</div>{% endif %}
-{% for v in cart.validations %}<div class="note warnbox">{{ v }}</div>{% endfor %}
+{% if cart.min_order and cart.products_total is not none %}{% set pct = [100, (cart.products_total / cart.min_order * 100)|round|int]|min %}
+<div class="meter" aria-label="До мінімального замовлення">
+  <div class="bar"><i style="width:{{ pct }}%"></i></div>
+  <small>{% if cart.products_total >= cart.min_order %}Мінімальне замовлення набрано ✓{% else %}До мінімального замовлення ще <b>{{ uah((cart.min_order - cart.products_total)|round(0, 'ceil')) }}</b>{% endif %}</small>
+</div>
+{% else %}{% for v in cart.validations %}<div class="note warnbox">{{ v }}</div>{% endfor %}{% endif %}
 <div class="card sclist">
   {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set nostock = l.stock is not none and l.stock < l.quantity %}{% set stp = 0.1 if l.weighted else 1 %}
   <div class="scrow{% if odd or nostock %} odd{% endif %}{% if changed and changed == l.line_id %} fresh{% endif %}" id="l-{{ l.line_id }}">

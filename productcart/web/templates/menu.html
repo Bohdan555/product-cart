@@ -5,7 +5,7 @@
 <div id="menuroot">
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
 <section class="intro">
-  <h1>Вечері на тиждень</h1>
+  <h1 class="xh">Вечері цього тижня <span class="hl">з акцій</span></h1>
   {% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
   {% elif is_demo %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/silpo">Підключити «Сільпо»</a></div>{% endif %}
 </section>
@@ -31,23 +31,25 @@
 </div>
 
 {% if m.dishes %}
-<section class="msum" aria-label="Підсумок">
-  <div><span class="lbl">Порція</span><div class="big">≈ <span data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</span><small>₴</small></div></div>
-  {% if m.saving >= 1 %}<div class="save"><span>економія</span><b>−<span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span> ₴</b></div>{% endif %}
-  <div class="pay"><span>Разом <b><span data-count="{{ m.total|round|int }}">{{ m.total|round|int }}</span> ₴</b></span><a href="#list">Список ↓</a></div>
+<section class="stats" aria-label="Підсумок">
+  <div class="stat" style="--c:var(--p-tomato)"><small>Порція</small><b>≈ <span data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</span><em>₴</em></b></div>
+  <div class="stat" style="--c:var(--p-basil)"><small>Економія</small><b>−<span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span><em>₴</em></b></div>
+  <a class="stat" style="--c:var(--p-plum)" href="#list"><small>Разом ↓</small><b><span data-count="{{ m.total|round|int }}">{{ m.total|round|int }}</span><em>₴</em></b></a>
 </section>
 
-<div class="sec-h"><h2>Меню</h2></div>
-<div class="days">
+{% set PAL = ["p-tomato", "p-citrus", "p-basil", "p-plum", "p-sky", "p-berry", "p-citrus"] %}
+<div class="daychips" id="daychips">{% for d in m.dishes %}<button type="button" data-to="d{{ loop.index0 }}"{% if loop.first %} class="on"{% endif %}>{{ days[loop.index0] }}<i style="background:var(--{{ PAL[loop.index0 % 7] }})"></i></button>{% endfor %}</div>
+<div class="days reel" id="reel">
 {% for d in m.dishes %}{% set i = loop.index0 %}
-  <article class="day{% if i == 0 %} lead{% endif %}{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}">
+  <article class="day{% if swapped and swapped|int == i %} fresh{% endif %}{% if d.id not in photos %} nophoto{% endif %}" id="d{{ i }}" style="--c:var(--{{ PAL[i % 7] }})">
+    <div class="dprice"><small>порція</small><b>{{ d.per_portion|round|int }} ₴</b></div>
+    {% if d.saving >= 1 %}<span class="dsave">−{{ d.saving|round|int }} ₴</span>{% endif %}
     <button type="button" class="tile" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
       {% if d.id in photos %}<img src="/static/dishes/{{ d.id }}.jpg" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
     </button>
     <div class="dbody">
-      <div class="dmeta"><span class="dn">{{ days[i] }}</span><span>{{ d.minutes }} хв</span></div>
+      <div class="dmeta"><span class="dn">{{ days[i] }} · {{ d.minutes }} хв</span></div>
       <h3 class="dt">{{ d.title }}</h3>
-      {% if d.saving >= 1 %}<div class="tags"><span class="tag money">−{{ uah(d.saving|round) }}</span></div>{% endif %}
       <div class="dact">
         <button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
         <button type="button" data-open="rec{{ i }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Рецепт</button>
@@ -92,7 +94,8 @@
   {% else %}<a class="scart-alt" href="/silpo">Зробити кошик у «Сільпо» →</a>{% endif %}
   {% macro row(l, price) %}
   <label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ price }}">
-    <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+{% set nv = name_visual(l.name) %}<span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
     <span class="rmain"><b>{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}</b>
       <small>{{ fmt_qty(l.need, l.unit) }}</small></span>
     {{ caller() }}
@@ -136,6 +139,19 @@
 
   // Усе, що треба перев'язати після кожного оновлення меню
   function init() {
+    // дні над стрічкою: дотик гортає до картки, а гортання підсвічує день
+    var reel = document.getElementById('reel'), chips = document.querySelectorAll('#daychips button');
+    if (reel && chips.length) {
+      chips.forEach(function (c) { c.addEventListener('click', function () {
+        var t = document.getElementById(c.dataset.to); if (t) reel.scrollTo({ left: t.offsetLeft - (reel.clientWidth - t.clientWidth) / 2, behavior: 'smooth' });
+      }); });
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (es) { es.forEach(function (e) {
+          if (e.isIntersecting && e.intersectionRatio > .6) chips.forEach(function (c) { c.classList.toggle('on', c.dataset.to === e.target.id); });
+        }); }, { root: reel, threshold: [.6] });
+        reel.querySelectorAll('.day').forEach(function (d) { io.observe(d); });
+      }
+    }
     root.querySelectorAll('[data-open]').forEach(function (b) {
       b.addEventListener('click', function () { var d = document.getElementById(b.dataset.open); if (d && d.showModal) d.showModal(); });
     });
@@ -207,12 +223,15 @@
         if (!fresh) throw new Error('no menu');
         document.querySelectorAll('dialog[open]').forEach(function (d) { d.close(); });
         var old = {}; root.querySelectorAll('[data-count]').forEach(function (x, k) { old[k] = x.dataset.count; });
+        var r0 = document.getElementById('reel'), left = r0 ? r0.scrollLeft : 0;
         root.innerHTML = fresh.innerHTML;
+        var r1 = document.getElementById('reel'); if (r1) r1.scrollLeft = left;
         root.querySelectorAll('[data-count]').forEach(function (x, k) { if (old[k] !== undefined) x.dataset.from = old[k]; });
         init();
         if (window.uiRefresh) uiRefresh(root);
         root.classList.remove('busy');
-        var f = root.querySelector('.day.fresh'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        var f = root.querySelector('.day.fresh'), rr = document.getElementById('reel');
+        if (f && rr) rr.scrollTo({ left: f.offsetLeft - (rr.clientWidth - f.clientWidth) / 2, behavior: 'smooth' });
       })
       .catch(function () { if (my === seq) { root.classList.remove('busy'); form.submit(); } });
   }
@@ -239,6 +258,7 @@
       form.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === btn ? 'true' : 'false'); });
     }
     if (btn) btn.classList.add('pending');
+    if (/\/menu\/swap/.test(form.getAttribute('action') || '')) { var card = form.closest('.day'); if (card) card.classList.add('swapping'); }
     send(form, btn);
   });
   init();

@@ -181,7 +181,7 @@ def test_nearby_stores_within_radius(client):
 def test_menu_page_and_settings(client):
     token = register(client)
     r = client.get("/menu")
-    assert r.status_code == 200 and "Вечері на тиждень" in r.text and "Демо" in r.text and "Список покупок" in r.text
+    assert r.status_code == 200 and "Вечері цього тижня" in r.text and "Демо" in r.text and "Список покупок" in r.text
     assert r.text.count('<article class="day') == 5 and "Як готувати" in r.text
     assert client.post("/menu/settings", data={"csrf": "bad", "dinners": "3"}).status_code == 400
     assert client.post("/menu/settings", data={"csrf": token, "dinners": "3"}).status_code == 303
@@ -488,13 +488,13 @@ def test_stale_offers_shown_then_refreshed(client):
 def test_turbo_and_fonts_cached(client):
     html = client.get("/").text
     assert "/static/vendor/turbo-8.0.12.js" in html and "fonts.googleapis" not in html
-    assert "immutable" in client.get("/static/fonts/golos-text-cyrillic-wght-normal.woff2").headers["cache-control"]
+    assert "immutable" in client.get("/static/fonts/onest-cyrillic-wght-normal.woff2").headers["cache-control"]
     assert "app;dur=" in client.get("/login").headers["server-timing"]
 
 
 def test_guest_sees_demo_deals(client):
     r = client.get("/list")
-    assert r.status_code == 200 and "Популярні акції" in r.text and 'href="/register">Увійти' in r.text
+    assert r.status_code == 200 and "Популярні <span class=\"hl\">акції</span>" in r.text and 'href="/register">Увійти' in r.text
     assert r.text.count('class="pcard"') >= 10 and "hero-sum" not in r.text and "Не підійшли" not in r.text
 
 

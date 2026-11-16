@@ -55,6 +55,7 @@ class CartState:
     line_ids: dict[str, str] = field(default_factory=dict)     # productId → id рядка кошика (для зміни кількості)
     lines: list[dict] = field(default_factory=list)            # для показу: name, quantity, weighted, price, total…
     validations: list[str] = field(default_factory=list)
+    min_order: float | None = None          # мінімальна сума замовлення, якщо «Сільпо» її називає
     names: dict[str, str] = field(default_factory=dict)
     total: float | None = None            # разом із доставкою
     products_total: float | None = None   # лише товари
@@ -142,6 +143,8 @@ def parse_cart(data: Any) -> CartState:
         st.products_total = round(sum(l["total"] or (l["price"] or 0) * l["quantity"] for l in st.lines), 2)
     for v in _first(calc, "validations") or []:
         msg, c = v.get("message") or "", v.get("context") or {}
+        if msg == "order.cost.min" and _num(c.get("orderCostMin")):
+            st.min_order = _num(c.get("orderCostMin"))
         if v.get("level") == "error":
             st.validations.append(VALIDATION_TEXT.get(msg, msg).format(**{k: c.get(k, "") for k in ("orderCostMin",)}))
     st.checkout = _find(data, "checkoutWebLink", "webLink")

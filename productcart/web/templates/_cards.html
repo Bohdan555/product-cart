@@ -1,7 +1,7 @@
 {# Картки акцій: перша сторінка і довантаження при прокрутці (partial=1) #}
 {% for o, reasons in items %}{% set v = visual(o) %}{% set link_url = click_url(o) %}
   {% set up = o.unit_price() %}
-  <article class="pcard" data-cat="{{ v.cat }}">
+  <article class="pcard" data-cat="{{ v.cat }}" style="--c:var(--{{ v.pastel }})">
     <div class="pimg" style="--h:{{ v.hue }}">
       {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
       <span class="pemoji" aria-hidden="true">{{ v.emoji }}</span>

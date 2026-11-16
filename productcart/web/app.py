@@ -103,7 +103,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     app.state.conn, app.state.gw = conn, gw
     analytics.init(conn)
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
-    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual, plural=plural)
+    tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual, plural=plural,
+                           name_visual=name_visual)
 
     # ---------- допоміжне ----------
     def user_of(request: Request):
@@ -1138,15 +1139,30 @@ NAME_VISUALS = [
 CAT_HUE = {label: hue for _, _, hue, label in VISUALS} | {"Бакалія": 40}
 
 
+CAT_PASTEL = {"Молочне": "p-sky", "Яйця": "p-citrus", "М'ясо": "p-tomato", "Риба": "p-sky", "Овочі": "p-basil",
+              "Фрукти": "p-citrus", "Крупи": "p-citrus", "Хліб і макарони": "p-citrus", "Бакалія": "p-citrus",
+              "Кава": "p-plum", "Чай": "p-basil", "Солодке": "p-berry", "Напої": "p-plum", "Побут": "p-sky"}
+
+
+def name_visual(name: str) -> dict:
+    """Емодзі, категорія й пастельний колір за назвою продукту (для рядків списку й плиток акцій)."""
+    low = f" {(name or '').lower()} "
+    for stems, emoji, label in NAME_VISUALS:
+        if any(st in low for st in stems):
+            return {"emoji": emoji, "cat": label, "pastel": CAT_PASTEL.get(label, "p-basil")}
+    return {"emoji": "🛒", "cat": "Інше", "pastel": "p-basil"}
+
+
 def offer_visual(o: Offer) -> dict:
     name = f" {(o.name or '').lower()} "
     for stems, emoji, label in NAME_VISUALS:
         if any(st in name for st in stems):
-            return {"emoji": emoji, "hue": CAT_HUE.get(label, 150), "cat": label}
+            return {"emoji": emoji, "hue": CAT_HUE.get(label, 150), "cat": label, "pastel": CAT_PASTEL.get(label, "p-basil")}
     for tag, emoji, hue, label in VISUALS:
         if tag in o.tags:
-            return {"emoji": emoji, "hue": hue, "cat": label}
-    return {"emoji": "🛒", "hue": 150, "cat": o.category or "Інше"}
+            return {"emoji": emoji, "hue": hue, "cat": label, "pastel": CAT_PASTEL.get(label, "p-basil")}
+    cat = o.category or "Інше"
+    return {"emoji": "🛒", "hue": 150, "cat": cat, "pastel": CAT_PASTEL.get(cat, "p-basil")}
 
 
 STATIC_DIR = Path(__file__).parent / "static"
