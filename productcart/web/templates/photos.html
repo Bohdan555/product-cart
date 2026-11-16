@@ -6,7 +6,7 @@
 <p class="lead">Фото з <a href="{{ unsplash_home }}" target="_blank" rel="noopener">Unsplash</a>.</p>
 <div class="card stack">
 {% for id, p in unsplash.items() %}
-  <div><b>{{ titles.get(id, id) }}</b><br><span class="hint">Фото: <a href="{{ p.by_url }}" target="_blank" rel="noopener">{{ p.by }}</a> на <a href="{{ unsplash_home }}" target="_blank" rel="noopener">Unsplash</a></span></div>
+  <div class="phrow"><img src="{{ p.img }}" alt="" width="96" height="72" loading="lazy"><span><b>{{ titles.get(id, id) }}</b><br><span class="hint">Фото: <a href="{{ p.by_url }}" target="_blank" rel="noopener">{{ p.by }}</a> на <a href="{{ unsplash_home }}" target="_blank" rel="noopener">Unsplash</a></span></span></div>
 {% endfor %}
 </div>
 {% endif %}
