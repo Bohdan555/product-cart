@@ -35,7 +35,7 @@
     <div class="nlist" id="nlist">{% for w in p.watch %}
       <div class="nitem"><span class="nname">{{ w }}</span><input type="hidden" name="w" value="{{ w }}">{{ minsel('wmin', p.watch_min.get(w, 0)) }}<button type="button" class="nrm" aria-label="Прибрати {{ w }}">×</button></div>{% endfor %}
     </div>
-    <div class="nadd"><input id="nword" placeholder="кава, лосось, підгузки…" autocomplete="off" maxlength="40"><button type="button" class="btn alt small" id="nplus">Додати</button></div>
+    <div class="nadd"><input type="text" id="nword" placeholder="кава, лосось, підгузки…" autocomplete="off" maxlength="40"><button type="button" class="btn alt small" id="nplus">Додати</button></div>
     <label class="ndef">Для нових обраних (і з «🔔» на картках): {{ minsel('watch_default', p.watch_default) }}</label>
   </div>
   <template id="ntpl"><div class="nitem"><span class="nname"></span><input type="hidden" name="w">{{ minsel('wmin', p.watch_default) }}<button type="button" class="nrm">×</button></div></template>

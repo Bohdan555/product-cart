@@ -782,14 +782,19 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return go(url)
         return keep_guest(go(url), p)
 
+    def roll_week(p: Profile) -> bool:
+        """Новий тиждень — нове меню, страви минулого тижня відсуваємо. True, якщо тиждень змінився."""
+        week = "%d-W%02d" % date.today().isocalendar()[:2]
+        if p.menu_week == week:
+            return False
+        if p.menu:
+            p.menu_prev = p.menu
+        p.menu, p.menu_skip, p.menu_week = [], [], week
+        return True
+
     def week_menu(p: Profile, offers: list[Offer]):
         """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
-        week = "%d-W%02d" % date.today().isocalendar()[:2]
-        new_week = p.menu_week != week
-        if new_week:   # новий тиждень — нове меню, страви минулого тижня відсуваємо
-            if p.menu:
-                p.menu_prev = p.menu
-            p.menu, p.menu_skip, p.menu_week = [], [], week
+        new_week = roll_week(p)
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
         changed = m.ids != p.menu or new_week
@@ -870,7 +875,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return JSONResponse({"error": "Оновіть сторінку"}, status_code=400)
         rid = str(form.get("id", ""))
-        if rid not in menu.RECIPE_BY_ID:
+        if rid not in menu.RECIPE_BY_ID and rid not in {r.id for r in menu.user_recipes(p)}:
             return JSONResponse({"error": "Невідома страва"}, status_code=400)
         liked = rid not in p.dish_likes
         p.dish_likes = ([rid] + [x for x in p.dish_likes if x != rid])[:30] if liked else [x for x in p.dish_likes if x != rid]
@@ -1049,6 +1054,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       keep=p.menu, pantry_buy=p.pantry_buy)
         bought = {k for k in str(form.get("bought", "")).split(",") if k}
         wants = silpo_cart.wants_from_menu(m.cart, bought)
+        wants += [silpo_cart.Want("x:" + x, x, 1, "pcs") for x in m.extras if "x:" + x not in bought]   # з моїх страв
         ctx = dict(bought=",".join(sorted(bought)), wanted=len(wants))
         if not wants:
             return render(request, "cart.html", u, error="Усе зі списку вже позначено як куплене — додавати нічого.", **ctx)
@@ -1134,6 +1140,73 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if u["email"].lower() not in admin_emails:
             return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
+
+    # ---------- мої страви ----------
+    def ing_choices() -> list[tuple[str, str, str]]:
+        """(ключ, назва, одиниця для поля) — довідник інгредієнтів, з якими рахуємо ціни й акції."""
+        unit = {"g": "г", "ml": "мл", "pcs": "шт"}
+        return sorted(((k, v[0], unit[v[1]]) for k, v in menu.INGREDIENTS.items()), key=lambda x: x[1])
+
+    @app.get("/dishes", response_class=HTMLResponse)
+    def dishes_page(request: Request, edit: str = "", saved: str = ""):
+        u = user_of(request)
+        if u is None:
+            return render(request, "dishes.html", None, mine=[], cur=None, choices=ing_choices(), emojis=menu.MY_EMOJI)
+        p, _ = load_profile(u["id"])
+        mine = menu.user_recipes(p)
+        cur = next((d for d in p.my_dishes if d.get("id") == edit), None)
+        return render(request, "dishes.html", u, mine=mine, cur=cur, choices=ing_choices(), emojis=menu.MY_EMOJI,
+                      saved=saved, in_menu=set(p.menu))
+
+    @app.post("/dishes")
+    async def dishes_save(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, form.get("csrf", ""))
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        serv = max(1, min(12, int(float(form.get("servings") or 4))))
+        ing: dict[str, float] = {}
+        for k, q in zip(form.getlist("ing"), form.getlist("qty")):
+            try:
+                qv = float(str(q).replace(",", "."))
+            except ValueError:
+                continue
+            if k in menu.INGREDIENTS and qv > 0:
+                ing[k] = round(ing.get(k, 0) + qv * 4 / serv, 1)     # зберігаємо на 4 порції, як усі рецепти
+        extra = [x.strip()[:40] for x in str(form.get("extra", "")).replace(";", ",").replace("\n", ",").split(",") if x.strip()][:15]
+        did = str(form.get("id") or "")
+        if not did.startswith(menu.MY_PREFIX):
+            did = menu.MY_PREFIX + secrets.token_hex(4)
+        d = {"id": did, "title": str(form.get("title", "")).strip()[:80], "emoji": str(form.get("emoji", "")),
+             "minutes": max(5, min(240, int(float(form.get("minutes") or 45)))), "ing": ing, "extra": extra,
+             "steps": str(form.get("steps", ""))[:2000]}
+        if not menu.user_recipe(d):
+            cur = dict(d, servings=serv)
+            return render(request, "dishes.html", u, mine=menu.user_recipes(p), cur=cur, choices=ing_choices(),
+                          emojis=menu.MY_EMOJI, in_menu=set(p.menu), status=400,
+                          error="Додайте назву і хоча б один інгредієнт.")
+        d["servings"] = serv
+        p.my_dishes = [x for x in p.my_dishes if x.get("id") != did][:29] + [d]
+        roll_week(p)
+        if form.get("to_menu") and did not in p.menu:      # одразу в меню цього тижня — замість останньої страви
+            p.menu = ([did] + p.menu)[:max(1, p.dinners)]
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "my_dish_saved", ingredients=len(ing), extras=len(extra))
+        return go(f"/dishes?saved={did}")
+
+    @app.post("/dishes/delete")
+    async def dishes_delete(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, form.get("csrf", ""))
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        did = str(form.get("id", ""))
+        p.my_dishes = [x for x in p.my_dishes if x.get("id") != did]
+        p.menu = [x for x in p.menu if x != did]
+        save_profile(u["id"], p, health)
+        return go("/dishes")
 
     # ---------- сповіщення в Telegram ----------
     def tg_chat(user_id: int):
@@ -1417,7 +1490,7 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     )
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
     for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly"):
+              "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly", "my_dishes"):
         setattr(p, k, getattr(prev, k))
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]

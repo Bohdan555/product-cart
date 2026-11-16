@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Мої страви — Кошик з акцій{% endblock %}
+{% block body %}
+<nav class="mtabs" aria-label="Меню"><a href="/menu">Меню тижня</a><a href="/dishes" aria-current="page">Мої страви</a></nav>
+<section class="intro">
+  <h1 class="xh">Мої <span class="hl">страви</span></h1>
+</section>
+
+{% if not user %}
+<div class="card stack"><p><b>Запишіть страви, які готуєте вдома</b> — додамо їх у меню й порахуємо інгредієнти з акцій.</p>
+  <p><a class="btn" href="/register">Увійти, щоб зберегти</a></p></div>
+{% else %}
+{% if saved %}<div class="ok" style="margin-bottom:12px">Збережено ✓ {% if saved in in_menu %}Страва вже в <a href="/menu">меню цього тижня</a>.{% else %}Вона частіше потраплятиме в меню.{% endif %}</div>{% endif %}
+
+{% if mine and not cur %}
+<div class="mydishes">
+  {% for r in mine %}
+  <article class="mydish" style="--c:var(--{{ ['p-tomato','p-citrus','p-basil','p-plum','p-sky','p-berry'][loop.index0 % 6] }})">
+    <span class="mde" aria-hidden="true">{{ r.emoji }}</span>
+    <div class="mdb"><b>{{ r.title }}</b>
+      <small>{{ r.minutes }} хв · {{ (r.ingredients|length) + (r.extras|length) }} {{ plural((r.ingredients|length) + (r.extras|length), 'інгредієнт', 'інгредієнти', 'інгредієнтів') }}{% if r.id in in_menu %} · <span class="inm">у меню</span>{% endif %}</small></div>
+    <a class="btn alt small" href="/dishes?edit={{ r.id }}">Змінити</a>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% set c = cur or {} %}
+<form method="post" action="/dishes" class="card stack dform" id="dform" data-turbo="false">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="id" value="{{ c.id or '' }}">
+  <h2>{{ 'Змінити страву' if c.id else 'Нова страва' }}</h2>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <label>Назва<input type="text" name="title" required maxlength="80" value="{{ c.title or '' }}" placeholder="Напр.: Мамині голубці"></label>
+  <div class="emo-pick" role="radiogroup" aria-label="Значок">
+    {% for e in emojis %}<label><input type="radio" name="emoji" value="{{ e }}" {% if (c.emoji or emojis[0]) == e %}checked{% endif %}><span>{{ e }}</span></label>{% endfor %}
+  </div>
+  <div class="drow2">
+    <label>Готувати, хв<input name="minutes" type="number" min="5" max="240" step="5" value="{{ c.minutes or 45 }}"></label>
+    <label>Порцій у рецепті<input name="servings" type="number" min="1" max="12" value="{{ c.servings or 4 }}"></label>
+  </div>
+
+  <div>
+    <b>Інгредієнти</b>
+    <small class="hint" style="display:block">З цих рахуємо ціну й шукаємо акції.</small>
+    <div class="ilist" id="ilist">
+      {% set sv = (c.servings or 4) %}
+      {% for k, q in (c.ing or {}).items() %}
+      <div class="irow"><select name="ing">{% for ck, cn, cu in choices %}<option value="{{ ck }}" data-u="{{ cu }}" {% if ck == k %}selected{% endif %}>{{ cn }}</option>{% endfor %}</select>
+        <input name="qty" type="number" min="0" step="any" value="{{ (q * sv / 4)|round(1)|string|replace('.0', '') }}" aria-label="Кількість"><span class="iu"></span><button type="button" class="nrm" aria-label="Прибрати">×</button></div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn alt small" id="iadd">+ Інгредієнт</button>
+  </div>
+  <label>Інше (без ціни), через кому<input type="text" name="extra" maxlength="400" value="{{ (c.extra or [])|join(', ') }}" placeholder="паприка, лаваш, кріп"></label>
+  <label>Як готувати <small class="hint">кожен крок з нового рядка</small><textarea name="steps" rows="4" maxlength="2000">{{ c.steps or '' }}</textarea></label>
+  {% if not c.id or c.id not in in_menu %}<label class="nrow"><input type="checkbox" name="to_menu" value="1" {% if not c.id %}checked{% endif %}><span>Додати в меню цього тижня</span></label>{% endif %}
+  <div class="dbtns"><button type="submit" class="btn">Зберегти</button>{% if c.id %}<a class="btn alt" href="/dishes">Скасувати</a>{% endif %}</div>
+</form>
+{% if c.id %}
+<form method="post" action="/dishes/delete" class="ddel" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="id" value="{{ c.id }}">
+  <button type="submit" class="btn danger small">Видалити страву</button></form>
+{% endif %}
+<template id="itpl"><div class="irow"><select name="ing">{% for ck, cn, cu in choices %}<option value="{{ ck }}" data-u="{{ cu }}">{{ cn }}</option>{% endfor %}</select>
+  <input name="qty" type="number" min="0" step="any" aria-label="Кількість"><span class="iu"></span><button type="button" class="nrm" aria-label="Прибрати">×</button></div></template>
+<script>
+(function () {
+  var list = document.getElementById('ilist'), tpl = document.getElementById('itpl'); if (!list) return;
+  function unit(row) { var o = row.querySelector('select').selectedOptions[0]; row.querySelector('.iu').textContent = o ? o.dataset.u : ''; }
+  function add() { var r = tpl.content.firstElementChild.cloneNode(true); list.appendChild(r); unit(r); r.querySelector('select').focus(); }
+  [].forEach.call(list.querySelectorAll('.irow'), unit);
+  if (!list.children.length) { add(); add(); }
+  document.getElementById('iadd').onclick = add;
+  list.addEventListener('change', function (e) { var r = e.target.closest('.irow'); if (r) unit(r); });
+  list.addEventListener('click', function (e) { var b = e.target.closest('.nrm'); if (b) b.parentNode.remove(); });
+  var del = document.querySelector('.ddel'); if (del) del.addEventListener('submit', function (e) { if (!confirm('Видалити страву?')) e.preventDefault(); });
+})();
+</script>
+{% endif %}
+{% endblock %}

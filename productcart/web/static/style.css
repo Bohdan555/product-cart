@@ -33,7 +33,7 @@ p.lead{color:var(--muted);margin:0 0 18px}
 .stack{display:grid;gap:14px}
 label{display:block;font-weight:600;font-size:14px;margin-bottom:6px}
 .hint{color:var(--muted);font-size:13px;font-weight:400}
-input[type=text],input[type=email],input[type=password],input[type=number],textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+input[type=text],input[type=email],input[type=password],input[type=number],textarea,select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
 textarea{min-height:74px}
 input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -803,3 +803,31 @@ details.more{border-top:0;background:var(--chip);border-radius:18px;padding:12px
 .nitem select,.ndef select{width:auto;padding:6px 8px;border-radius:10px;font-size:14px}
 .nrm{border:0;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--ink);padding:2px 8px}
 .ndef{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:13.5px;color:var(--muted)}
+
+/* Мої страви */
+.mtabs{display:inline-flex;gap:4px;background:var(--chip,var(--line));border-radius:999px;padding:4px;margin:0 0 6px}
+.mtabs a{text-decoration:none;color:var(--muted);font-weight:700;font-size:14px;padding:8px 14px;border-radius:999px}
+.mtabs a[aria-current]{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.dmeta .mine{margin-left:6px;background:var(--sticker);color:#3b2f00;border-radius:999px;padding:2px 8px;font-size:11.5px;font-weight:800}
+.ing li.x span:last-child{color:var(--muted);font-size:12.5px}
+.mydishes{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.mydish{display:flex;align-items:center;gap:12px;background:color-mix(in srgb,var(--c) 55%,var(--card));border-radius:18px;padding:10px 12px}
+.mydish .mde{font-size:30px;width:48px;height:48px;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 60%,transparent);border-radius:14px;flex:none}
+.mydish .mdb{flex:1;min-width:0}.mydish .mdb b{display:block}.mydish small{color:var(--muted)}
+.mydish .inm{color:var(--accent);font-weight:700}
+.dform label{display:block;font-weight:600}.dform label input:not([type=radio]):not([type=checkbox]),.dform textarea{display:block;width:100%;margin-top:4px}
+.drow2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.emo-pick{display:flex;flex-wrap:wrap;gap:6px}
+.emo-pick label{cursor:pointer}.emo-pick input{position:absolute;opacity:0;pointer-events:none}
+.emo-pick span{display:grid;place-items:center;width:42px;height:42px;font-size:22px;border-radius:12px;background:var(--chip,var(--line))}
+.emo-pick input:checked+span{background:var(--p-citrus);box-shadow:inset 0 0 0 2px var(--accent)}
+.emo-pick input:focus-visible+span{outline:2px solid var(--accent)}
+.ilist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.irow{display:flex;align-items:center;gap:6px}
+.irow select{flex:1;min-width:0}.irow input{width:84px;flex:none}.irow .iu{width:24px;color:var(--muted);font-size:13px}
+.dbtns{display:flex;gap:8px}.ddel{margin:10px 0 0}
+.dform .nrow{display:flex;gap:10px;align-items:center;font-weight:600}
+.dform .nrow input{width:20px;height:20px;accent-color:var(--accent)}
+
+.irow select{padding:11px 8px}.nitem select,.ndef select{width:auto;padding:6px 8px}
+.sortbar select{width:auto}

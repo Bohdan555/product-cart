@@ -4,6 +4,7 @@
 {% include "_stale.html" %}
 <div id="menuroot">
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
+<nav class="mtabs" aria-label="Меню"><a href="/menu" aria-current="page">Меню тижня</a><a href="/dishes">Мої страви</a></nav>
 <section class="intro">
   <h1 class="xh">Вечері цього тижня <span class="hl">з акцій</span></h1>
   {% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
@@ -48,10 +49,10 @@
       {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="temoji" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
     </button>
     <div class="dbody">
-      <div class="dmeta"><span class="dn">{{ days[i] }} · {{ d.minutes }} хв</span></div>
+      <div class="dmeta"><span class="dn">{{ days[i] }} · {{ d.minutes }} хв</span>{% if d.recipe.mine %}<span class="mine">моя</span>{% endif %}</div>
       <h3 class="dt">{{ d.title }}</h3>
       <div class="dact">
-        <button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
+        {% if not d.recipe.mine %}<button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>{% endif %}
         <button type="button" data-open="rec{{ i }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Рецепт</button>
         <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}">
           <button type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>Замінити</button></form>
@@ -70,9 +71,10 @@
     <h3 id="rt{{ i }}">{{ d.title }}</h3>
     {% if d.saving >= 1 %}<div class="tags"><span class="tag money">−{{ uah(d.saving|round) }} завдяки акціям</span></div>{% endif %}
     <h4>Інгредієнти</h4>
-    <ul class="ing">{% for k, q in d.ingredients.items() %}<li{% if k in d.promo_keys %} class="p"{% endif %}><span>{{ ingredients[k][0] }}</span><span>{{ fmt_qty(q, ingredients[k][1]) }}</span></li>{% endfor %}</ul>
-    <h4>Як готувати</h4>
-    <ol class="steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+    <ul class="ing">{% for k, q in d.ingredients.items() %}<li{% if k in d.promo_keys %} class="p"{% endif %}><span>{{ ingredients[k][0] }}</span><span>{{ fmt_qty(q, ingredients[k][1]) }}</span></li>{% endfor %}{% for x in d.recipe.extras %}<li class="x"><span>{{ x }}</span><span>без ціни</span></li>{% endfor %}</ul>
+    {% if d.recipe.steps %}<h4>Як готувати</h4>
+    <ol class="steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>{% endif %}
+    {% if d.recipe.mine %}<p><a href="/dishes?edit={{ d.id }}" data-turbo="false">Змінити мою страву →</a></p>{% endif %}
     <div class="ract">
       <button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
       <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}"><button type="submit">Інша страва</button></form>
@@ -111,6 +113,14 @@
   {% if m.other_lines %}
   <div class="group"><div class="gh"><b>Без акції</b></div>
   {% for l in m.other_lines %}{% call row(l, '≈ ' ~ uah(l.cost|round)) %}<span class="rprice"><b class="est">≈ {{ uah(l.cost|round) }}</b></span>{% endcall %}{% endfor %}</div>
+  {% endif %}
+  {% if m.extras %}
+  <div class="group"><div class="gh"><b>Для ваших страв</b><small>без ціни</small></div>
+  {% for x in m.extras %}{% set nv = name_visual(x) %}
+  <label class="brow"><input type="checkbox" data-buy="x:{{ x }}" data-text="{{ x }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
+    <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+    <span class="rmain"><b>{{ x }}</b></span></label>
+  {% endfor %}</div>
   {% endif %}
   {% set waiting = m.pantry_lines|rejectattr('buy')|list %}
   {% if waiting %}

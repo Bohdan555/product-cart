@@ -62,6 +62,8 @@ class Recipe:
     emoji: str
     ingredients: dict           # ключ інгредієнта → кількість на 4 порції (г | мл | шт)
     steps: tuple = ()
+    extras: tuple = ()          # власна страва: інгредієнти поза довідником («паприка», «лаваш») — без ціни
+    mine: bool = False          # страва, яку записав сам користувач
 
 
 def _r(id, title, minutes, likes, protein, emoji, ingredients, *steps):
@@ -273,6 +275,31 @@ RECIPES: list[Recipe] = [
 ]
 RECIPE_BY_ID = {r.id: r for r in RECIPES}
 
+# ---------- власні страви користувача ----------
+MY_PREFIX = "my-"
+_PROTEIN = [("chicken_fillet", "курка"), ("chicken_thigh", "курка"), ("minced", "фарш"), ("pork", "свинина"),
+            ("liver", "печінка"), ("fish", "риба"), ("sausages", "сосиски"), ("eggs", "яйця"), ("cottage", "сир"),
+            ("beans", "бобові"), ("lentils", "бобові"), ("mushrooms", "гриби")]
+MY_EMOJI = ["🍲", "🥘", "🍝", "🍛", "🥗", "🍗", "🐟", "🥩", "🥞", "🍳", "🥔", "🫕"]
+
+
+def user_recipe(d: dict) -> Recipe | None:
+    """Словник з профілю → Recipe. Невідомі інгредієнти відкидаємо; без жодного відомого — не страва."""
+    ings = {k: float(q) for k, q in (d.get("ing") or {}).items() if k in INGREDIENTS and float(q or 0) > 0}
+    title = str(d.get("title") or "").strip()[:80]
+    if not title or not str(d.get("id", "")).startswith(MY_PREFIX) or not (ings or d.get("extra")):
+        return None
+    protein = next((p for k, p in _PROTEIN if k in ings), "овочі")
+    steps = tuple(x.strip() for x in str(d.get("steps") or "").split("\n") if x.strip())[:12]
+    return Recipe(d["id"], title, int(d.get("minutes") or 45), frozenset({"моє"}), protein,
+                  d.get("emoji") if d.get("emoji") in MY_EMOJI else "🍲", ings, steps,
+                  tuple(str(x)[:40] for x in (d.get("extra") or [])[:15]), True)
+
+
+def user_recipes(profile: Profile) -> list[Recipe]:
+    return [r for r in (user_recipe(d) for d in (getattr(profile, "my_dishes", None) or [])) if r]
+
+
 DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
 
 
@@ -477,6 +504,14 @@ class Menu:
     def ids(self) -> list[str]:
         return [d.id for d in self.dishes]
 
+    @property
+    def extras(self) -> list[str]:
+        """Інгредієнти власних страв поза довідником — без ціни, окремим блоком."""
+        out: list[str] = []
+        for d in self.dishes:
+            out += [x for x in d.recipe.extras if x.lower() not in {y.lower() for y in out}]
+        return out
+
 
 def allowed(rec: Recipe, profile: Profile, max_minutes: int) -> bool:
     return (rec.minutes <= max_minutes and not (recipe_tags(rec) & profile.excluded_tags())
@@ -523,7 +558,10 @@ class _Ctx:
         self.avoid = set(profile.menu_prev)   # страви минулого тижня — штраф, щоб меню мінялось
         self.week = date.today().isocalendar()[:2]
         self.regular_stems = [w[:-1] if len(w) > 4 else w for r in profile.regulars for w in _tokens(r)]
-        self.pool = [r for r in RECIPES if allowed(r, profile, max_minutes)]
+        self.mine = user_recipes(profile)
+        self.by_id = {**RECIPE_BY_ID, **{r.id: r for r in self.mine}}
+        self.dish_likes |= {r.id for r in self.mine}       # свої страви — як улюблені
+        self.pool = [r for r in RECIPES + self.mine if allowed(r, profile, max_minutes)]
         self.people = max(1, profile.household)
 
     def score(self, r: Recipe, others: list[Recipe]) -> float:
@@ -565,7 +603,9 @@ class _Ctx:
             d.saving += q / _per(k) * (src.regular_unit_price - src.unit_price)
         d.used, d.saving = round(d.used, 2), round(d.saving, 2)
         d.promo_keys = [k for k in r.ingredients if self.sources[k].offer]
-        if r.id in self.dish_likes:
+        if r.mine:
+            d.why.append("Ваша страва")
+        elif r.id in self.dish_likes:
             d.why.append("Ви позначили: смачно")
         liked = sorted(recipe_tags(r) & self.likes)
         if liked:
@@ -597,11 +637,11 @@ def plan(offers: list[Offer], profile: Profile, dinners: int = 5, max_minutes: i
     доїдання відкритих швидкопсувних упаковок − повтор основного продукту; далі підгонка під бюджет.
     `keep` — збережене меню людини (після замін): його страви лишаємо, якщо вони ще підходять."""
     ctx = _Ctx(offers, profile, max_minutes)
-    kept = [RECIPE_BY_ID[i] for i in (keep or []) if i in RECIPE_BY_ID and RECIPE_BY_ID[i] in ctx.pool][:dinners]
+    kept = [ctx.by_id[i] for i in (keep or []) if i in ctx.by_id and ctx.by_id[i] in ctx.pool][:dinners]
     if keep and len(kept) == dinners and len(set(kept)) == dinners:
         chosen = kept
     else:
-        chosen = ctx.greedy(dinners)
+        chosen = ctx.greedy(dinners, fixed=list(dict.fromkeys(kept)))   # що лишилось зі збереженого — доповнюємо
         if budget:
             chosen = _fit_budget(chosen, ctx, budget)
     return ctx.menu(chosen, pantry_buy)
@@ -612,7 +652,7 @@ def swap(offers: list[Offer], profile: Profile, current: list[str], i: int, max_
     """Замінює i-ту страву на найкращу іншу з пулу (без уже вибраних і нещодавно відхилених).
     Повертає новий список id або None, якщо замінити нема на що."""
     ctx = _Ctx(offers, profile, max_minutes)
-    recipes = [RECIPE_BY_ID[x] for x in current if x in RECIPE_BY_ID]
+    recipes = [ctx.by_id[x] for x in current if x in ctx.by_id]
     if not 0 <= i < len(recipes):
         return None
     others = recipes[:i] + recipes[i + 1:]

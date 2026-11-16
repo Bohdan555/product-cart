@@ -580,3 +580,27 @@ def test_dish_likes(client):
     assert client.post("/menu/like", data={"id": "borscht", "csrf": token}).json()["liked"] is True
     prof = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
     assert '"borscht"' in prof
+
+
+def test_my_dishes_in_menu_and_cart(client):
+    assert "Увійти, щоб зберегти" in client.get("/dishes").text
+    token = register(client)
+    r = client.post("/dishes", data={"csrf": token, "title": "", "ing": ["potato"], "qty": ["500"]})
+    assert r.status_code == 400 and "Додайте назву" in r.text
+    r = client.post("/dishes", data={"csrf": token, "title": "Мамині деруни", "emoji": "🥔", "minutes": "40",
+                                     "servings": "2", "ing": ["potato", "eggs", "bogus"], "qty": ["600", "1", "5"],
+                                     "extra": "кріп, часник", "steps": "Натерти картоплю\nСмажити", "to_menu": "1"})
+    assert r.status_code == 303
+    did = parse_qs(urlparse(r.headers["location"]).query)["saved"][0]
+    assert did.startswith("my-")
+    page = client.get("/dishes").text
+    assert "Мамині деруни" in page and "у меню" in page
+    m = client.get("/menu").text
+    assert "Мамині деруни" in m and ">моя<" in m and "Для ваших страв" in m and "кріп" in m and "Натерти картоплю" in m
+    # зберігається на 4 порції: 600 г на 2 порції → 1200 г
+    p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
+    assert '"potato": 1200.0' in p and "bogus" not in p
+    edit = client.get(f"/dishes?edit={did}").text
+    assert 'value="600"' in edit and "Змінити страву" in edit
+    client.post("/dishes/delete", data={"csrf": token, "id": did})
+    assert "Мамині деруни" not in client.get("/menu").text
