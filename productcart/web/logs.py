@@ -83,7 +83,7 @@ def setup() -> None:
     app_log.setLevel(level)
     app_log.propagate = False
     # сторонні бібліотеки: httpx на INFO пише повні URL (у Telegram там токен бота) — лише попередження
-    for name in ("httpx", "httpcore", "mcp", "anyio", "uvicorn.access"):
+    for name in ("httpx", "httpx2", "httpcore", "httpcore2", "anthropic", "mcp", "anyio", "uvicorn.access"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
