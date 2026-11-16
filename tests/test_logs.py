@@ -56,3 +56,12 @@ def test_third_party_loggers_quiet():
     logs.setup()
     assert logging.getLogger("httpx").level == logging.WARNING
     assert not logging.getLogger("productcart").propagate
+
+
+def test_identity_probe_keeps_only_field_names():
+    import base64
+    from productcart.web import silpo_identity as si
+    shape = si.shape({"id": 42, "phone": "+380501234567", "family": [{"name": "Оля"}]})
+    assert shape == {"id": "int", "phone": "str", "family": [{"name": "str"}]}
+    body = base64.urlsafe_b64encode(json.dumps({"sub": "u-1", "exp": 1}).encode()).decode().rstrip("=")
+    assert si.jwt_claims(f"h.{body}.s") == ["exp", "sub"] and si.jwt_claims("opaque") is None

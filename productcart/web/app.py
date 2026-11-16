@@ -31,7 +31,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask
 
-from . import analytics, db, fridge, logs, security, unsplash
+from . import analytics, db, fridge, logs, security, silpo_identity, unsplash
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -345,7 +345,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         offers += [dict_store(o, st) for o in hit]
                     else:
                         todo.append(st)
-                call = await get_call() if todo else None
+                call = await get_call()
+                if not db.get_setting(conn, "silpo_identity_probe"):      # один раз на сайт
+                    db.set_setting(conn, "silpo_identity_probe", security.iso(security.now()))
+                    await silpo_identity.probe(call, tokens) if todo else None
                 sem = asyncio.Semaphore(4)
 
                 async def one(st):
