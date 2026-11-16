@@ -672,3 +672,21 @@ def test_today_missing_to_silpo_cart(tmp_path):
         assert r.status_code == 200 and "Кошик у «Сільпо»" in r.text and "Немає в наявності: Макарони, Фарш" in r.text
         ev = c.app.state.conn.execute("SELECT meta FROM events WHERE event='today_cart'").fetchone()
         assert ev and '"dish": "flotski"' in ev["meta"]
+
+
+def test_me_profile_page(client):
+    g = client.get("/me").text
+    assert "Ви поки гість" in g and "Реальні ціни вашого «Сільпо»" in g and 'href="/register"' in g
+    token = register(client)
+    client.post("/today/cooked", data={"csrf": token, "id": "omelette"})
+    me = client.get("/me").text
+    assert "Ваш профіль" in me and "Приготовано" in me and "<b>1</b>" in me and "«Сільпо» не підключено" in me
+    assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
+
+
+def test_dock_marks_section(client):
+    def on(path):
+        import re as _re
+        return _re.search(r'data-sect="(\w+)" class="on"', client.get(path).text).group(1)
+    assert on("/menu") == "cook" and on("/") == "cook" and on("/today") == "cook"
+    assert on("/list") == "deals" and on("/me") == "me"

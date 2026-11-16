@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Що в холодильнику — Кошик з акцій{% endblock %}
 {% block body %}
-<nav class="mtabs" aria-label="Меню"><a href="/menu">Меню тижня</a><a href="/fridge" aria-current="page">Холодильник</a><a href="/dishes">Мої страви</a></nav>
+{% set step = 1 %}{% include "_week.html" %}
 <section class="intro">
   <h1 class="xh">Що в <span class="hl">холодильнику?</span></h1>
   <p class="lead">Сфотографуйте — меню спершу доїсть те, що вже є, а з акцій докупимо решту.</p>
@@ -38,8 +38,8 @@
 
   <div id="frHidden"></div>
   <div class="fr-go">
-    <button type="submit" class="btn" id="frSave">🍽 Скласти меню з цього</button>
-    {% if p.fridge or p.fridge_other %}<button type="submit" class="btn alt" id="frClear" formnovalidate>Очистити</button>{% endif %}
+    <button type="submit" class="btn" id="frSave">Далі: меню з цього</button>
+    {% if p.fridge or p.fridge_other %}<button type="submit" class="btn alt" id="frClear" formnovalidate>Очистити</button>{% else %}<a class="btn alt" href="/menu">Пропустити</a>{% endif %}
   </div>
   <p class="hint">Фото не зберігаємо — лише список продуктів, і лише на тиждень. Розпізнає фото модель Claude.</p>
 </form>

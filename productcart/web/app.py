@@ -405,6 +405,19 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                   "жовтень", "листопад", "грудень"]
         return {"saved": round(saved), "cooked": cooked, "month": months[today.month - 1]}
 
+    @app.get("/me", response_class=HTMLResponse)
+    def me_page(request: Request):
+        """Профіль: статистика, кухня (сім'я, час, смаки, свої страви), підключення («Сільпо», Telegram)."""
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        mine = menu.user_recipes(p)
+        days = day_labels(p)[:p.dinners]
+        ctx = dict(p=p, mine=mine, days=days, st=user_stats(u["id"]) if u else None,
+                   link=silpo_link(u["id"]) if u else None, chat=tg_chat(u["id"]) if u else None,
+                   likes=[TAG_LABELS.get(t, t) for t in p.likes][:4], hides=[TAG_LABELS.get(t, t) for t in p.dislikes][:3],
+                   fridge_n=len(p.fridge) + len(p.fridge_other))
+        return render(request, "me.html", u, **ctx)
+
     @app.get("/week")
     def week_start(request: Request):
         """План на тиждень починається з «що є вдома» (крок ①); далі меню (②) і покупки (③)."""
@@ -855,6 +868,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu, p.menu_skip, p.menu_week = [], [], week
         return True
 
+    def hot_deals(offers: list[Offer], m, n: int = 4) -> list[Offer]:
+        """Крок ③ «Що купити»: найбільші знижки, яких ще немає в списку до меню."""
+        used = {l.source.offer.product_id for l in m.promo_lines if l.source.offer}
+        return sorted((o for o in offers if (o.discount_pct or 0) >= 15 and o.product_id not in used),
+                      key=lambda o: -(o.discount_pct or 0))[:n]
+
     def week_menu(p: Profile, offers: list[Offer]):
         """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
         new_week = roll_week(p)
@@ -882,7 +901,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       days=day_labels(p), fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
                       stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"),
-                      fresh=bool(request.query_params.get("fresh")))
+                      fresh=bool(request.query_params.get("fresh")), hot=hot_deals(offers, m))
         return keep_guest(resp, p) if (changed and not u) else resp
 
     async def menu_form(request: Request):
@@ -1739,6 +1758,7 @@ NAME_VISUALS = [
     (("огірк",), "🥒", "Овочі"), (("помідор", "томат"), "🍅", "Овочі"), (("картопл",), "🥔", "Овочі"),
     (("морква",), "🥕", "Овочі"), (("цибул",), "🧅", "Овочі"), (("капуст",), "🥬", "Овочі"),
     (("перець",), "🫑", "Овочі"), (("печериц", "гриб"), "🍄", "Овочі"),
+    (("кабач", "цукін"), "🥒", "Овочі"), (("квасол", "сочевиц", "нут"), "🫘", "Крупи"),
     (("банан",), "🍌", "Фрукти"), (("яблук",), "🍎", "Фрукти"), (("апельсин", "мандарин"), "🍊", "Фрукти"),
     (("лимон",), "🍋", "Фрукти"), (("виноград",), "🍇", "Фрукти"), (("груш",), "🍐", "Фрукти"),
 ]

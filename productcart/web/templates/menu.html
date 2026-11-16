@@ -4,7 +4,7 @@
 {% include "_stale.html" %}
 <div id="menuroot"{% if fresh %} class="fresh-in"{% endif %}>
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
-<nav class="mtabs" aria-label="Меню"><a href="/menu" aria-current="page">Меню тижня</a><a href="/fridge">Холодильник</a><a href="/dishes">Мої страви</a></nav>
+{% set step = 2 %}{% include "_week.html" %}
 <section class="intro">
   <h1 class="xh">Вечері цього тижня <span class="hl">з акцій</span></h1>
   {% if guest %}<div class="gnote"><p>Демо-ціни</p><a class="btn small" href="/register">Увійти</a></div>
@@ -12,8 +12,7 @@
 </section>
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
 
-{% if p.fridge %}<a class="fr-banner on" href="/fridge"><span aria-hidden="true">🧊</span><span><b>Доїдаємо те, що вдома</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ') or 'продукти з фото' }} · змінити</small></span></a>
-{% elif not guest %}<a class="fr-banner" href="/fridge"><span aria-hidden="true">📸</span><span><b>Що в холодильнику?</b><small>сфотографуйте — меню доїсть те, що вже є</small></span></a>{% endif %}
+{% if p.fridge %}<a class="fr-banner on" href="/fridge"><span class="icotile">{{ ic("fridge", "mid") }}</span><span><b>Доїдаємо те, що вдома</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ') or 'продукти з фото' }} · змінити</small></span></a>{% endif %}
 <a class="su-open" href="/menu/setup">✨ Налаштувати меню<small>скільки вас, дні, час, смаки, бюджет</small></a>
 <div class="mctl" aria-label="Налаштування меню">
   <form method="post" action="/menu/settings" class="ctl step">
@@ -64,6 +63,7 @@
   </article>
 {% endfor %}
 </div>
+{% if user %}<a class="wk-add" href="/dishes">{{ ic("book", "sm") }} + Своя страва</a>{% endif %}
 
 {% for d in m.dishes %}{% set i = loop.index0 %}
 <dialog class="rsheet" id="rec{{ i }}" aria-labelledby="rt{{ i }}">
@@ -88,6 +88,7 @@
 {% endfor %}
 
 <section id="list" class="mlist">
+  {% set step = 3 %}{% include "_week.html" %}
   <div class="list-h"><h2>Список покупок</h2><button type="button" class="copy" id="copy">Скопіювати список</button></div>
   <div><div class="progress"><i id="bar"></i></div><small class="hint" id="progressTxt"></small></div>
   {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
@@ -145,6 +146,14 @@
 
 </section>
 
+{% if hot %}
+<section class="wk-hot" aria-label="Ще вигідне цього тижня">
+  <div class="wk-hot-h"><h2>Ще вигідне цього тижня</h2><a href="/list?sort=disc">Усі акції →</a></div>
+  <div class="wk-hot-grid">{% for o in hot %}{% set v = visual(o) %}
+    <a class="wk-deal" href="/list?sort=disc" style="--c:var(--{{ v.pastel }})"><span class="off">−{{ o.discount_pct|round|int }}%</span><span class="e" aria-hidden="true">{{ v.emoji }}</span><b>{{ o.name }}</b><span class="p">{{ uah(o.price) }}</span></a>
+  {% endfor %}</div>
+</section>
+{% endif %}
 <div class="toast" id="toast" hidden></div>
 <div hidden id="menudata" data-key="bought:{{ m.ids|join(",") }}:{{ m.people }}" data-menu="Меню: {% for d in m.dishes %}{{ days[loop.index0] }} {{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}"></div>
 {% else %}
