@@ -40,7 +40,7 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         r = c.post("/fridge/save", data={"csrf": token, "have": ["chicken_thigh", "potato", "bogus"], "other": ["Кетчуп"]})
         assert r.headers["location"] == "/menu?fresh=1"
         m = c.get("/menu").text
-        assert "🧊 є вдома" in m and "🧊 Є вдома" in c.get("/buy").text
+        assert "✓ є вдома: стегно куряче, картопля" in m and "✓ Вже є вдома" in c.get("/buy").text
         assert "Курячі стегна з картоплею" in m        # страва, що доїдає стегна й картоплю, потрапила в меню
         page = c.get("/fridge").text
         assert 'data-key="potato"' in page and 'data-other="Кетчуп"' in page and "bogus" not in page
@@ -51,7 +51,7 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert 'data-key="potato"' not in c.get("/fridge").text and 'data-key="chicken_thigh"' in c.get("/fridge").text
         c.post("/fridge/save", data={"csrf": token})
         m = c.get("/menu").text
-        assert "🧊 Є вдома" not in c.get("/buy").text and 'href="/fridge"><i>1</i>Що є' in m
+        assert "✓ Вже є вдома" not in c.get("/buy").text and 'href="/fridge"><i>1</i>Що є' in m
 
 
 def test_not_configured_and_errors(tmp_path, monkeypatch):

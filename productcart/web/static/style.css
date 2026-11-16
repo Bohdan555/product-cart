@@ -1182,3 +1182,6 @@ a.eat-open small{color:var(--muted)}
 .eat-row.swapping .eat-swap svg{animation:eat-spin .8s linear infinite}
 @keyframes eat-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.eat-row.swapping .eat-swap svg{animation:none}}
+
+.eat-t small.eat-home{display:block;color:var(--accent);font-weight:700;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home-ok{color:var(--accent);font-weight:700}
