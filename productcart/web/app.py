@@ -1302,10 +1302,6 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
 
     # ---------- «Що приготувати сьогодні»: продукти → час і люди → 3 страви → рецепт ----------
-    TODAY_FOOD = ["chicken_fillet", "chicken_thigh", "minced", "pork", "fish", "sausages", "eggs", "cheese", "cottage",
-                  "sour_cream", "milk", "potato", "carrot", "onion", "cabbage", "mushrooms", "pepper", "zucchini",
-                  "rice", "buckwheat", "pasta", "beans", "lentils", "kefir"]
-
     def today_args(request: Request) -> tuple[list[str], int, int]:
         q = request.query_params
         have = [k for k in str(q.get("have", "")).split(",") if k in menu.INGREDIENTS]
@@ -1331,10 +1327,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         have, t, n = today_args(request)
         if not request.query_params.get("have") and u:      # що вже є вдома з фото холодильника
             p = load_profile(u["id"])[0]
-            have = [k for k in p.fridge if k in TODAY_FOOD]
+            have = [k for k in p.fridge if k in menu.PANTRY_WORDS]
             n = p.household or n
-        food = [(k, menu.INGREDIENTS[k][0]) for k in TODAY_FOOD]
-        return render(request, "today.html", u, food=food, have=have, t=t, n=n)
+        words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
+        return render(request, "today.html", u, words=words, popular=menu.POPULAR_HAVE, have=have, t=t, n=n)
 
     @app.get("/today/dishes", response_class=HTMLResponse)
     async def today_dishes(request: Request):

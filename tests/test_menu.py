@@ -106,3 +106,11 @@ def test_source_map_cache_is_safe():
     assert a is not b and {k: v.offer for k, v in a.items()} == {k: v.offer for k, v in b.items()}
     a["eggs"].offer = None                         # зміна однієї копії не псує кеш
     assert menu.source_map(offers)["eggs"].offer is not None or b["eggs"].offer is None
+
+
+def test_pantry_words_cover_dictionary_and_synonyms():
+    from productcart import menu
+    assert set(menu.PANTRY_WORDS) == set(menu.INGREDIENTS)
+    assert menu.word_to_key("Курятина") == "chicken_fillet" and menu.word_to_key("картошка") == "potato"
+    assert menu.word_to_key("помідори") == "tomatoes_can" and menu.word_to_key("творог") == "cottage"
+    assert menu.word_to_key("сир") == "cheese" and menu.word_to_key("авокадо") is None

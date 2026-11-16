@@ -9,23 +9,33 @@
   <section class="td-step" data-step="1">
     <div class="td-top"><a class="td-back" href="/" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 1 з 3"><i class="on"></i><i></i><i></i></span></div>
     <h1 class="xh">Що є <span class="hl">під рукою?</span></h1>
+    <div class="hv-box" id="hvBox">
+      <div class="hv-field" id="hvField">
+        <span id="hvChips" class="hv-chips"></span>
+        <input type="text" id="hvIn" placeholder="Напишіть: курка, рис, яйця…" autocomplete="off" autocapitalize="off" enterkeyhint="done" aria-label="Що є вдома" aria-describedby="hvHint">
+      </div>
+      <div class="hv-sug" id="hvSug" role="listbox" hidden></div>
+    </div>
+    <p class="hv-hint" id="hvHint" aria-live="polite">Через кому або Enter. Можна й так: картошка, помідори, творог.</p>
+
+    <p class="hv-lbl">Часто є вдома</p>
+    <div class="hv-pop" id="hvPop">
+      {% for k in popular %}<button type="button" data-k="{{ k }}" aria-pressed="{{ 'true' if k in have else 'false' }}"><span aria-hidden="true">{{ words[k][1] }}</span>{{ words[k][0] }}</button>{% endfor %}
+    </div>
+
     {% if user %}
-    <div class="td-shot" id="tdShot">
-      <span class="icotile lg">{{ ic("fridge", "big") }}</span><b id="tdShotTxt">Сфотографуйте холодильник</b><small>або оберіть продукти нижче</small>
+    <div class="hv-photo" id="tdShot">
+      <span class="icotile">{{ ic("fridge", "mid") }}</span>
+      <span class="hv-photo-t"><b id="tdShotTxt">Або сфотографуйте холодильник</b><small>знайдене додамо само</small></span>
       <div class="pick-row">
-    <label class="btn pick-btn">📷 Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
-    <label class="btn alt pick-btn">🖼 Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
-  </div>
+        <label class="btn small pick-btn">📷 Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
+        <label class="btn alt small pick-btn">🖼 Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
+      </div>
     </div>
     {% else %}
-    <a class="td-shot" href="/register"><span class="icotile lg">{{ ic("fridge", "big") }}</span><b>Сфотографувати холодильник</b>
-      <small class="td-lock">{{ ic("lock", "sm") }} після входу · або оберіть нижче</small></a>
+    <a class="hv-photo" href="/register"><span class="icotile">{{ ic("fridge", "mid") }}</span>
+      <span class="hv-photo-t"><b>Або сфотографуйте холодильник</b><small class="td-lock">{{ ic("lock", "sm") }} після входу</small></span></a>
     {% endif %}
-    <p class="td-picked" id="tdPicked" aria-live="polite"></p>
-    <div class="td-tiles">
-      {% for k, name in food %}{% set v = name_visual(name) %}
-      <button type="button" class="td-tile" data-k="{{ k }}" aria-pressed="{{ 'true' if k in have else 'false' }}" style="--c:var(--{{ v.pastel }})"><span class="e" aria-hidden="true">{{ v.emoji }}</span>{{ name }}</button>{% endfor %}
-    </div>
     <div class="td-nav"><button type="button" class="btn alt" data-skip>Пропустити</button><button type="button" class="btn" data-next>Далі</button></div>
   </section>
 
@@ -49,14 +59,55 @@
   var $ = function (id) { return document.getElementById(id); };
   var steps = form.querySelectorAll('.td-step'), tap = function (ms) { if (window.haptic) haptic(ms || 8); };
   function show(i) { steps.forEach(function (s, k) { s.hidden = k !== i; }); window.scrollTo(0, 0); }
-  function sync() {
-    var on = [].filter.call(form.querySelectorAll('.td-tile'), function (b) { return b.getAttribute('aria-pressed') === 'true'; });
-    $('tdHave').value = on.map(function (b) { return b.dataset.k; }).join(',');
-    $('tdPicked').textContent = on.length ? 'Є: ' + on.map(function (b) { return b.querySelector('.e').textContent; }).join(' ') + ' · ' + on.length : 'Нічого не обрано — теж можна';
+  var WORDS = {{ words|tojson }}, have = {{ have|tojson }}, other = [];
+  var inp = $('hvIn'), sug = $('hvSug');
+  function norm(t) { return (t || '').toLowerCase().replace(/[’ʼ]/g, "'").replace(/\s+/g, ' ').trim(); }
+  function match(t) {          // те саме, що word_to_key на сервері
+    t = norm(t); if (t.length < 2) return null;
+    for (var k in WORDS) if (WORDS[k][2].indexOf(t) >= 0) return k;
+    for (var k2 in WORDS) if (WORDS[k2][2].some(function (w) { return w.indexOf(t) === 0 || (t.length > 4 && t.indexOf(w) === 0); })) return k2;
+    return null;
   }
-  form.querySelectorAll('.td-tile').forEach(function (b) { b.onclick = function () { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); tap(); sync(); }; });
-  form.querySelector('[data-next]').onclick = function () { tap(12); show(1); };
-  form.querySelector('[data-skip]').onclick = function () { form.querySelectorAll('.td-tile').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); }); sync(); show(1); };
+  function sync() {
+    $('tdHave').value = have.join(',');
+    var box = $('hvChips'); box.innerHTML = '';
+    have.forEach(function (k) { box.appendChild(chipEl(WORDS[k][1] + ' ' + WORDS[k][0], function () { have = have.filter(function (x) { return x !== k; }); sync(); })); });
+    other.forEach(function (t) { var c = chipEl(t, function () { other = other.filter(function (x) { return x !== t; }); sync(); }); c.classList.add('other'); c.title = 'Цього немає в наших рецептах'; box.appendChild(c); });
+    document.querySelectorAll('#hvPop button').forEach(function (b) { b.setAttribute('aria-pressed', have.indexOf(b.dataset.k) >= 0); });
+    inp.placeholder = have.length || other.length ? 'Ще щось?' : 'Напишіть: курка, рис, яйця…';
+  }
+  function chipEl(text, onRemove) {
+    var c = document.createElement('button'); c.type = 'button'; c.className = 'hv-chip';
+    c.textContent = text; c.setAttribute('aria-label', 'Прибрати: ' + text);
+    var x = document.createElement('i'); x.textContent = '×'; x.setAttribute('aria-hidden', 'true'); c.appendChild(x);
+    c.onclick = function () { onRemove(); tap(); inp.focus(); }; return c;
+  }
+  function add(text) {
+    var k = match(text), t = norm(text); if (!t) return;
+    if (k) { if (have.indexOf(k) < 0) have.push(k); $('hvHint').textContent = WORDS[k][0] + ' ✓'; }
+    else if (other.indexOf(t) < 0) { other.push(t); $('hvHint').textContent = '«' + t + '» немає в наших рецептах — врахуємо як «інше»'; }
+    tap(); sync();
+  }
+  function suggest() {
+    var t = norm(inp.value.split(',').pop()); sug.innerHTML = '';
+    if (t.length < 1) { sug.hidden = true; return; }
+    var hits = Object.keys(WORDS).filter(function (k) { return have.indexOf(k) < 0 && (WORDS[k][0].toLowerCase().indexOf(t) === 0 || WORDS[k][2].some(function (w) { return w.indexOf(t) === 0; })); }).slice(0, 6);
+    hits.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'option'); b.textContent = WORDS[k][1] + ' ' + WORDS[k][0];
+      b.onmousedown = function (e) { e.preventDefault(); }; b.onclick = function () { if (have.indexOf(k) < 0) have.push(k); inp.value = ''; sug.hidden = true; tap(); sync(); inp.focus(); }; sug.appendChild(b); });
+    sug.hidden = !hits.length;
+  }
+  function flush() { inp.value.split(',').forEach(function (p) { if (norm(p)) add(p); }); inp.value = ''; sug.hidden = true; }
+  inp.addEventListener('input', function () { if (/,/.test(inp.value)) { var parts = inp.value.split(','); inp.value = parts.pop(); parts.forEach(add); } suggest(); });
+  inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); var first = sug.querySelector('button'); if (first && !sug.hidden && !match(inp.value)) first.click(); else flush(); }
+    if (e.key === 'Backspace' && !inp.value) { if (other.length) other.pop(); else have.pop(); sync(); }
+  });
+  inp.addEventListener('blur', function () { setTimeout(function () { if (inp.value.trim()) flush(); sug.hidden = true; }, 150); });
+  $('hvField').addEventListener('click', function (e) { if (e.target === $('hvField')) inp.focus(); });
+  document.querySelectorAll('#hvPop button').forEach(function (b) { b.onclick = function () {
+    var k = b.dataset.k; if (have.indexOf(k) >= 0) have = have.filter(function (x) { return x !== k; }); else have.push(k); tap(); sync(); }; });
+  form.querySelector('[data-next]').onclick = function () { if (inp.value.trim()) flush(); tap(12); show(1); };
+  form.querySelector('[data-skip]').onclick = function () { have = []; other = []; sync(); show(1); };
   form.querySelector('[data-prev]').onclick = function () { show(0); };
   form.querySelectorAll('.td-chips').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
     g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); $(g.dataset.field).value = b.dataset.v; tap(); }; }); });
@@ -72,8 +123,11 @@
       $('tdShot').classList.remove('scanning');
       if (d.error) { $('tdShotTxt').textContent = d.error; return; }
       var n = 0;
-      d.items.forEach(function (it) { var b = form.querySelector('.td-tile[data-k="' + it.ingredient + '"]'); if (b && b.getAttribute('aria-pressed') !== 'true') { b.setAttribute('aria-pressed', 'true'); n++; } });
-      $('tdShotTxt').textContent = n ? 'Знайшли й позначили: ' + n : 'Нічого з цих продуктів не знайшли — оберіть вручну';
+      d.items.forEach(function (it) {
+        if (it.ingredient !== 'other' && WORDS[it.ingredient]) { if (have.indexOf(it.ingredient) < 0) { have.push(it.ingredient); n++; } }
+        else if (other.indexOf(norm(it.name)) < 0) other.push(norm(it.name));
+      });
+      $('tdShotTxt').textContent = n ? 'Знайшли й додали: ' + n : 'Нічого з наших рецептів не знайшли — допишіть вручну';
       sync(); tap(25);
     }).catch(function () { $('tdShot').classList.remove('scanning'); $('tdShotTxt').textContent = 'Не вдалося надіслати фото. Перевірте інтернет.'; });
   }
