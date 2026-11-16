@@ -54,6 +54,17 @@
     <div class="td-nav"><button type="submit" class="btn">Показати страви</button></div>
   </section>
 </form>
+
+<dialog class="mic-sheet" id="micSheet" aria-labelledby="micT">
+  <div class="mic-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></div>
+  <h2 id="micT"></h2>
+  <p id="micP"></p>
+  <ol class="mic-steps" id="micSteps" hidden></ol>
+  <div class="mic-btns">
+    <button type="button" class="btn" id="micGo"></button>
+    <button type="button" class="btn alt" id="micType">Краще напишу</button>
+  </div>
+</dialog>
 <script>
 (function () {
   var form = document.getElementById('td'); if (!form) return;
@@ -140,9 +151,57 @@
   // 🎤 Диктування: розпізнавання мови браузера (безкоштовно, без ШІ). Де його немає — мікрофон клавіатури.
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false, mic = $('hvMic');
   function hint(t) { $('hvHint').textContent = t; }
-  mic.addEventListener('click', function () {
-    if (!SR) { inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є — ми розберемо.'); return; }
-    if (listening && rec) { rec.stop(); return; }
+  // ---- Дозвіл на мікрофон: пояснюємо до запиту браузера й підказуємо, як увімкнути, якщо заблоковано ----
+  var sheet = $('micSheet'), micAfter = null;
+  var UA = navigator.userAgent || '';
+  var IOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && 'ontouchend' in document);
+  var SAMSUNG = /SamsungBrowser/.test(UA), ANDROID = /Android/.test(UA), INAPP = /Telegram|FBAN|FBAV|Instagram|; wv\)/.test(UA);
+  function deniedSteps() {
+    if (INAPP) return ['Натисніть ⋮ або «…» угорі й оберіть «Відкрити в браузері»', 'У браузері натисніть 🎤 ще раз і дозвольте мікрофон'];
+    if (IOS) return ['Відкрийте «Параметри» iPhone → Safari → Мікрофон', 'Оберіть «Дозволити» або «Запитувати»', 'Поверніться сюди й натисніть «Спробувати ще раз»'];
+    if (SAMSUNG) return ['Натисніть ☰ внизу → Налаштування → Сайти й завантаження → Дозволи сайтів', 'Мікрофон → знайдіть цей сайт і дозвольте', 'Поверніться сюди й натисніть «Спробувати ще раз»'];
+    if (ANDROID) return ['Торкніться значка 🔒 або ⚙ ліворуч від адреси сайту', 'Дозволи → Мікрофон → «Дозволити»', 'Натисніть «Спробувати ще раз»'];
+    return ['Натисніть значок 🔒 ліворуч від адреси сайту', 'Мікрофон → «Дозволити»', 'Натисніть «Спробувати ще раз»'];
+  }
+  function showSheet(kind) {
+    var steps = $('micSteps'); steps.innerHTML = ''; steps.hidden = true;
+    if (kind === 'ask') {
+      $('micT').textContent = 'Дозвольте мікрофон';
+      $('micP').textContent = 'Скажіть, що є вдома, — а ми розкладемо на продукти. Слухаємо лише поки кнопка червона, запис ніде не зберігаємо.';
+      $('micGo').textContent = 'Дозволити й говорити';
+    } else if (kind === 'denied') {
+      $('micT').textContent = 'Мікрофон вимкнено для сайту';
+      $('micP').textContent = 'Щоб надиктувати продукти, увімкніть мікрофон:';
+      deniedSteps().forEach(function (t) { var li = document.createElement('li'); li.textContent = t; steps.appendChild(li); });
+      steps.hidden = false;
+      $('micGo').textContent = 'Спробувати ще раз';
+    } else {
+      $('micT').textContent = kind === 'busy' ? 'Мікрофон зайнятий' : 'Мікрофон не знайдено';
+      $('micP').textContent = kind === 'busy' ? 'Його використовує інша програма (дзвінок, запис). Закрийте її й спробуйте ще раз.' : 'Перевірте, що мікрофон підключений і не вимкнений у налаштуваннях телефона.';
+      $('micGo').textContent = 'Спробувати ще раз';
+    }
+    sheet.dataset.kind = kind;
+    if (sheet.showModal) { if (!sheet.open) sheet.showModal(); } else sheet.setAttribute('open', '');
+    if (window.haptic) haptic(12);
+  }
+  function closeSheet() { if (sheet.open) { if (sheet.close) sheet.close(); else sheet.removeAttribute('open'); } }
+  $('micType').onclick = function () { closeSheet(); inp.focus(); hint('Напишіть через кому: курка, рис, яйця…'); };
+  $('micGo').onclick = function () { closeSheet(); try { localStorage.setItem('pc-mic-asked', '1'); } catch (e) {} listen(); };
+  sheet.addEventListener('click', function (e) { if (e.target === sheet) closeSheet(); });
+
+  function micState() {          // 'granted' | 'prompt' | 'denied' | 'unknown'
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        return navigator.permissions.query({ name: 'microphone' }).then(function (st) {
+          st.onchange = function () { if (st.state === 'granted' && sheet.open && sheet.dataset.kind === 'denied') { closeSheet(); listen(); } };
+          return st.state;
+        }, function () { return 'unknown'; });
+      }
+    } catch (e) {}
+    return Promise.resolve('unknown');
+  }
+
+  function listen() {
     var heard = '';
     try {
       rec = new SR(); rec.lang = 'uk-UA'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
@@ -153,16 +212,31 @@
       inp.value = (heard + interim).trim();
     };
     rec.onerror = function (e) {
-      hint(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Дозвольте мікрофон для сайту в налаштуваннях браузера.'
-        : e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { hint('Мікрофон вимкнено для сайту'); showSheet('denied'); return; }
+      if (e.error === 'audio-capture') { hint('Мікрофон не знайдено'); showSheet('nomic'); return; }
+      hint(e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : e.error === 'network' ? 'Розпізнаванню мови потрібен інтернет. Спробуйте ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
     };
     rec.onend = function () {
       listening = false; mic.classList.remove('on'); $('hvField').classList.remove('listening');
       var txt = (heard || inp.value).trim(); inp.value = '';
       if (txt) { var r = addPhrase(txt); hint(r.added ? '«' + txt + '» → додали ' + r.added : 'Почули «' + txt + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
     };
-    try { rec.start(); } catch (e) { hint('Мікрофон зайнятий. Спробуйте ще раз.'); return; }
+    try { rec.start(); } catch (e) { showSheet('busy'); return; }
     listening = true; mic.classList.add('on'); $('hvField').classList.add('listening'); hint('Слухаю… скажіть, що є'); tap(15);
+  }
+
+  mic.addEventListener('click', function () {
+    if (!SR) {
+      if (INAPP) { showSheet('denied'); return; }           // вбудований браузер (Telegram тощо): відкрити у звичайному
+      inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є — ми розберемо.'); return;
+    }
+    if (listening && rec) { rec.stop(); return; }
+    micState().then(function (st) {
+      var asked = false; try { asked = localStorage.getItem('pc-mic-asked') === '1'; } catch (e) {}
+      if (st === 'denied') showSheet('denied');
+      else if (st === 'prompt' || (st === 'unknown' && !asked)) showSheet('ask');   // пояснюємо перед системним запитом
+      else listen();
+    });
   });
   inp.addEventListener('input', function () {
     if (/,/.test(inp.value)) {      // кома — частина до неї готова: розбираємо як фразу («пів курки» → курка)
