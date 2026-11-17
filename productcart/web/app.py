@@ -11,6 +11,7 @@ import hmac
 import time
 import logging
 import contextlib
+import copy
 import json
 import re
 import os
@@ -298,7 +299,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             conn.execute("UPDATE silpo_links SET tokens_enc=? WHERE user_id=?", (box.seal(json.dumps(tokens)), user_id))
         return tokens
 
-    parsed_offers: dict[str, tuple[str, list[dict]]] = {}  # у межах процесу: store_id → (fetched_at, акції)
+    parsed_offers: dict[str, tuple[str, list[Offer]]] = {}  # у межах процесу: store_id → (fetched_at, готові акції)
 
     def cached_offers(store_id: str, max_age: timedelta = OFFERS_TTL) -> list[Offer] | None:
         # спершу лише дата (дешево); великий JSON читаємо й розбираємо, тільки якщо його ще немає в пам'яті
@@ -310,8 +311,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             row = conn.execute("SELECT data FROM offers_cache WHERE chain='silpo' AND store_id=?", (store_id,)).fetchone()
             if not row:
                 return None
-            hit = parsed_offers[store_id] = (r["fetched_at"], json.loads(row["data"]))
-        return [offer_from_dict(d) for d in hit[1]]
+            # розбір і класифікація (enrich) — найдорожче на сторінці; робимо раз на оновлення кешу магазину
+            hit = parsed_offers[store_id] = (r["fetched_at"], [offer_from_dict(d) for d in json.loads(row["data"])])
+        return [copy.copy(o) for o in hit[1]]     # копії: далі їм дописують магазин
 
     @contextlib.asynccontextmanager
     async def lazy_silpo(access_token: str):

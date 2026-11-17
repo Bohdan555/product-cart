@@ -15,6 +15,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 {% if user %}<meta name="csrf" content="{{ user.csrf }}">{% endif %}
 <meta name="turbo-cache-control" content="no-preview">
+<meta name="view-transition" content="same-origin">
 <script src="/static/vendor/turbo-8.0.12.js" defer></script>
 <script src="/static/ui.js?v={{ js_v }}" defer></script>
 <script>
@@ -32,6 +33,41 @@ function markTab() {
   });
 }
 document.addEventListener('turbo:load', markTab);
+// Перехід між розділами: одразу видно, що натиснули — вкладка підсвічується, крутиться значок, вгорі смужка,
+// поточна сторінка трохи тьмяніє. Нова сторінка з'являється плавно (View Transitions, де браузер уміє).
+(function () {
+  var t0 = 0, pressed = null;
+  function sectOf(path) {
+    return /^\/(list|go)/.test(path) ? 'deals' : /^\/silpo\/cart/.test(path) ? 'cart'
+      : (path === '/me' || /^\/(profile|notify|silpo|login|register|dishes|privacy|photos)/.test(path)) ? 'me' : 'cook';
+  }
+  document.addEventListener('turbo:click', function (e) {
+    var a = e.target.closest && e.target.closest('a');
+    if (a && a.closest('.dock')) { pressed = a; a.classList.add('loading'); }
+  });
+  document.addEventListener('turbo:visit', function (e) {
+    t0 = Date.now();
+    document.documentElement.classList.add('navigating');
+    setTimeout(function () { if (Date.now() - t0 >= 15000) done(); }, 15000);   // запобіжник, якщо щось зависло
+    try {
+      var sect = sectOf(new URL(e.detail.url).pathname);
+      document.querySelectorAll('.dock a').forEach(function (a) { a.classList.toggle('on', a.dataset.sect === sect); });
+    } catch (err) {}
+  });
+  function done() {
+    document.documentElement.classList.remove('navigating');
+    if (pressed) { pressed.classList.remove('loading'); pressed = null; }
+    document.querySelectorAll('.dock a.loading').forEach(function (a) { a.classList.remove('loading'); });
+  }
+  document.addEventListener('turbo:render', done);
+  document.addEventListener('turbo:load', done);
+  // (не слухаємо turbo:fetch-request-error: його кидає й скасований попередній запит при дотику)
+  document.addEventListener('turbo:load', function once() {
+    if (window.Turbo && Turbo.setProgressBarDelay) Turbo.setProgressBarDelay(60);   // смужка майже одразу, а не через 0,5 с
+    document.removeEventListener('turbo:load', once);
+  });
+  window.addEventListener('pageshow', done);
+})();
 // PWA: service worker (офлайн-копії сторінок і push). Вихід з акаунта — прибираємо збережені сторінки.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });

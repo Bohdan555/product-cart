@@ -1249,3 +1249,27 @@ a.eat-open small{color:var(--muted)}
 .npush[data-state=ios] [data-state-msg=ios],.npush[data-state=denied] [data-state-msg=denied],.npush[data-state=unsupported] [data-state-msg=unsupported],
 .npush[data-state=on] [data-state-msg=on]{display:block}
 html.pwa footer{display:none}
+
+/* ---------- Переходи між розділами ---------- */
+.turbo-progress-bar{height:3px;background:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 60%,transparent)}
+html.navigating .wrap{opacity:.55;transition:opacity .18s ease .05s}
+html.navigating .wrap *{pointer-events:none}
+.dock a.loading .ico,.dock a.loading .tico{animation:tab-pulse .9s ease-in-out infinite}
+.dock a.loading{background:var(--chip);color:var(--ink)}
+@keyframes tab-pulse{0%,100%{transform:scale(1)}50%{transform:scale(.86)}}
+/* View Transitions: нижня панель стоїть на місці, вміст — легкий наплив знизу */
+.dock{view-transition-name:dock}
+header.top{view-transition-name:topbar}
+::view-transition-old(root){animation:vt-out .16s ease both}
+::view-transition-new(root){animation:vt-in .26s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vt-out{to{opacity:0;transform:translateY(-4px)}}
+@keyframes vt-in{from{opacity:0;transform:translateY(10px)}}
+html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:vt-in-back}
+@keyframes vt-in-back{from{opacity:0;transform:translateY(-10px)}}
+/* Без View Transitions (старіші браузери) — просто плавна поява */
+@supports not (view-transition-name:none){.wrap{animation:vt-in .24s cubic-bezier(.2,.8,.2,1) both}}
+@media (prefers-reduced-motion:reduce){
+  ::view-transition-old(root),::view-transition-new(root){animation:none}
+  .dock a.loading .ico,.dock a.loading .tico{animation:none}
+  html.navigating .wrap{transition:none}
+}
