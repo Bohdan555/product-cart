@@ -6,7 +6,7 @@
 var VERSION = '__VERSION__';
 var STATIC = 'static-' + VERSION, PAGES = 'pages-v1';
 var PRECACHE = ['/offline', '/static/style.css?v=__CSS_V__', '/static/ui.js?v=__JS_V__', '/static/vendor/turbo-8.0.12.js',
-                '/static/icons/icon-192.png', '/static/fonts/onest-cyrillic-wght-normal.woff2',
+                '/static/icons/icon-192.png?v=__ICON_V__', '/static/fonts/onest-cyrillic-wght-normal.woff2',
                 '/static/fonts/unbounded-cyrillic-wght-normal.woff2'];
 var NO_CACHE = /^\/(silpo|auth|go|cron|tg|push|client-log|logout|login|register|admin|offers|fridge\/scan|photos)/;
 var MAX_PAGES = 40;
@@ -68,7 +68,7 @@ self.addEventListener('push', function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Кошик з акцій', {
-    body: d.body || '', icon: '/static/icons/icon-192.png', badge: '/static/icons/favicon-64.png',
+    body: d.body || '', icon: '/static/icons/icon-192.png?v=__ICON_V__', badge: '/static/icons/favicon-64.png',
     tag: d.tag || undefined, data: { url: d.url || '/' }
   }));
 });

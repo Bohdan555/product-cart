@@ -1,6 +1,6 @@
 {# Додати Кошик на екран телефона. Режим (prompt | ios | done) виставляє ui.js; без JS картка схована. #}
 <section class="pwa-card" data-install="{{ install_mode or '' }}" {% if dismiss %}data-dismiss="{{ dismiss }}"{% endif %} hidden>
-  <img src="/static/icons/icon-192.png" alt="" width="52" height="52">
+  <img src="/static/icons/icon-192.png?v={{ icon_v }}" alt="" width="52" height="52">
   <div class="pwa-t">
     <b class="m-prompt m-ios">Кошик на екрані телефона</b>
     <b class="m-done">Кошик встановлено ✓</b>

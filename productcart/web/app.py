@@ -145,24 +145,27 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     tpl = Jinja2Templates(directory=HERE / "templates")
     css_v = hashlib.sha1((HERE / "static" / "style.css").read_bytes()).hexdigest()[:10]
     js_v = hashlib.sha1((HERE / "static" / "ui.js").read_bytes()).hexdigest()[:10]
-    tpl.env.globals.update(css_v=css_v, js_v=js_v)
+    icon_v = hashlib.sha1(b"".join(f.read_bytes() for f in sorted((HERE / "static" / "icons").iterdir()))).hexdigest()[:8]
+    tpl.env.globals.update(css_v=css_v, js_v=js_v, icon_v=icon_v)
 
     # ---------- PWA: маніфест, service worker, іконки ----------
     sw_src = (HERE / "static" / "sw.js").read_text(encoding="utf-8")
     sw_body = (sw_src.replace("__CSS_V__", css_v).replace("__JS_V__", js_v)
-               .replace("__VERSION__", hashlib.sha1((sw_src + css_v + js_v).encode()).hexdigest()[:10]))
+               .replace("__ICON_V__", icon_v)
+               .replace("__VERSION__", hashlib.sha1((sw_src + css_v + js_v + icon_v).encode()).hexdigest()[:10]))
     manifest = {
         "name": "Кошик з акцій", "short_name": "Кошик", "lang": "uk", "dir": "ltr",
         "description": "Що приготувати з того, що є, і кошик з акцій «Сільпо» поруч",
         "start_url": "/?source=pwa", "scope": "/", "id": "/", "display": "standalone",
-        "background_color": "#fbfaf8", "theme_color": "#2a7a52", "orientation": "portrait",
+        "background_color": "#18231e", "theme_color": "#18231e", "orientation": "portrait",
         "categories": ["food", "shopping", "lifestyle"],
-        "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
-                  {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
-                  {"src": "/static/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
-        "shortcuts": [{"name": "Що готуємо", "url": "/today", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
-                      {"name": "Список покупок", "url": "/buy", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
-                      {"name": "Акції", "url": "/list", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]}],
+        "icons": [{"src": f"/static/icons/icon-192.png?v={icon_v}", "sizes": "192x192", "type": "image/png"},
+                  {"src": f"/static/icons/icon-512.png?v={icon_v}", "sizes": "512x512", "type": "image/png"},
+                  {"src": f"/static/icons/icon.svg?v={icon_v}", "sizes": "any", "type": "image/svg+xml"},
+                  {"src": f"/static/icons/maskable-512.png?v={icon_v}", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
+        "shortcuts": [{"name": "Що готуємо", "url": "/today", "icons": [{"src": f"/static/icons/icon-192.png?v={icon_v}", "sizes": "192x192"}]},
+                      {"name": "Список покупок", "url": "/buy", "icons": [{"src": f"/static/icons/icon-192.png?v={icon_v}", "sizes": "192x192"}]},
+                      {"name": "Акції", "url": "/list", "icons": [{"src": f"/static/icons/icon-192.png?v={icon_v}", "sizes": "192x192"}]}],
     }
 
     @app.get("/sw.js")
