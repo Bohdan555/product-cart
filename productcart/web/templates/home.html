@@ -4,6 +4,7 @@
 <section class="home">
   <h1 class="xh">Що <span class="hl">готуємо?</span></h1>
   <p class="lead">Страви з того, що є вдома, і з акцій «Сільпо» поруч.</p>
+  {% with dismiss = "pc-install-hide" %}{% include "_install.html" %}{% endwith %}
 
   {% if cooking %}
   <a class="ck-card" href="/cook">

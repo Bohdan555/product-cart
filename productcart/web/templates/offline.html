@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Немає інтернету — Кошик з акцій{% endblock %}
+{% block body %}
+<section class="intro offline-box">
+  <h1 class="xh">Немає <span class="hl">інтернету</span></h1>
+  <p>Цю сторінку ще не відкривали з телефона, тож показати її без мережі не можемо.</p>
+  <p>Збережені сторінки відкриваються й без інтернету: <b>список покупок</b>, <b>меню</b>, <b>рецепти</b>.</p>
+  <p class="row"><a class="btn" href="/buy">Список покупок</a> <a class="btn alt" href="/cook">Мої рецепти</a></p>
+  <p class="hint">Щойно мережа з'явиться — просто оновіть сторінку.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,13 @@
+{# Додати Кошик на екран телефона. Режим (prompt | ios | done) виставляє ui.js; без JS картка схована. #}
+<section class="pwa-card" data-install="{{ install_mode or '' }}" {% if dismiss %}data-dismiss="{{ dismiss }}"{% endif %} hidden>
+  <img src="/static/icons/icon-192.png" alt="" width="52" height="52">
+  <div class="pwa-t">
+    <b class="m-prompt m-ios">Кошик на екрані телефона</b>
+    <b class="m-done">Кошик встановлено ✓</b>
+    <span class="m-prompt">Відкривається як додаток, без браузера; список покупок працює навіть без інтернету.</span>
+    <span class="m-ios">Натисніть <b>Поділитися</b> <svg class="ios-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="значок «Поділитися»"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg> внизу Safari → <b>«На початковий екран»</b>.</span>
+    <span class="m-done">Ви відкрили його як додаток.</span>
+    <button type="button" class="btn small m-prompt" data-install-go>Встановити</button>
+  </div>
+  {% if dismiss %}<button type="button" class="pwa-x" data-install-x aria-label="Сховати">×</button>{% endif %}
+</section>

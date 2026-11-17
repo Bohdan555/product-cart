@@ -1229,3 +1229,23 @@ a.eat-open small{color:var(--muted)}
 .paywhere{margin:6px 0 0}
 .payalt{margin:4px 0 0;font-size:14px}
 .payalt a{color:var(--muted)}
+
+/* PWA: картка «Додати на екран» і перемикач push */
+.pwa-card{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px;margin:0 0 14px;position:relative}
+.pwa-card img{border-radius:12px;flex:none}
+.pwa-t{display:flex;flex-direction:column;gap:6px;min-width:0;padding-right:18px}
+.pwa-t b{font-size:15px}
+.pwa-t span{color:var(--muted);font-size:14px;line-height:1.4}
+.pwa-t span b{color:var(--ink);font-size:inherit}
+.pwa-t .btn{align-self:flex-start;margin-top:2px}
+.pwa-card [class*="m-"]{display:none}
+.pwa-card[data-mode=prompt] .m-prompt,.pwa-card[data-mode=ios] .m-ios,.pwa-card[data-mode=done] .m-done{display:revert}
+.pwa-card[data-mode=prompt] .btn.m-prompt{display:inline-flex}
+.ios-share{width:17px;height:17px;vertical-align:-3px;color:var(--accent)}
+.pwa-x{position:absolute;top:6px;right:8px;border:0;background:none;font-size:22px;line-height:1;color:var(--muted);padding:6px;cursor:pointer}
+.npush{display:flex;flex-direction:column;gap:8px}
+.npush .nrow{align-items:center}
+.npush [data-state-msg]{display:none;font-size:14px;color:var(--muted)}
+.npush[data-state=ios] [data-state-msg=ios],.npush[data-state=denied] [data-state-msg=denied],.npush[data-state=unsupported] [data-state-msg=unsupported],
+.npush[data-state=on] [data-state-msg=on]{display:block}
+html.pwa footer{display:none}

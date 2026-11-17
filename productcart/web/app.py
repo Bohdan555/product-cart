@@ -32,7 +32,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask
 
-from . import analytics, db, fridge, icons, logs, recipe_import, security, silpo_identity, unsplash
+from . import analytics, db, fridge, icons, logs, recipe_import, security, silpo_identity, unsplash, webpush
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -76,7 +76,7 @@ TASTE_GROUPS = [("Овочі й фрукти", ["vegetables", "fruits"]), ("Ка
 HIDE_TAGS = ["alcohol", "sweets", "household", "pork", "fish", "meat"]
 
 
-def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None,
+def create_app(db_path: str | None = None, app_secret: str | None = None, base_url: str | None = None, push_sender=None,
                gateway: SilpoGateway | None = None, secure_cookies: bool | None = None,
                google: GoogleAuth | None = None, telegram: Telegram | None = None, vision=None) -> FastAPI:
     logs.setup()
@@ -90,6 +90,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     secure = base_url.startswith("https://") if secure_cookies is None else secure_cookies
     google = google or GoogleAuth(redirect_uri=f"{base_url}/auth/google/callback")
     tg = telegram or Telegram()
+    vapid = webpush.Vapid.from_secret(app_secret, base_url)     # ключ push-сповіщень — з APP_SECRET, без нового секрету
+    push_send = push_sender or webpush.send                    # у тестах — підробка
     vision = vision or fridge.recognize     # фото холодильника → продукти (у тестах — підробка)
 
     app = FastAPI(title="Кошик з акцій", docs_url=None, redoc_url=None)
@@ -143,6 +145,45 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     css_v = hashlib.sha1((HERE / "static" / "style.css").read_bytes()).hexdigest()[:10]
     js_v = hashlib.sha1((HERE / "static" / "ui.js").read_bytes()).hexdigest()[:10]
     tpl.env.globals.update(css_v=css_v, js_v=js_v)
+
+    # ---------- PWA: маніфест, service worker, іконки ----------
+    sw_src = (HERE / "static" / "sw.js").read_text(encoding="utf-8")
+    sw_body = (sw_src.replace("__CSS_V__", css_v).replace("__JS_V__", js_v)
+               .replace("__VERSION__", hashlib.sha1((sw_src + css_v + js_v).encode()).hexdigest()[:10]))
+    manifest = {
+        "name": "Кошик з акцій", "short_name": "Кошик", "lang": "uk", "dir": "ltr",
+        "description": "Що приготувати з того, що є, і кошик з акцій «Сільпо» поруч",
+        "start_url": "/?source=pwa", "scope": "/", "id": "/", "display": "standalone",
+        "background_color": "#fbfaf8", "theme_color": "#2a7a52", "orientation": "portrait",
+        "categories": ["food", "shopping", "lifestyle"],
+        "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                  {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+                  {"src": "/static/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
+        "shortcuts": [{"name": "Що готуємо", "url": "/today", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+                      {"name": "Список покупок", "url": "/buy", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+                      {"name": "Акції", "url": "/list", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]}],
+    }
+
+    @app.get("/sw.js")
+    def service_worker():
+        return Response(sw_body, media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+    @app.get("/manifest.webmanifest")
+    def web_manifest():
+        return JSONResponse(manifest, media_type="application/manifest+json",
+                            headers={"Cache-Control": "public, max-age=3600"})
+
+    @app.get("/offline", response_class=HTMLResponse)
+    def offline(request: Request):
+        return render(request, "offline.html", None)
+
+    for _path, _file in (("/favicon.ico", "favicon-64.png"), ("/apple-touch-icon.png", "apple-touch-icon.png"),
+                         ("/apple-touch-icon-precomposed.png", "apple-touch-icon.png")):
+        def _icon(_file=_file):
+            return Response((HERE / "static" / "icons" / _file).read_bytes(), media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=604800"})
+        app.add_api_route(_path, _icon, methods=["GET"], include_in_schema=False)
     tpl.env.globals.update(uah=uah, chain_name=lambda k: CHAIN_NAMES.get(k.split(" · ")[0], k.split(" · ")[0]),
                            DIET_LABELS=DIET_LABELS, TAG_LABELS=TAG_LABELS)
     app.state.conn, app.state.gw = conn, gw
@@ -416,6 +457,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         days = day_labels(p)[:p.dinners]
         ctx = dict(p=p, mine=mine, days=days, st=user_stats(u["id"]) if u else None,
                    link=silpo_link(u["id"]) if u else None, chat=tg_chat(u["id"]) if u else None,
+                   push_n=len(push_subs(u["id"])) if u else 0,
                    likes=[TAG_LABELS.get(t, t) for t in p.likes][:4], hides=[TAG_LABELS.get(t, t) for t in p.dislikes][:3],
                    fridge_n=len(p.fridge) + len(p.fridge_other), cook_n=len(cooking_items(p)))
         return render(request, "me.html", u, **ctx)
@@ -1261,6 +1303,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: кошик не зібрався: %s: %s", type(err).__name__, str(err)[:1500])
             return render(request, "cart.html", u, status=502, **ctx,
                           error=f"«Сільпо» відповіло помилкою: {str(err)[:200]}. Спробуйте ще раз за хвилину.")
+        if res["placed"]:
+            n_pl = len(res["placed"])
+            await asyncio.to_thread(push_user, u["id"], "🛒 Кошик у «Сільпо» зібрано",
+                                    f"{n_pl} {plural(n_pl, 'товар', 'товари', 'товарів')} уже в кошику. Оплатіть — рецепти збережено.",
+                                    "/silpo/cart", "cart")
         chat = tg_chat(u["id"])
         if chat and res["placed"]:
             await asyncio.to_thread(tg.send, chat["chat_id"],
@@ -1678,6 +1725,69 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return go("/dishes")
 
     # ---------- сповіщення в Telegram ----------
+    # ---------- Web Push (PWA) ----------
+    def push_subs(user_id: int) -> list:
+        return conn.execute("SELECT endpoint, p256dh, auth FROM push_subs WHERE user_id=?", (user_id,)).fetchall()
+
+    def push_user(user_id: int, title: str, body: str, url: str = "/", tag: str | None = None) -> int:
+        """Надсилає на всі пристрої людини. Повертає, на скільки дійшло. Відписані — прибираємо."""
+        ok = 0
+        for r in push_subs(user_id):
+            try:
+                if push_send(vapid, dict(r), {"title": title, "body": body[:240], "url": url, "tag": tag}):
+                    ok += 1
+            except webpush.Gone:
+                conn.execute("DELETE FROM push_subs WHERE endpoint=?", (r["endpoint"],))
+            except Exception as e:
+                log.warning("Push: не надіслали: %s", str(e)[:200])
+        return ok
+
+    @app.get("/push/key")
+    def push_key():
+        return {"key": vapid.public_key}
+
+    @app.post("/push/subscribe")
+    async def push_subscribe(request: Request):
+        u = user_of(request)
+        if u is None:
+            return JSONResponse({"ok": False, "go": "/register"}, status_code=401)
+        if not secrets.compare_digest(request.headers.get("x-csrf", ""), u["csrf"]):
+            return JSONResponse({"ok": False}, status_code=400)
+        try:
+            d = await request.json()
+            endpoint, keys = str(d["endpoint"]), d.get("keys") or {}
+            p256dh, auth = str(keys["p256dh"]), str(keys["auth"])
+            assert len(webpush.unb64u(p256dh)) == 65 and len(webpush.unb64u(auth)) == 16
+        except Exception:
+            return JSONResponse({"ok": False, "error": "неправильна підписка"}, status_code=400)
+        if not webpush.allowed_endpoint(endpoint):
+            return JSONResponse({"ok": False, "error": "невідомий push-сервіс"}, status_code=400)
+        conn.execute("""INSERT INTO push_subs (endpoint, user_id, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, p256dh=excluded.p256dh, auth=excluded.auth""",
+                     (endpoint, u["id"], p256dh, auth, security.iso(security.now())))
+        p, health = load_profile(u["id"])
+        if not (p.tg_deals or p.tg_weekly):          # щойно ввімкнули — нехай сповіщення одразу щось означають
+            p.tg_deals = p.tg_weekly = True
+            save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "push_subscribed", host=(webpush.urlsplit(endpoint).hostname or "")[:60],
+                        pwa=request.headers.get("x-pwa") == "1")
+        sent = await asyncio.to_thread(push_user, u["id"], "Сповіщення ввімкнено ✓",
+                                       "Повідомимо про знижки на ваші товари й нове меню щопонеділка.", "/notify", "hello")
+        return {"ok": True, "sent": sent}
+
+    @app.post("/push/unsubscribe")
+    async def push_unsubscribe(request: Request):
+        u = user_of(request)
+        if u is None or not secrets.compare_digest(request.headers.get("x-csrf", ""), u["csrf"]):
+            return JSONResponse({"ok": False}, status_code=400)
+        try:
+            endpoint = str((await request.json())["endpoint"])
+        except Exception:
+            return JSONResponse({"ok": False}, status_code=400)
+        conn.execute("DELETE FROM push_subs WHERE endpoint=? AND user_id=?", (endpoint, u["id"]))
+        analytics.track(conn, u["id"], "push_unsubscribed")
+        return {"ok": True}
+
     def tg_chat(user_id: int):
         return conn.execute("SELECT chat_id, linked_at FROM tg_links WHERE user_id=?", (user_id,)).fetchone()
 
@@ -1706,6 +1816,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         p, _ = load_profile(u["id"])
         return render(request, "notify.html", u, p=p, chat=tg_chat(u["id"]), tg_on=tg.enabled, bot=tg.bot,
+                      push_n=len(push_subs(u["id"])),
                       start_url=f"https://t.me/{tg.bot}?start={tgm.link_code(app_secret, u['id'])}",
                       silpo=silpo_link(u["id"]), saved=saved)
 
@@ -1789,7 +1900,18 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return JSONResponse({"ok": False, "why": str(e)[:200]}, status_code=502)
         return {"ok": True, "bot": tg.bot}
 
-    async def notify_user(uid: int, chat: str, menu_day: bool, st: dict) -> None:
+    async def notify_user(uid: int, chat: str | None, menu_day: bool, st: dict) -> None:
+        """Акції й меню тижня — у Telegram (якщо прив'язаний) і push на пристрої (якщо ввімкнені)."""
+        has_push = bool(push_subs(uid))
+
+        async def deliver(tg_text: str, tg_btn: tuple[str, str], title: str, body: str, url: str, tag: str) -> bool:
+            ok = False
+            if chat and tg.enabled:
+                ok = await asyncio.to_thread(tg.send, chat, tg_text, [tg_btn]) or ok
+            if has_push:
+                ok = bool(await asyncio.to_thread(push_user, uid, title, body, url, tag)) or ok
+            return ok
+
         p, health = load_profile(uid)
         if not silpo_link(uid) or not (p.tg_deals or (p.tg_weekly and menu_day)):
             return
@@ -1807,8 +1929,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
         if p.tg_deals:
             items = tgm.pick_deals(offers, p, sent)
-            if items and await asyncio.to_thread(tg.send, chat, tgm.deals_text(items),
-                                                 [("Усі акції", f"{base_url}/list?sort=disc")]):
+            if items and await deliver(tgm.deals_text(items), ("Усі акції", f"{base_url}/list?sort=disc"),
+                                       "🔔 Цікаві акції у «Сільпо»", tgm.deals_short(items), "/list?sort=disc", "deals"):
                 mark(tgm.offer_key(o) for o, _ in items)
                 st["deals"] += 1
         wk = "w:%d-W%02d" % date.today().isocalendar()[:2]
@@ -1816,8 +1938,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             m, changed = week_menu(p, offers)
             if changed:
                 save_profile(uid, p, health)
-            if m.dishes and await asyncio.to_thread(tg.send, chat, tgm.menu_text(m, day_labels(p)),
-                                                    [("Відкрити меню", f"{base_url}/menu")]):
+            if m.dishes and await deliver(tgm.menu_text(m, day_labels(p)), ("Відкрити меню", f"{base_url}/menu"),
+                                          "🍽 Меню на тиждень готове",
+                                          ", ".join(d.title for d in m.dishes[:3]) + (" і ще" if len(m.dishes) > 3 else ""),
+                                          "/menu", "menu"):
                 mark([wk])
                 st["menus"] += 1
 
@@ -1829,8 +1953,6 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                    else request.headers.get("user-agent", "").startswith("vercel-cron"))
         if not allowed:
             return JSONResponse({"ok": False}, status_code=403)
-        if not tg.enabled:
-            return {"ok": False, "why": "немає TELEGRAM_BOT_TOKEN"}
         last = db.get_setting(conn, "tg_cron_at")
         if last and last > security.iso(security.now() - timedelta(hours=20)):
             return {"ok": True, "skipped": "вже надсилали сьогодні"}
@@ -1838,10 +1960,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         conn.execute("DELETE FROM tg_sent WHERE sent_at < ?", (security.iso(security.now() - timedelta(days=30)),))
         st = {"users": 0, "deals": 0, "menus": 0, "errors": 0}
         menu_day = tgm.is_menu_day()
-        for r in conn.execute("SELECT user_id, chat_id FROM tg_links").fetchall():
+        chats = {r["user_id"]: r["chat_id"] for r in conn.execute("SELECT user_id, chat_id FROM tg_links").fetchall()} \
+            if tg.enabled else {}
+        uids = set(chats) | {r["user_id"] for r in conn.execute("SELECT DISTINCT user_id FROM push_subs").fetchall()}
+        for uid in sorted(uids):
             st["users"] += 1
             try:
-                await notify_user(r["user_id"], r["chat_id"], menu_day, st)
+                await notify_user(uid, chats.get(uid), menu_day, st)
             except Exception as e:
                 st["errors"] += 1
                 log.warning("Telegram: розсилка користувачу: %s", str(root_error(e))[:300])

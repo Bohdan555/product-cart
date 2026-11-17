@@ -33,6 +33,8 @@
 </section>
 {% endif %}
 
+{% with install_mode = "always" %}{% include "_install.html" %}{% endwith %}
+
 <h2 class="ph">Кухня</h2>
 <div class="pgroup">
   {{ row("/cook", "pan", "tomato", "Готую", (cook_n ~ " " ~ plural(cook_n, 'рецепт', 'рецепти', 'рецептів') ~ " збережено") if cook_n else "рецепти страв, які ви обрали") }}
@@ -55,10 +57,10 @@
   {% set go_btn %}<span class="pgo">Підключити</span>{% endset %}
   {{ row("/silpo", "store", "basil", "«Сільпо»", (link.store_title or "підключено") if link else "реальні ціни й кошик", ok if link else go_btn) }}
   {{ row("/silpo/cart", "cart", "citrus", "Кошик «Сільпо»", ((cart_n ~ " " ~ plural(cart_n, 'товар', 'товари', 'товарів')) if cart_n else "переглянути, змінити, оплатити")) }}
-  {{ row("/notify", "plane", "sky", "Telegram", ("@Product_basket_bot · " ~ (p.watch|length) ~ " " ~ plural(p.watch|length, 'обраний товар', 'обрані товари', 'обраних товарів')) if chat else "акції й меню в Telegram", ok if chat else "") }}
+  {{ row("/notify", "plane", "sky", "Сповіщення", ("на телефон" if push_n else "") ~ (" і " if push_n and chat else "") ~ ("Telegram" if chat else "") ~ ((" · " ~ (p.watch|length) ~ " " ~ plural(p.watch|length, 'обраний товар', 'обрані товари', 'обраних товарів')) if (push_n or chat) else "") if (push_n or chat) else "знижки й меню — на телефон або в Telegram", ok if (push_n or chat) else "") }}
   {% else %}
   {{ row("/register", "store", "basil", "«Сільпо»", "після входу") }}
-  {{ row("/register", "plane", "sky", "Telegram", "після входу") }}
+  {{ row("/register", "plane", "sky", "Сповіщення", "після входу") }}
   {% endif %}
 </div>
 

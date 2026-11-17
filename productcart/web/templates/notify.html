@@ -2,8 +2,18 @@
 {% block title %}Сповіщення — Кошик з акцій{% endblock %}
 {% block body %}
 <section class="intro">
-  <h1 class="xh">Сповіщення в <span class="hl">Telegram</span></h1>
+  <h1 class="xh"><span class="hl">Сповіщення</span></h1>
 </section>
+{% include "_install.html" %}
+<div class="card stack npush" data-push>
+  <label class="nrow"><input type="checkbox" data-push-toggle>
+    <span><b>📱 На цей телефон</b><small>знижки на ваші товари й меню щопонеділка — як звичайні сповіщення</small></span></label>
+  <p data-state-msg="on">✅ Увімкнено на цьому пристрої{% if push_n > 1 %} · усього пристроїв: {{ push_n }}{% endif %}</p>
+  <p data-state-msg="ios">На iPhone сповіщення працюють, коли Кошик додано на початковий екран: <b>Поділитися</b> → <b>«На початковий екран»</b>, потім відкрийте його звідти.</p>
+  <p data-state-msg="denied">Сповіщення для сайту заборонені. Дозвольте їх у налаштуваннях браузера (значок 🔒 біля адреси → Сповіщення).</p>
+  <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram нижче.</p>
+</div>
+<h2 class="ph">Або в Telegram</h2>
 {% if saved %}<div class="ok" style="margin-bottom:12px">Збережено ✓</div>{% endif %}
 
 <div class="card stack ntg" style="--c:var(--p-sky)">

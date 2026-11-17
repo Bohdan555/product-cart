@@ -131,6 +131,13 @@ def deals_text(items: list[tuple[Offer, str]]) -> str:
     return "\n".join(lines)
 
 
+def deals_short(items: list[tuple[Offer, str]]) -> str:
+    """Для push: коротко, без розмітки. «Сир Гауда −30% · Кава −25% і ще 2»."""
+    head = [f"{o.name[:40]} −{round(o.discount_pct or 0)}%" for o, _ in items[:2]]
+    rest = len(items) - len(head)
+    return " · ".join(head) + (f" і ще {rest}" if rest > 0 else "")
+
+
 def menu_text(m, days: list[str]) -> str:
     lines = ["🍽 <b>Меню на тиждень готове</b>",
              f"{len(m.dishes)} вечерь · порція ≈ {round(m.per_portion)} ₴ · економія {round(m.saving)} ₴", ""]

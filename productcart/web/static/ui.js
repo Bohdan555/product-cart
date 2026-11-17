@@ -89,3 +89,94 @@
     });
   };
 })();
+
+/* ---------- PWA: встановлення на екран і push-сповіщення ---------- */
+(function () {
+  var bip = null;   // Android/Chrome: подія «можна встановити» — показуємо свою кнопку
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); bip = e; render(); });
+  window.addEventListener('appinstalled', function () { bip = null; report('pwa_installed'); render(); });
+  var ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  var standalone = function () { return window.isStandalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); };
+  var csrf = function () { var m = document.querySelector('meta[name=csrf]'); return m ? m.content : ''; };
+  function report(ev, extra) {
+    try { var fd = new FormData(); fd.append('event', ev); fd.append('extra', extra || '');
+      if (navigator.sendBeacon) navigator.sendBeacon('/client-log', fd); } catch (e) {}
+  }
+  function hidden(k) { try { return !!localStorage.getItem(k); } catch (e) { return false; } }
+
+  // Картка «Додати на екран»: Android — кнопка, iPhone — інструкція, уже встановлено — ховаємо
+  function render() {
+    document.querySelectorAll('[data-install]').forEach(function (box) {
+      var mode = standalone() ? 'done' : bip ? 'prompt' : ios ? 'ios' : 'none';
+      if (box.dataset.dismiss && hidden(box.dataset.dismiss)) mode = 'none';
+      box.dataset.mode = mode;
+      box.hidden = mode === 'none' || (mode === 'done' && box.dataset.install !== 'always');
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-install-go]');
+    if (b && bip) { bip.prompt(); bip.userChoice.then(function (c) { report('pwa_prompt', c.outcome); bip = null; render(); }); }
+    var x = e.target.closest('[data-install-x]');
+    if (x) { var box = x.closest('[data-install]'); try { localStorage.setItem(box.dataset.dismiss, '1'); } catch (err) {} box.hidden = true; }
+  });
+
+  // Push: ввімкнути / вимкнути на цьому пристрої
+  function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function b64(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+    var raw = atob(s), out = new Uint8Array(raw.length); for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i); return out; }
+  function post(url, body) {
+    return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF': csrf(), 'X-PWA': standalone() ? '1' : '0' },
+      body: JSON.stringify(body) }).then(function (r) { return r.json(); });
+  }
+  function current() {
+    if (!pushSupported()) return Promise.resolve(null);
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); });
+  }
+  window.pushOn = function () {
+    if (!pushSupported()) return Promise.reject(new Error(ios && !standalone() ? 'ios-not-installed' : 'unsupported'));
+    return Notification.requestPermission().then(function (perm) {
+      if (perm !== 'granted') throw new Error(perm === 'denied' ? 'denied' : 'dismissed');
+      return Promise.all([navigator.serviceWorker.ready, fetch('/push/key').then(function (r) { return r.json(); })]);
+    }).then(function (x) {
+      return x[0].pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(x[1].key) });
+    }).then(function (sub) { return post('/push/subscribe', sub.toJSON()); })
+      .then(function (d) { if (!d.ok) throw new Error(d.error || 'server'); report('push_on', standalone() ? 'pwa' : 'browser'); return d; });
+  };
+  window.pushOff = function () {
+    return current().then(function (sub) {
+      if (!sub) return;
+      return post('/push/unsubscribe', { endpoint: sub.endpoint }).then(function () { return sub.unsubscribe(); });
+    });
+  };
+  function paint(box) {
+    var t = box.querySelector('[data-push-toggle]'), msg = box.querySelector('[data-push-msg]');
+    if (!pushSupported()) {
+      box.dataset.state = ios && !standalone() ? 'ios' : 'unsupported';
+      if (t) t.disabled = true; return;
+    }
+    if (Notification.permission === 'denied') { box.dataset.state = 'denied'; if (t) { t.checked = false; t.disabled = true; } return; }
+    current().then(function (sub) { box.dataset.state = sub ? 'on' : 'off'; if (t) { t.checked = !!sub; t.disabled = false; } });
+  }
+  function bindPush() {
+    document.querySelectorAll('[data-push]').forEach(function (box) {
+      paint(box);
+      var t = box.querySelector('[data-push-toggle]'); if (!t || t.dataset.bound) return; t.dataset.bound = '1';
+      t.addEventListener('change', function () {
+        t.disabled = true;
+        (t.checked ? window.pushOn() : window.pushOff()).then(function () {
+          if (window.toast) toast(t.checked ? 'Сповіщення ввімкнено 🔔' : 'Сповіщення вимкнено');
+          if (window.haptic) haptic(12);
+        }).catch(function (e) {
+          t.checked = false;
+          var why = e && e.message;
+          if (window.toast) toast(why === 'denied' ? 'Сповіщення заборонені в налаштуваннях' : why === 'ios-not-installed'
+            ? 'Спершу додайте Кошик на початковий екран' : 'Не вдалося ввімкнути сповіщення');
+          report('push_fail', why || '');
+        }).then(function () { paint(box); });
+      });
+    });
+  }
+  function init() { render(); bindPush(); }
+  document.addEventListener('turbo:load', init);
+  if (document.readyState !== 'loading') init(); else document.addEventListener('DOMContentLoaded', init);
+})();

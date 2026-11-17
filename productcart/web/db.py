@@ -59,6 +59,14 @@ CREATE TABLE IF NOT EXISTS tg_links (
   chat_id TEXT NOT NULL,
   linked_at TEXT NOT NULL
 );
+-- Web Push: підписки браузерів/PWA (на одного користувача може бути кілька пристроїв)
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS tg_sent (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   key TEXT NOT NULL,

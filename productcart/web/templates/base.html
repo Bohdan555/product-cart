@@ -4,6 +4,16 @@
 <link rel="preload" href="/static/fonts/onest-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/unbounded-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={{ css_v }}">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141716" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Кошик">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+{% if user %}<meta name="csrf" content="{{ user.csrf }}">{% endif %}
 <meta name="turbo-cache-control" content="no-preview">
 <script src="/static/vendor/turbo-8.0.12.js" defer></script>
 <script src="/static/ui.js?v={{ js_v }}" defer></script>
@@ -22,6 +32,15 @@ function markTab() {
   });
 }
 document.addEventListener('turbo:load', markTab);
+// PWA: service worker (офлайн-копії сторінок і push). Вихід з акаунта — прибираємо збережені сторінки.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });
+  document.addEventListener('submit', function (e) {
+    if (e.target.action && /\/logout$/.test(e.target.action) && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('logout');
+  }, true);
+}
+window.isStandalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+if (window.isStandalone) document.documentElement.classList.add('pwa');
 document.addEventListener('turbo:render', markTab);
 document.addEventListener('turbo:before-prefetch', function (e) {
   var href = (e.target && e.target.getAttribute('href')) || '';
