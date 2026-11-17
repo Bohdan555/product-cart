@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
@@ -63,6 +64,7 @@ class CartState:
     line_ids: dict[str, str] = field(default_factory=dict)     # productId → id рядка кошика (для зміни кількості)
     lines: list[dict] = field(default_factory=list)            # для показу: name, quantity, weighted, price, total…
     validations: list[str] = field(default_factory=list)
+    flagged: set = field(default_factory=set)      # productId, на які «Сільпо» поскаржилось у перевірках
     min_order: float | None = None          # мінімальна сума замовлення, якщо «Сільпо» її називає
     names: dict[str, str] = field(default_factory=dict)
     total: float | None = None            # разом із доставкою
@@ -154,7 +156,12 @@ def parse_cart(data: Any) -> CartState:
         if msg == "order.cost.min" and _num(c.get("orderCostMin")):
             st.min_order = _num(c.get("orderCostMin"))
         if v.get("level") == "error":
-            st.validations.append(VALIDATION_TEXT.get(msg, msg).format(**{k: c.get(k, "") for k in ("orderCostMin",)}))
+            pid = c.get("productId") or c.get("offerId")
+            if pid:
+                st.flagged.add(str(pid))
+            text = validation_text(msg, c)
+            if text not in st.validations:
+                st.validations.append(text)
     st.checkout = _find(data, "checkoutWebLink", "webLink")
     st.checkout_mobile = _find(data, "checkoutMobileLink", "mobileLink")
     return st
@@ -163,7 +170,31 @@ def parse_cart(data: Any) -> CartState:
 VALIDATION_TEXT = {
     "order.cost.min": "Мінімальна сума замовлення в «Сільпо» — {orderCostMin} ₴. Додайте товарів, щоб оформити.",
     "product.offer.not_found": "Деяких товарів немає в цьому магазині — «Сільпо» прибере їх при оформленні.",
+    "product.offer.stock.max": "Деяких товарів у магазині менше, ніж у кошику. Зменште кількість у позначених рядках.",
+    "product.offer.stock.min": "Для деяких товарів замало кількості — збільште її або приберіть товар.",
+    "product.offer.unavailable": "Деякі товари зараз недоступні — приберіть позначені рядки.",
 }
+
+
+def validation_text(code: str, ctx: dict | None = None) -> str:
+    """Код перевірки «Сільпо» → зрозумілий текст. Незнайомий код людині не показуємо, а пишемо в лог."""
+    ctx = ctx or {}
+    if code in VALIDATION_TEXT:
+        try:
+            return VALIDATION_TEXT[code].format(**{k: ctx.get(k, "") for k in ("orderCostMin",)})
+        except (KeyError, IndexError, ValueError):
+            pass
+    if not re.fullmatch(r"[\w.\-]+", code or ""):      # уже людський текст
+        return code
+    log.warning("Сільпо: незнайома перевірка кошика %s: %s", code, str(ctx)[:300])
+    low = code.lower()
+    if "stock" in low:
+        return VALIDATION_TEXT["product.offer.stock.max"]
+    if "timeslot" in low or "slot" in low or "delivery" in low:
+        return "Вибране вікно доставки вже недоступне — оберіть інше під час оплати в «Сільпо»."
+    if "product" in low or "offer" in low:
+        return "Деякі товари в кошику потребують уваги — перевірте позначені рядки."
+    return "«Сільпо» має зауваження до кошика — перевірте його під час оплати."
 
 
 def _step(p: dict) -> float:

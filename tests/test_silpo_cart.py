@@ -265,3 +265,13 @@ def test_empty_search_retries_with_fresh_slot():
     res = run(sc.build(mcp, [sc.Want("deal", "Паштет Одеський 240г", 1, "pcs", product_id="pate", packs=1)]))
     assert [p.product_id for p in res["placed"]] == ["pate"]
     assert len([1 for n, _ in mcp.calls if n == "silpo_find_products_batch"]) == 2
+
+
+def test_validation_codes_become_human_text():
+    st = sc.parse_cart({"cart": {"id": "c1", "shipments": [{"products": [{"id": "l1", "productId": "cola", "name": "Кола", "quantity": 3}]}],
+                                 "calculation": {"validations": [
+                                     {"level": "error", "message": "product.offer.stock.max", "context": {"productId": "cola"}},
+                                     {"level": "error", "message": "order.weird.thing", "context": {}}]}}})
+    assert st.validations[0].startswith("Деяких товарів у магазині менше") and "cola" in st.flagged
+    assert all("." not in v.split()[0] for v in st.validations)          # жодних сирих кодів
+    assert sc.validation_text("product.offer.stock.zero").startswith("Деяких товарів у магазині менше")

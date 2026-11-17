@@ -38,12 +38,12 @@
 </div>
 {% else %}{% for v in cart.validations %}<div class="note warnbox">{{ v }}</div>{% endfor %}{% endif %}
 <div class="card sclist">
-  {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set nostock = l.stock is not none and l.stock < l.quantity %}{% set stp = 0.1 if l.weighted else 1 %}
+  {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set nostock = (l.stock is not none and l.stock < l.quantity) or l.product_id in cart.flagged %}{% set stp = 0.1 if l.weighted else 1 %}
   <div class="scrow{% if odd or nostock %} odd{% endif %}{% if changed and changed == l.line_id %} fresh{% endif %}" id="l-{{ l.line_id }}">
     {% if l.image %}<img src="{{ l.image }}" alt="" width="52" height="52" loading="lazy">{% else %}<span class="scimg"></span>{% endif %}
     <div class="scmain"><b>{{ l.name }}</b>
       <small>{% if l.price %}{{ uah(l.price) }}{% if l.weighted %} за кг{% elif l.ratio %} за {{ l.ratio }}{% endif %}{% endif %}{% if l.total %} · разом <b>{{ uah(l.total) }}</b>{% endif %}{% if l.old and l.price and l.old > l.price %} <s>{{ uah(l.old) }}</s>{% endif %}</small>
-      {% if nostock %}<small class="oddtxt">{% if l.stock and l.stock > 0 %}В наявності лише {{ l.stock|round(1)|string|replace('.0','') }}{% else %}Немає в наявності{% endif %}</small>{% endif %}
+      {% if nostock %}<small class="oddtxt">{% if l.stock is none %}Перевірте кількість — «Сільпо» має зауваження{% elif l.stock > 0 %}В наявності лише {{ l.stock|round(1)|string|replace('.0','') }}{% if l.weighted %} кг{% endif %}{% else %}Немає в наявності{% endif %}</small>{% endif %}
       {% if odd %}<small class="oddtxt">Підозріло багато</small>
       {% if l.line_id %}<form method="post" action="/silpo/cart/change" class="fixform"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="line" value="{{ l.line_id }}"><input type="hidden" name="action" value="set"><input type="hidden" name="quantity" value="{{ 0.5 if l.weighted else 1 }}"><button type="submit" class="btn small">Поставити {{ '0,5 кг' if l.weighted else '1 шт' }}</button></form>{% endif %}{% endif %}
       {% if l.line_id %}

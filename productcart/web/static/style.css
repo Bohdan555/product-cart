@@ -1273,3 +1273,17 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
   .dock a.loading .ico,.dock a.loading .tico{animation:none}
   html.navigating .wrap{transition:none}
 }
+
+/* Картки акцій: назва рівно у 2 рядки (раніше визирав третій), кнопка «У кошик» в один рядок */
+#feed .pname,.pname{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  line-height:1.2;min-height:2.4em;max-height:2.4em}
+#feed .pcard{position:relative}
+#feed .pacts{gap:6px}
+#feed .padd{white-space:nowrap;font-size:14px;padding:12px 6px}
+#feed .pacts .pbell,#feed .pacts .pgo{position:absolute;right:16px;width:36px;height:36px;min-height:36px;padding:0;
+  border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--card) 88%,transparent);
+  box-shadow:0 2px 8px -2px rgba(0,0,0,.18);z-index:2;font-size:15px;text-decoration:none}
+#feed .pacts .pbell{top:16px}
+#feed .pacts .pgo{top:58px}
+/* «Економія −5869 ₴» — мінус і сума разом */
+.hs-save b span{display:inline}
