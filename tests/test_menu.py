@@ -114,3 +114,10 @@ def test_pantry_words_cover_dictionary_and_synonyms():
     assert menu.word_to_key("Курятина") == "chicken_fillet" and menu.word_to_key("картошка") == "potato"
     assert menu.word_to_key("помідори") == "tomatoes_can" and menu.word_to_key("творог") == "cottage"
     assert menu.word_to_key("сир") == "cheese" and menu.word_to_key("авокадо") is None
+
+
+def test_other_products_with_ingredient_word_do_not_match():
+    from productcart.menu import matches_ingredient as m
+    assert not m("Паштет «Онисс» «Одеський» печінковий з вершковим маслом 240г", "butter")
+    assert not m("Оливки «Повна Чаша»® зелені фаршировані лососем 290г", "minced")
+    assert m("Масло вершкове Селянське 82% 200г", "butter") and m("Фарш свино-яловичий 500г", "minced")

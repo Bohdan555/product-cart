@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from ..catalog import parse_pack
+from . import substitute
 
 log = logging.getLogger(__name__)
 Call = Callable[[str, dict], Awaitable[Any]]
@@ -195,22 +196,53 @@ def sane(qty: float, weighted: bool) -> bool:
     return 0 < qty <= (MAX_KG if weighted else MAX_PACKS)
 
 
+def _sellable(p: dict) -> bool:
+    stock = _num(p.get("stock"))
+    return bool(_first(p, "id", "productId") and _num(_first(p, "price", "currentPrice")) and (stock is None or stock > 0)
+                and p.get("available", True) is not False)
+
+
+def unit_price(p: dict) -> float:
+    price = _num(_first(p, "price", "currentPrice")) or 1e9
+    if p.get("weighted"):
+        return price
+    qty, _ = parse_pack(str(p.get("displayRatio") or p.get("ratio") or p.get("name") or ""))
+    return price / qty * 1000 if qty else price * 1000
+
+
 def pick_product(items: list[dict]) -> dict | None:
     """Найдешевший товар у наявності (за кг / л / шт, коли це можна порахувати)."""
-    def ok(p: dict) -> bool:
-        stock = _num(p.get("stock"))
-        return _first(p, "id", "productId") and _num(_first(p, "price", "currentPrice")) and (stock is None or stock > 0) \
-            and p.get("available", True) is not False
-
-    def unit_price(p: dict) -> float:
-        price = _num(_first(p, "price", "currentPrice")) or 1e9
-        if p.get("weighted"):
-            return price
-        qty, _ = parse_pack(str(p.get("displayRatio") or p.get("ratio") or p.get("name") or ""))
-        return price / qty * 1000 if qty else price * 1000
-
-    good = [p for p in items if ok(p)]
+    good = [p for p in items if _sellable(p)]
     return min(good[:5], key=unit_price) if good else None
+
+
+GOOD_MATCH = 0.6      # такий кандидат беремо одразу; слабший — лише якщо кращого не знайдеться в наступних запитах
+PRICE_BAND = 0.08     # серед майже однаково схожих — найдешевший за кг / л / шт
+
+
+def score_candidate(p: dict, original: str, key: str, orig_weighted: bool | None = None) -> float:
+    """Наскільки товар годиться: збіг з інгредієнтом меню + схожість на оригінал (substitute.relevance)."""
+    rel = substitute.relevance(original, str(p.get("name") or ""), orig_weighted=orig_weighted,
+                               cand_weighted=bool(p.get("weighted")))
+    if _known(key):
+        if _matches(p, key):
+            if not rel and substitute.changes_form(original, str(p.get("name") or "")):
+                return 0.0                                # «соус з куркою» для курки — ні
+            return round(0.5 + 0.5 * (rel or 0.3), 3)     # інгредієнт той; чим схожіше на оригінал — тим вище
+        return rel if rel >= GOOD_MATCH else 0.0          # не той інгредієнт — лише якщо дуже схоже на оригінал
+    return rel
+
+
+def best_candidate(items: list[dict], original: str, key: str, orig_weighted: bool | None = None) -> tuple[dict | None, float]:
+    """Найрелевантніший товар у наявності; серед майже однаково схожих — найдешевший за одиницю."""
+    scored = [(score_candidate(p, original, key, orig_weighted), p) for p in items if _sellable(p)]
+    scored = [(sc, p) for sc, p in scored if sc >= substitute.MIN_SCORE]
+    if not scored:
+        return None, 0.0
+    top = max(sc for sc, _ in scored)
+    band = [(sc, p) for sc, p in scored if sc >= top - PRICE_BAND]
+    sc, p = min(band, key=lambda x: (unit_price(x[1]), -x[0]))
+    return p, sc
 
 
 # ---------- сценарій ----------
@@ -325,6 +357,14 @@ async def _search(call: Call, ctx: dict, names: list[str]) -> dict[str, list[dic
     return by_query
 
 
+def _known(key: str) -> bool:
+    try:
+        from ..menu import INGREDIENTS
+        return key in INGREDIENTS
+    except Exception:
+        return False
+
+
 def _matches(p: dict, key: str) -> bool:
     try:
         from ..menu import INGREDIENTS, matches_ingredient
@@ -336,13 +376,15 @@ def _matches(p: dict, key: str) -> bool:
 async def resolve(call: Call, cart: CartState, wants: list[Want]) -> dict:
     """Перевіряє наявність у магазині кошика й підбирає товари.
     → {"found": [(want, productId, quantity, назва, ваговий)], "missing": [Want], "replaced": [(старе, нове)]}
-    Акційний товар — саме той, якщо є й вистачає залишку; інакше заміна. Решту шукаємо кількома простими
-    запитами по черзі (до 4 кіл), беремо найдешевше з достатнім залишком, спершу — що справді відповідає продукту."""
+    Акційний товар — саме той, якщо є й вистачає залишку; інакше заміна. Решту шукаємо кількома запитами
+    по черзі (від найточнішого), беремо найсхожіше на оригінал (substitute.relevance), серед майже однаково схожих — найдешевше."""
     ctx = {k: v for k, v in {"branchId": cart.branch_id, "deliveryType": cart.delivery_type,
                              "timeslotStart": cart.slot_start, "timeslotEnd": cart.slot_end}.items() if v}
     found, missing, replaced = [], [], []
     swap_from: dict[str, str] = {}   # ключ рядка → назва акційного товару, якого не виявилось
     why: dict[str, str] = {}         # ключ → чому не знайшли (у лог, для діагностики)
+    origin: dict[str, tuple[str, bool | None]] = {}   # ключ → на що має бути схожа заміна
+    weak: dict[str, tuple[float, dict, Want]] = {}    # найкращий слабкий кандидат, якщо сильного не буде
     # 1) акційні товари: чи є саме цей товар у магазині кошика і чи вистачає залишку
     by_id_query = await _search(call, ctx, [w.name for w in wants if w.product_id])
     pending: list[tuple[Want, list[str]]] = []      # (рядок, черга запитів)
@@ -357,16 +399,17 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> dict:
             found.append((w, w.product_id, qty, w.name, w.weighted))
             continue
         why[w.key] = "акційного немає" if same is None else "акційного мало на залишку"
-        alt_queue = [q for q in dict.fromkeys([w.generic or ""] + list(w.alts)) if q]
+        alt_queue = substitute.queries(w.name, w.generic, tuple(w.alts))
         if not alt_queue:
             missing.append(w)
             continue
-        log.info("Сільпо: «%s» немає в наявності — шукаємо заміну: %s", w.name, ", ".join(alt_queue[:3]))
+        log.info("Сільпо: «%s» немає в наявності — шукаємо заміну: %s", w.name, ", ".join(alt_queue[:4]))
         swap_from[w.key] = w.name
+        origin[w.key] = (w.name, w.weighted)
         pending.append((Want(w.key, alt_queue[0], w.need, w.unit, alts=tuple(alt_queue[1:]), label=w.title), alt_queue))
     # 2) пошук за назвами: кожне коло — наступний запит для тих, що ще не знайдені
     tries: dict[str, list[str]] = {}
-    for _round in range(4):
+    for _round in range(6):
         if not pending:
             break
         names = [queue[0] for _, queue in pending]
@@ -377,22 +420,43 @@ async def resolve(call: Call, cart: CartState, wants: list[Want]) -> dict:
             tries.setdefault(w.key, []).append(q)
             got = by_query.get(q.lower(), [])
             ok_stock = [p for p in got if _stock_ok(p, quantity_for(w, p))]
-            fitting = [p for p in ok_stock if _matches(p, w.key)]
-            p = pick_product(fitting) or pick_product(ok_stock)
+            orig, ow = origin.get(w.key, (w.label or w.name, None))
+            p, sc = best_candidate(ok_stock, orig, w.key, ow)
+            if p is not None and sc < GOOD_MATCH and len(queue) > 1:
+                if sc > weak.get(w.key, (0.0,))[0]:
+                    weak[w.key] = (sc, p, w)            # слабкувато — спершу спробуємо точніші запити далі
+                p = None
             if p is None:
-                why[w.key] = "нічого не знайшли" if not got else f"знайшли {len(got)}, але немає в наявності"
+                prev = weak.get(w.key)
                 if len(queue) > 1:
+                    why[w.key] = "нічого не знайшли" if not got else (f"знайшли {len(got)}, але немає в наявності" if not ok_stock
+                                                                      else f"знайшли {len(ok_stock)}, але не схожі")
                     nxt.append((w, queue[1:]))
-                else:
+                    continue
+                if prev is None:
+                    why[w.key] = "нічого не знайшли" if not got else (f"знайшли {len(got)}, але немає в наявності" if not ok_stock
+                                                                      else f"знайшли {len(ok_stock)}, але не схожі на «{orig}»")
                     missing.append(w)
-                continue
+                    continue
+                sc, p, _ = prev
+            elif weak.get(w.key) and weak[w.key][0] > sc:
+                sc, p, _ = weak[w.key]                  # останній запит дав гірше, ніж попередній
+            weak.pop(w.key, None)
             name = p.get("name") or w.name
+            log.info("Сільпо: для «%s» беремо «%s» (схожість %.2f, запит «%s»)", orig, name, sc, q)
             if w.key in swap_from:
                 replaced.append((swap_from[w.key], name))
             found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), name, bool(p.get("weighted"))))
         pending = nxt
     for w, _ in pending:
-        missing.append(w)
+        if w.key in weak:                           # черга не скінчилась, але щось годяще вже знайшли
+            sc, p, _ = weak.pop(w.key)
+            name = p.get("name") or w.name
+            if w.key in swap_from:
+                replaced.append((swap_from[w.key], name))
+            found.append((w, str(_first(p, "id", "productId")), quantity_for(w, p), name, bool(p.get("weighted"))))
+        else:
+            missing.append(w)
     ok = []
     for item in found:
         if sane(item[2], item[4]):

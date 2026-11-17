@@ -307,10 +307,18 @@ def _tokens(name: str) -> list[str]:
     return [t for t in re.split(r"[^\wʼ'-]+", (name or "").lower().replace("’", "'")) if t]
 
 
+# Інший продукт, хоч і зі словом інгредієнта в назві: «паштет з вершковим маслом» — не масло,
+# «оливки фаршировані» — не фарш, «чипси зі смаком сиру» — не сир.
+OTHER_PRODUCT = ("паштет", "соус", "чипс", "снек", "сухарик", "фарширов", "зі смаком", "смак ", "ароматиз", "корм",
+                 "цукерк", "батончик", "печиво", "сироп", "для котів", "для собак")
+
+
 def matches_ingredient(name: str, key: str) -> bool:
-    _, _, _, _, _, _, variants, excludes = INGREDIENTS[key]
+    _, title, _, _, _, _, variants, excludes = INGREDIENTS[key]
     low = (name or "").lower()
     if any(e in low for e in excludes):
+        return False
+    if any(w in low and w not in title.lower() for w in OTHER_PRODUCT):
         return False
     toks = _tokens(name)
     return any(all(any(t.startswith(stem) for t in toks) for stem in var) for var in variants)

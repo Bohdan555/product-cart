@@ -1162,9 +1162,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             msg = str(err) if isinstance(err, silpo_cart.CartError) else "«Сільпо» не відповіло"
             return JSONResponse({"error": msg[:200]}, status_code=502)
         if not res["placed"]:
-            return JSONResponse({"error": "Немає в наявності"}, status_code=409)
-        analytics.track(conn, u["id"], "deal_added", chain="silpo", product_id=pid)
-        return remember_cart(JSONResponse({"ok": True, "count": res["count"]}), res["count"], u["id"])
+            return JSONResponse({"error": "Немає й схожого"}, status_code=409)
+        swap = res["replaced"][0][1] if res["replaced"] else None
+        analytics.track(conn, u["id"], "deal_added", chain="silpo", product_id=pid, replaced=bool(swap))
+        return remember_cart(JSONResponse({"ok": True, "count": res["count"], "replaced": swap}), res["count"], u["id"])
 
     @app.post("/silpo/cart/clear")
     async def silpo_cart_clear(request: Request, csrf: str = Form("")):

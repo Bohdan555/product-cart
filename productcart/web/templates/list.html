@@ -88,7 +88,8 @@ document.getElementById('loc-btn').addEventListener('click', function () {
     b.disabled = true; b.textContent = '…';
     fetch('/silpo/cart/add', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); })
       .then(function (d) {
-        if (d.ok) { b.textContent = '✓ У кошику'; b.classList.add('done'); if (window.flyToCart) flyToCart(b); if (window.haptic) haptic(15); if (window.setCartCount) window.setCartCount(d.count); setTimeout(function () { b.disabled = false; b.textContent = '+ Ще'; }, 1500); return; }
+        if (d.ok && d.replaced && window.toast) toast('Цього немає в наявності — поклали схоже: ' + d.replaced);
+        if (d.ok) { b.textContent = d.replaced ? '✓ Поклали заміну' : '✓ У кошику'; b.classList.add('done'); if (window.flyToCart) flyToCart(b); if (window.haptic) haptic(15); if (window.setCartCount) window.setCartCount(d.count); setTimeout(function () { b.disabled = false; b.textContent = '+ Ще'; }, 1500); return; }
         if (d.go) { location.href = d.go; return; }
         b.textContent = d.error || 'Не вдалося'; setTimeout(function () { b.disabled = false; b.textContent = '+ У кошик'; }, 2000);
       }).catch(function () { b.disabled = false; b.textContent = '+ У кошик'; });

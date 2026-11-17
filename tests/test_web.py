@@ -552,7 +552,7 @@ def test_add_deal_to_silpo_cart(tmp_path):
         c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
         assert 'data-pid="p2"' in c.get("/list").text                              # справжні акції — кнопка в кошик
         d = c.post("/silpo/cart/add", data={"csrf": token, "pid": "p2", "name": "Кава", "weighted": "0"}).json()
-        assert d == {"ok": True, "count": 2} and shared.items["p2"] == 1
+        assert d == {"ok": True, "count": 2, "replaced": None} and shared.items["p2"] == 1
         c.post("/silpo/cart/add", data={"csrf": token, "pid": "p2", "name": "Кава"})
         assert shared.items["p2"] == 2 and shared.items["other"] == 1               # ще раз — +1, чуже не чіпаємо
         assert c.post("/silpo/cart/add", data={"csrf": "bad", "pid": "p2"}).status_code == 400
