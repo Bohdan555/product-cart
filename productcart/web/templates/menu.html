@@ -75,8 +75,8 @@
   </form>
   {% else %}<a class="scart-alt" href="/silpo">Зробити кошик у «Сільпо» →</a>{% endif %}
   {% macro row(l, price) %}
-  <label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %} — {{ price }}">
-{% set nv = name_visual(l.name) %}<span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
+  {% set nv = name_visual(l.name) %}<label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-emoji="{{ nv.emoji }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}" data-price="{{ price }}">
+<span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
         <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
     <span class="rmain"><b>{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}</b>
       <small>{{ fmt_qty(l.need, l.unit) }}</small></span>
@@ -84,35 +84,35 @@
   </label>
   {% endmacro %}
   {% if m.promo_lines %}
-  <div class="group"><div class="gh"><b>В акції</b></div>
+  <div class="group" data-copy="🏷 В акції"><div class="gh"><b>В акції</b></div>
   {% for l in m.promo_lines %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
     {% call row(l, uah(l.cost)) %}<span class="rprice"><b>{{ uah(l.cost) }}{% if o.discount_pct %}<span class="disc">−{{ o.discount_pct|round|int }}%</span>{% endif %}</b>{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</span>
       {% if link_url %}<a class="bgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}{% endcall %}
   {% endfor %}</div>
   {% endif %}
   {% if m.other_lines %}
-  <div class="group"><div class="gh"><b>Без акції</b></div>
+  <div class="group" data-copy="🛒 Без акції"><div class="gh"><b>Без акції</b></div>
   {% for l in m.other_lines %}{% call row(l, '≈ ' ~ uah(l.cost|round)) %}<span class="rprice"><b class="est">≈ {{ uah(l.cost|round) }}</b></span>{% endcall %}{% endfor %}</div>
   {% endif %}
   {% if m.extras %}
-  <div class="group"><div class="gh"><b>Для ваших страв</b><small>без ціни</small></div>
+  <div class="group" data-copy="🧂 Для ваших страв"><div class="gh"><b>Для ваших страв</b><small>без ціни</small></div>
   {% for x in m.extras %}{% set nv = name_visual(x) %}
-  <label class="brow"><input type="checkbox" data-buy="x:{{ x }}" data-text="{{ x }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
+  <label class="brow"><input type="checkbox" data-buy="x:{{ x }}" data-emoji="{{ nv.emoji }}" data-text="{{ x }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
     <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
     <span class="rmain"><b>{{ x }}</b></span></label>
   {% endfor %}</div>
   {% endif %}
   {% if m.home_lines %}
-  <div class="group"><div class="gh"><b>✓ Вже є вдома</b><small>не купуємо</small></div>
+  <div class="group" data-copy="🏠 Вже є вдома — не купуємо"><div class="gh"><b>✓ Вже є вдома</b><small>не купуємо</small></div>
   {% for l in m.home_lines %}{% set nv = name_visual(l.name) %}
-    <div class="brow static"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span>
+    <div class="brow static" data-have="1" data-emoji="{{ nv.emoji }}" data-text="{{ l.name }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span>
       <form method="post" action="/fridge/remove" data-noajax data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Немає</button></form></div>
   {% endfor %}</div>
   {% endif %}
   {% if m.pantry_lines %}
-  <div class="group pantry"><div class="gh"><b>Запаси вдома</b><small>олія, крупи — зазвичай є</small></div>
+  <div class="group pantry" data-copy="🫙 Запаси вдома"><div class="gh"><b>Запаси вдома</b><small>олія, крупи — зазвичай є</small></div>
   {% for l in m.pantry_lines %}
-    <div class="brow static{% if l.buy %} buying{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}купуємо ✓ · {{ fmt_qty(l.need, l.unit) }}{% else %}є вдома{% endif %}</small></span>
+    <div class="brow static{% if l.buy %} buying{% endif %}" {% if not l.buy %}data-have="1"{% endif %} data-text="{{ l.name }}{% if l.buy %} — {{ fmt_qty(l.need, l.unit) }}{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}купуємо ✓ · {{ fmt_qty(l.need, l.unit) }}{% else %}є вдома{% endif %}</small></span>
       <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}">
         <button type="submit" class="switch{% if l.buy %} back{% endif %}">{{ 'Є вдома' if l.buy else 'Закінчилось' }}</button></form></div>
   {% endfor %}</div>
@@ -123,7 +123,7 @@
 
 {% endif %}
 <div class="toast" id="toast" hidden></div>
-<div hidden id="menudata" data-key="bought:{{ m.ids|join(",") }}:{{ m.people }}" data-menu="Меню: {% for d in m.dishes %}{{ days[loop.index0] }} {{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}"></div>
+<div hidden id="menudata" data-key="bought:{{ m.ids|join(",") }}:{{ m.people }}" data-menu="{% for d in m.dishes %}{{ days[loop.index0] }} — {{ d.title }}{% if not loop.last %}|{% endif %}{% endfor %}"></div>
 {% else %}
 <div class="card">Під ваші налаштування страв не знайшлося. Збільште час на готування або змініть обмеження в <a href="/profile">профілі</a>.</div>
 {% endif %}
@@ -179,13 +179,23 @@
     progress();
     var copy = document.getElementById('copy');
     if (copy) copy.addEventListener('click', function () {
-      var lines = [data.dataset.menu, ''];
-      root.querySelectorAll('.mlist .group').forEach(function (g) {
-        var rows = g.querySelectorAll('[data-buy]'); if (!rows.length) return;
-        lines.push(g.querySelector('.gh b').textContent + ':');
-        rows.forEach(function (r) { lines.push((r.checked ? '☑ ' : '☐ ') + r.dataset.text); });
-        lines.push('');
+      // Гарний текст для месенджера: розділи з емодзі, ☐ — купити, ✅/✓ і закреслене — купувати не треба
+      function strike(t) { return Array.from(t).map(function (c) { return c === ' ' ? c : c + '\u0336'; }).join(''); }
+      var lines = ['🛒 Список покупок'], left = 0;
+      var menuTxt = (data.dataset.menu || '').split('|').filter(Boolean);
+      if (menuTxt.length) { lines.push('', '🍽 Меню'); menuTxt.forEach(function (d) { lines.push('• ' + d); }); }
+      root.querySelectorAll('.mlist .group[data-copy]').forEach(function (g) {
+        var rows = g.querySelectorAll('input[data-buy], .brow[data-text]'); if (!rows.length) return;
+        lines.push('', g.dataset.copy);
+        rows.forEach(function (r) {
+          var em = r.dataset.emoji ? r.dataset.emoji + ' ' : '', name = r.dataset.text, price = r.dataset.price ? ' — ' + r.dataset.price : '';
+          if (r.dataset.have) lines.push('✓ ' + em + strike(name));
+          else if (r.checked) lines.push('✅ ' + em + strike(name) + ' — куплено');
+          else { lines.push('☐ ' + em + name + price); left += +r.dataset.cost || 0; }
+        });
       });
+      if (left >= 1) lines.push('', '💰 Разом до покупки ≈ ' + Math.round(left) + ' ₴');
+      lines.push('', '— Кошик з акцій · ' + location.origin);
       var text = lines.join('\n').trim();
       try { navigator.clipboard.writeText(text).then(function () { toast('Список скопійовано'); }, function () { toast('Не вдалося скопіювати'); }); }
       catch (e) { toast('Не вдалося скопіювати'); }

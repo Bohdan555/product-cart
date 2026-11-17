@@ -1219,3 +1219,6 @@ a.eat-open small{color:var(--muted)}
 /* Кошик «Сільпо» — четверта вкладка нижньої панелі, з будь-якого екрана */
 .dock nav{grid-template-columns:repeat(4,1fr)}
 .dock .tico .cartN{top:-7px;right:-12px;box-shadow:0 0 0 2px var(--bg)}
+
+/* «Вже є вдома»: купувати не треба — закреслено */
+.mlist .brow[data-have] .rmain b{text-decoration:line-through;text-decoration-thickness:2px;color:var(--muted)}
