@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
@@ -238,26 +239,89 @@ def _stock_ok(p: dict, qty: float) -> bool:
     return stock is None or stock >= qty
 
 
-async def _search(call: Call, ctx: dict, names: list[str]) -> dict[str, list[dict]]:
-    """Пакетний пошук у магазині кошика: назва запиту (lower) → знайдені товари."""
+async def _search_once(call: Call, ctx: dict, names: list[str]) -> tuple[dict[str, list[dict]], int, str]:
+    """Один прохід пакетного пошуку → (назва запиту lower → товари, скільки знайдено, зразок сирої відповіді)."""
     by_query: dict[str, list[dict]] = {}
-    names = list(dict.fromkeys(n for n in names if n))
+    total, sample = 0, ""
     for i in range(0, len(names), SEARCH_BATCH):
         chunk = names[i:i + SEARCH_BATCH]
         try:
             res = await call("silpo_find_products_batch", dict(ctx, products=chunk)) or {}
         except Exception as e:
             log.warning("Сільпо: find_products_batch: %s", str(e)[:300])
+            sample = sample or f"помилка: {str(e)[:300]}"
             continue
+        sample = sample or str(res)[:600]
         queries = _first(res, "queries", "results") if isinstance(res, dict) else res
         log.debug("Сільпо: find_products_batch → %s", str(res)[:800])
         for j, q in enumerate(queries or []):
             name = _first(q, "query", "name", "requestedName") if isinstance(q, dict) else None
             items = (_first(q, "products", "items") if isinstance(q, dict) else None) or []
+            total += len(items)
             if name:
                 by_query.setdefault(str(name).lower(), items)
             if j < len(chunk):      # якщо API переформулювало запит — тримаємо й за порядком
                 by_query.setdefault(chunk[j].lower(), items)
+    return by_query, total, sample
+
+
+def _slot_over(ctx: dict) -> bool:
+    end = ctx.get("timeslotEnd")
+    if not end:
+        return False
+    try:
+        t = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)) < datetime.now(timezone.utc)
+
+
+async def _fresh_ctx(call: Call, ctx: dict) -> dict | None:
+    """Свіже вікно магазину кошика: зі старим (минулим) вікном «Сільпо» віддає порожній пошук."""
+    if not ctx.get("branchId"):
+        return None
+    try:
+        from .silpo import branch_context
+        fresh = await branch_context(call, ctx["branchId"])
+    except Exception as e:
+        log.warning("Сільпо: свіже вікно для пошуку: %s", str(e)[:300])
+        return None
+    return fresh if fresh != ctx else None
+
+
+async def _search(call: Call, ctx: dict, names: list[str]) -> dict[str, list[dict]]:
+    """Пакетний пошук у магазині кошика: назва запиту (lower) → знайдені товари.
+    Якщо вікно кошика вже минуло або пошук не дав нічого взагалі — повторюємо зі свіжим вікном магазину
+    (ctx оновлюємо на місці, щоб наступні кола шукали вже з ним)."""
+    names = list(dict.fromkeys(n for n in names if n))
+    if not names:
+        return {}
+    if _slot_over(ctx) and not ctx.get("_fresh"):
+        fresh = await _fresh_ctx(call, ctx)
+        ctx["_fresh"] = True
+        if fresh:
+            log.info("Сільпо: вікно кошика минуло (%s) — шукаємо з новим %s", ctx.get("timeslotEnd"), fresh.get("timeslotStart"))
+            ctx.update(fresh)
+    args = {k: v for k, v in ctx.items() if not k.startswith("_")}
+    by_query, total, sample = await _search_once(call, args, names)
+    if total or ctx.get("_fresh"):
+        if not total:
+            log.warning("Сільпо: пошук порожній (%d запитів, контекст %s): %s", len(names),
+                        {k: v for k, v in args.items() if k != "branchId"}, sample)
+        return by_query
+    ctx["_fresh"] = True
+    fresh = await _fresh_ctx(call, args)
+    if not fresh:
+        log.warning("Сільпо: пошук порожній (%d запитів, контекст %s): %s", len(names),
+                    {k: v for k, v in args.items() if k != "branchId"}, sample)
+        return by_query
+    by_query2, total2, sample2 = await _search_once(call, fresh, names)
+    log.warning("Сільпо: пошук порожній з вікном кошика %s–%s → зі свіжим %s: знайдено %d%s",
+                args.get("timeslotStart"), args.get("timeslotEnd"), fresh.get("timeslotStart"), total2,
+                "" if total2 else f"; відповідь: {sample2}")
+    if total2:
+        ctx.update(fresh)
+        return by_query2
     return by_query
 
 

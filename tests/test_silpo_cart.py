@@ -228,3 +228,40 @@ def test_missing_shows_human_name():
     mcp = OutOfStockMCP()
     res = run(sc.build(mcp, [sc.Want("tofu", "тофу", 200, "g", label="Тофу")]))
     assert [w.title for w in res["missing"]] == ["Тофу"]
+
+
+class StaleSlotMCP(CartMCP):
+    """Кошик зі старим вікном: із ним пошук «Сільпо» порожній, зі свіжим — знаходить."""
+    def __init__(self, end="2020-01-01T10:00:00Z"):
+        super().__init__()
+        self.end = end
+
+    async def __call__(self, name, args):
+        if name == "silpo_get_shopping_cart_by_id":
+            r = await super().__call__(name, args)
+            r["cart"]["timeslot"] = {"start": "2020-01-01T08:00:00Z", "end": self.end}
+            return r
+        if name == "silpo_get_time_slots":
+            self.calls.append((name, args))
+            return {"slots": [{"available": True, "start": "2099-01-01T08:00:00Z", "end": "2099-01-01T10:00:00Z"}]}
+        if name == "silpo_find_products_batch":
+            self.calls.append((name, args))
+            fresh = args.get("timeslotStart", "").startswith("2099")
+            cat = {"Паштет Одеський 240г": [{"id": "pate", "name": "Паштет Одеський 240г", "price": 40, "stock": 3}]}
+            return {"queries": [{"query": q, "products": lookup(cat, q) if fresh else []} for q in args["products"]]}
+        return await super().__call__(name, args)
+
+
+def test_expired_cart_slot_searches_with_fresh_slot():
+    mcp = StaleSlotMCP()
+    res = run(sc.build(mcp, [sc.Want("deal", "Паштет Одеський 240г", 1, "pcs", product_id="pate", packs=1)]))
+    assert [p.product_id for p in res["placed"]] == ["pate"] and not res["missing"]
+    searches = [a for n, a in mcp.calls if n == "silpo_find_products_batch"]
+    assert len(searches) == 1 and searches[0]["timeslotStart"].startswith("2099")   # одразу зі свіжим вікном
+
+
+def test_empty_search_retries_with_fresh_slot():
+    mcp = StaleSlotMCP(end="2099-12-31T10:00:00Z")      # вікно ще не минуло, але пошук порожній
+    res = run(sc.build(mcp, [sc.Want("deal", "Паштет Одеський 240г", 1, "pcs", product_id="pate", packs=1)]))
+    assert [p.product_id for p in res["placed"]] == ["pate"]
+    assert len([1 for n, _ in mcp.calls if n == "silpo_find_products_batch"]) == 2
