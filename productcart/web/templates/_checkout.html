@@ -8,10 +8,13 @@
   </div>
   {% endif %}
   {% if cart.checkout or cart.checkout_mobile %}
-  <div class="row">
-    {% if cart.checkout_mobile %}<a class="btn" href="{{ cart.checkout_mobile }}" target="_blank" rel="noopener" data-pay>Оплатити в застосунку «Сільпо»</a>{% endif %}
-    {% if cart.checkout %}<a class="btn{% if cart.checkout_mobile %} alt{% endif %}" href="{{ cart.checkout }}" target="_blank" rel="noopener" data-pay>Оплатити на сайті «Сільпо»</a>{% endif %}
+  {# Одна кнопка: на телефоні — застосунок «Сільпо» (там уже вхід і збережена картка), якщо не відкрився — сайт #}
+  <div class="row paybtns">
+    <a class="btn paygo" id="payGo" href="{{ cart.checkout or cart.checkout_mobile }}" target="_blank" rel="noopener" data-pay
+       data-app="{{ cart.checkout_mobile or '' }}" data-web="{{ cart.checkout or '' }}">Оплатити в «Сільпо»</a>
   </div>
+  <p class="hint paywhere" id="payWhere">{% if cart.checkout_mobile %}Відкриємо застосунок «Сільпо», якщо він є на телефоні, інакше — сайт.{% endif %}</p>
+  {% if cart.checkout and cart.checkout_mobile %}<p class="payalt"><a href="{{ cart.checkout }}" target="_blank" rel="noopener" data-pay>Оплатити на сайті</a></p>{% endif %}
   {% else %}
   <p>Кошик уже у вашому «Сільпо» — оформіть його в застосунку або на сайті.</p>
   <div class="row">
@@ -38,5 +41,37 @@
   document.getElementById('ckBackX').onclick = function () { bar.hidden = true; set(0); };
   bar.querySelector('a').addEventListener('click', function () { set(0); });
   check();
+})();
+(function () {
+  // Застосунок «Сільпо»: пробуємо посилання для застосунку в цій же вкладці; якщо за ~1,6 с сторінка не сховалась
+  // (застосунок не відкрився) — відкриваємо оплату на сайті. Що спрацювало — коротко в лог, щоб бачити, як воно в людей.
+  var a = document.getElementById('payGo'); if (!a) return;
+  var app = a.dataset.app, web = a.dataset.web, ua = navigator.userAgent;
+  var mobile = /Android|iPhone|iPad|iPod/i.test(ua);
+  function report(ev, extra) {
+    try { var fd = new FormData(); fd.append('event', ev); fd.append('extra', extra || '');
+      if (navigator.sendBeacon) navigator.sendBeacon('/client-log', fd); else fetch('/client-log', { method: 'POST', body: fd }); } catch (e) {}
+  }
+  if (!mobile || !app) {          // комп'ютер: одразу сайт у новій вкладці
+    if (!mobile && web) { a.href = web; var w = document.getElementById('payWhere'); if (w) w.textContent = ''; }
+    return;
+  }
+  a.removeAttribute('target');
+  a.addEventListener('click', function (e) {
+    e.preventDefault();
+    var left = false, t0 = Date.now();
+    function gone() { left = true; }
+    document.addEventListener('visibilitychange', function v() { if (document.hidden) { gone(); document.removeEventListener('visibilitychange', v); } });
+    window.addEventListener('pagehide', gone, { once: true });
+    window.addEventListener('blur', gone, { once: true });
+    a.classList.add('busy'); a.textContent = 'Відкриваємо «Сільпо»…';
+    location.href = app;
+    setTimeout(function () {
+      a.classList.remove('busy'); a.textContent = 'Оплатити в «Сільпо»';
+      if (left) { report('pay_app', 'opened'); return; }
+      report('pay_app', 'fallback-web');
+      if (web) location.href = web;
+    }, 1600);
+  });
 })();
 </script>

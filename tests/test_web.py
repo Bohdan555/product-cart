@@ -330,7 +330,7 @@ def test_menu_to_silpo_cart(tmp_path):
         r = c.post("/menu/silpo-cart", data={"csrf": token, "bought": "", "confirm": "1"})
         assert r.status_code == 200 and "До кошика й оплати" in r.text and "pc_cart_n" in c.cookies
         cart_page = c.get("/silpo/cart").text
-        assert "Оплатити на сайті «Сільпо»" in cart_page and "https://silpo.ua/pay/c1" in cart_page and "hcart" in cart_page
+        assert "Оплатити в «Сільпо»" in cart_page and "https://silpo.ua/pay/c1" in cart_page and "hcart" in cart_page
         assert shared.items["other"] == 1 and len(shared.items) > 1
         cook = c.get("/cook").text
         assert cook.count('class="eat-row"') == 5 and "з меню тижня" in cook        # рецепти тижня збережено

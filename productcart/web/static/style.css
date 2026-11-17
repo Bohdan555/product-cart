@@ -1222,3 +1222,10 @@ a.eat-open small{color:var(--muted)}
 
 /* «Вже є вдома»: купувати не треба — закреслено */
 .mlist .brow[data-have] .rmain b{text-decoration:line-through;text-decoration-thickness:2px;color:var(--muted)}
+
+/* Оплата: одна велика кнопка, запасний варіант — посиланням */
+.paybtns .paygo{flex:1;justify-content:center;font-size:17px;padding:16px 18px}
+.paygo.busy{opacity:.75;pointer-events:none}
+.paywhere{margin:6px 0 0}
+.payalt{margin:4px 0 0;font-size:14px}
+.payalt a{color:var(--muted)}
