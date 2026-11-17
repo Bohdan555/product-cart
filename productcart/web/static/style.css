@@ -1215,3 +1215,7 @@ a.eat-open small{color:var(--muted)}
 .buyprog-h span{color:var(--accent);font-weight:800;white-space:nowrap}
 .buyprog .progress{height:10px;margin:0}
 @media (prefers-reduced-motion:reduce){.brow:has(input:checked) .box{animation:none}}
+
+/* Кошик «Сільпо» — четверта вкладка нижньої панелі, з будь-якого екрана */
+.dock nav{grid-template-columns:repeat(4,1fr)}
+.dock .tico .cartN{top:-7px;right:-12px;box-shadow:0 0 0 2px var(--bg)}
