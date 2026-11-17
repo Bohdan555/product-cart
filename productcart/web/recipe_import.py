@@ -222,7 +222,9 @@ _UNIT = [
 ]
 _SPICE = ("чорн", "мелен", "духмян", "горош", "чилі", "червоний мелений", "за смаком")
 _PIECE_G = {"potato": 150, "onion": 100, "carrot": 100, "pepper": 150, "zucchini": 300, "beet": 200, "cabbage": 1500,
-            "chicken_thigh": 150, "chicken_fillet": 250, "sausages": 50, "tomatoes_can": 100}
+            "chicken_thigh": 150, "chicken_fillet": 250, "sausages": 50, "tomatoes_can": 100, "tomato": 120, "cucumber": 150,
+            "eggplant": 300, "apples": 180, "pumpkin": 1500, "broccoli": 400, "cauliflower": 800, "garlic": 40,
+            "turkey": 300, "lavash": 90}
 _DEFAULT = {"g": 200, "ml": 100, "pcs": 2}
 _STOP = {"свіжий", "свіжа", "свіже", "свіжі", "великий", "велика", "середня", "середній", "дрібна", "дрібний", "нарізаний",
          "подрібнений", "смак", "за", "на", "для", "або", "і", "та", "й", "з", "із", "у", "в", "по", "трохи", "кілька"}
@@ -289,7 +291,7 @@ def amount_of(line: str, key: str) -> float | None:
         return q * _PIECE_G[key] if key in _PIECE_G else None
     kind, mult = u
     if kind == "misc":
-        return None
+        return q * 5 if key == "garlic" and m.group(2).strip().startswith("зубч") else None   # зубчик часнику ≈ 5 г
     if unit == "pcs":
         return q if kind == "pcs" else None
     if kind == "pcs":

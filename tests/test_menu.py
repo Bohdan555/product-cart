@@ -112,7 +112,7 @@ def test_pantry_words_cover_dictionary_and_synonyms():
     from productcart import menu
     assert set(menu.PANTRY_WORDS) == set(menu.INGREDIENTS)
     assert menu.word_to_key("Курятина") == "chicken_fillet" and menu.word_to_key("картошка") == "potato"
-    assert menu.word_to_key("помідори") == "tomatoes_can" and menu.word_to_key("творог") == "cottage"
+    assert menu.word_to_key("помідори") == "tomato" and menu.word_to_key("томати в соку") == "tomatoes_can" and menu.word_to_key("творог") == "cottage"
     assert menu.word_to_key("сир") == "cheese" and menu.word_to_key("авокадо") is None
 
 
@@ -121,3 +121,17 @@ def test_other_products_with_ingredient_word_do_not_match():
     assert not m("Паштет «Онисс» «Одеський» печінковий з вершковим маслом 240г", "butter")
     assert not m("Оливки «Повна Чаша»® зелені фаршировані лососем 290г", "minced")
     assert m("Масло вершкове Селянське 82% 200г", "butter") and m("Фарш свино-яловичий 500г", "minced")
+
+
+def test_recipe_catalog_is_consistent():
+    from productcart.menu import recipe_tags
+    from productcart.web import unsplash
+    ids = [r.id for r in menu.RECIPES]
+    assert len(ids) >= 100 and len(set(ids)) == len(ids)
+    for r in menu.RECIPES:
+        assert set(r.ingredients) <= set(menu.INGREDIENTS), r.id
+        assert r.steps and r.id in unsplash.QUERIES, r.id
+        if "вегетаріанське" in r.likes:
+            assert not recipe_tags(r) & {"meat", "fish"}, r.id
+        if "веганське" in r.likes:
+            assert not recipe_tags(r) & {"meat", "fish", "dairy", "eggs"}, r.id

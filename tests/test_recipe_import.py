@@ -24,8 +24,8 @@ def test_jsonld_recipe_parsed_and_mapped():
     assert d["title"] == "Курка з картоплею в духовці" and d["servings"] == 2 and d["minutes"] == 70
     assert d["steps"] == ["Наріжте картоплю.", "Запікайте 50 хв при 200 °C."]
     ing, extras = ri.map_ingredients(d["ingredients"], d["servings"])
-    assert ing == {"chicken_fillet": 1000.0, "potato": 2000.0, "onion": 400.0, "oil": 30.0}   # на 4 порції
-    assert extras == ["часнику", "сіль, перець"]
+    assert ing == {"chicken_fillet": 1000.0, "potato": 2000.0, "onion": 400.0, "oil": 30.0, "garlic": 20.0}   # на 4 порції
+    assert extras == ["сіль, перець"]
 
 
 def test_unsafe_urls_rejected():
