@@ -43,7 +43,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% if sl and sl.items %}<section class="hero-sum">
   <div class="hs-main"><span class="hs-label">Разом</span><b class="hs-total"><span data-count="{{ sl.total|round|int }}">{{ sl.total|round|int }}</span> ₴</b>
     <span class="hs-items">{{ sl.items|length }} {{ plural(sl.items|length, 'товар', 'товари', 'товарів') }}</span></div>
-  <div class="hs-save"><span>економія</span><b>−<span data-count="{{ sl.saving|round|int }}">{{ sl.saving|round|int }}</span> ₴</b></div>
+  <div class="hs-save"><span>економія</span><b><span data-count="{{ sl.saving|round|int }}">{{ sl.saving|round|int }}</span> ₴</b></div>
 </section>{% endif %}
 <div class="sortbar">
   <label for="sortSel">Сортувати</label>
