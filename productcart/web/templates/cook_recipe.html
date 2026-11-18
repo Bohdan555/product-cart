@@ -5,7 +5,7 @@
 <div class="td-top"><a class="td-back" href="/cook" aria-label="До списку «Готую»">←</a></div>
 <section class="td-hero">
   {% if r.id in photos %}<img src="{{ photos[r.id] }}" alt="">{% else %}<span class="e" aria-hidden="true">{{ r.emoji }}</span>{% endif %}
-  <div><h1 class="xh">{{ r.title }}</h1><span class="td-pill">{{ ic("clock", "sm") }} {{ r.minutes }} хв · {{ d.people }} {{ plural(d.people, 'порція', 'порції', 'порцій') }}</span></div>
+  <div><h1 class="xh">{{ r.title }}</h1>{% set kc = kcal(r) %}<span class="td-pill">{{ ic("clock", "sm") }} {{ r.minutes }} хв{% if kc %} · ≈ {{ kc }} ккал{% endif %} · {{ d.people }} {{ plural(d.people, 'порція', 'порції', 'порцій') }}</span></div>
 </section>
 
 <h2 class="td-h">Продукти</h2>

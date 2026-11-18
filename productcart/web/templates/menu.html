@@ -26,7 +26,7 @@
     <button type="button" class="eat-open" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
       <span class="eat-day">{{ days[i] }}</span>
       {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 2 %}loading="lazy"{% endif %}>{% else %}<span class="eat-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
-      <span class="eat-t"><b>{{ d.title }}</b><small>{{ d.minutes }} хв{% if d.recipe.mine %} · моя{% endif %}</small>{% if d.home %}<small class="eat-home">✓ є вдома: {{ d.home|join(', ') }}</small>{% endif %}</span>
+      <span class="eat-t"><b>{{ d.title }}</b><small>{{ d.minutes }} хв{% set kc = kcal(d.recipe) %}{% if kc %} · ≈ {{ kc }} ккал{% endif %}{% if d.recipe.mine %} · моя{% endif %}</small>{% if d.home %}<small class="eat-home">✓ є вдома: {{ d.home|join(', ') }}</small>{% endif %}</span>
     </button>
     <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}">
       <button type="submit" class="eat-swap" aria-label="Замінити: {{ d.title }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg></button></form>

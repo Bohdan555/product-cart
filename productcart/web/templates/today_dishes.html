@@ -27,7 +27,7 @@
     </div>
     {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}</p>
     {% else %}<p class="td-need">Нічого не треба купувати</p>{% endif %}
-    <div class="td-price"><span>порція</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
+    <div class="td-price"><span>порція{% set kc = kcal(d.recipe) %}{% if kc %} · <span class="kcal">≈ {{ kc }} ккал</span>{% endif %}</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
     <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}">Готую це</a>
   </article>
 {% endmacro %}

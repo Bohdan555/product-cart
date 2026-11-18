@@ -581,6 +581,41 @@ class Menu:
         return out
 
 
+# ---------- калорійність ----------
+# ккал на 100 г / 100 мл; для штучного (яйця) — на 1 шт. Довідкові середні значення (сирі продукти, крупи — сухі).
+KCAL = {
+    "chicken_fillet": 110, "chicken_thigh": 185, "minced": 260, "pork": 250, "liver": 140, "fish": 80, "sausages": 260,
+    "eggs": 70, "milk": 52, "sour_cream": 160, "cottage": 120, "cheese": 360, "butter": 740, "potato": 77, "carrot": 35,
+    "onion": 41, "cabbage": 27, "beet": 43, "mushrooms": 22, "pepper": 27, "tomatoes_can": 25, "tomato_paste": 100,
+    "rice": 345, "buckwheat": 330, "pasta": 350, "flour": 340, "lentils": 320, "beans": 100, "zucchini": 24, "kefir": 50,
+    "oil": 900, "turkey": 115, "beef": 190, "ham": 260, "tuna": 140, "cream": 120, "brynza": 260, "broccoli": 34,
+    "cauliflower": 25, "tomato": 20, "cucumber": 15, "eggplant": 24, "pumpkin": 26, "garlic": 150, "greens": 40, "corn": 80,
+    "peas": 55, "apples": 50, "lavash": 275, "bread": 250, "oats": 360, "bulgur": 340, "millet": 350, "chickpeas": 360,
+    "pelmeni": 270, "varenyky": 160, "mayo": 620, "soy_sauce": 55, "banana": 90, "berries": 45, "avocado": 160, "yogurt": 70,
+    "semolina": 330, "crab_sticks": 90, "radish": 16, "lettuce": 15,
+}
+# Що реально з'їдається: стегна — без кісток (~70%), олія для смаження — приблизно половина лишається на сковорідці
+KCAL_YIELD = {"chicken_thigh": 0.7, "oil": 0.6}
+_kcal_cache: dict[str, int | None] = {}
+
+
+def kcal_per_portion(rec: "Recipe") -> int | None:
+    """Орієнтовна калорійність однієї порції (рецепт — на 4 порції). Олію для смаження рахуємо всю — тож це верхня межа.
+    None — якщо для якогось інгредієнта немає даних."""
+    if not rec.mine and rec.id in _kcal_cache:
+        return _kcal_cache[rec.id]
+    total = 0.0
+    for k, q in rec.ingredients.items():
+        if k not in KCAL or k not in INGREDIENTS:
+            total = None
+            break
+        total += (q * KCAL[k] if INGREDIENTS[k][1] == "pcs" else q / 100 * KCAL[k]) * KCAL_YIELD.get(k, 1.0)
+    val = None if total is None else int(round(total / 4 / 10) * 10)
+    if not rec.mine:
+        _kcal_cache[rec.id] = val
+    return val
+
+
 # ---------- кухонні прилади ----------
 KITCHEN = {"stove": "Плита", "oven": "Духовка", "multicooker": "Мультиварка", "airfryer": "Аерогриль",
            "microwave": "Мікрохвильовка", "blender": "Блендер"}      # назва; іконка — icons.ic(ключ)

@@ -199,6 +199,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     analytics.init(conn)
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
     tpl.env.globals.update(watch_word=watch_word, ic=icons.ic)
+    tpl.env.globals.update(kcal=menu.kcal_per_portion)
     tpl.env.globals.update(click_url=lambda o: analytics.click_url(app_secret, o), visual=offer_visual, plural=plural,
                            name_visual=name_visual)
 

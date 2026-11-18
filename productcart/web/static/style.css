@@ -1343,3 +1343,5 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 .pbell .ico{--ic:transparent;width:18px;height:18px}
 .pbell.on .ico{--ic:var(--s-citrus)}
 .pstats{grid-template-columns:repeat(2,1fr)}
+
+.td-price .kcal{color:var(--muted);font-weight:600}

@@ -11,7 +11,7 @@
   <li class="eat-row">
     <a class="eat-open" href="/cook/{{ r.id }}">
       {% if r.id in photos %}<img src="{{ photos[r.id] }}" alt="" {% if loop.index0 > 2 %}loading="lazy"{% endif %}>{% else %}<span class="eat-em" aria-hidden="true">{{ r.emoji }}</span>{% endif %}
-      <span class="eat-t"><b>{{ r.title }}</b><small>{{ r.minutes }} хв · {{ d.people }} {{ plural(d.people, 'порція', 'порції', 'порцій') }}{% if it.c.src == 'week' %} · з меню тижня{% endif %}</small></span>
+      <span class="eat-t"><b>{{ r.title }}</b><small>{{ r.minutes }} хв{% set kc = kcal(r) %}{% if kc %} · ≈ {{ kc }} ккал{% endif %} · {{ d.people }} {{ plural(d.people, 'порція', 'порції', 'порцій') }}{% if it.c.src == 'week' %} · з меню тижня{% endif %}</small></span>
     </a>
     <form method="post" action="/cook/done"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="id" value="{{ r.id }}">
       <button type="submit" class="ck-done" aria-label="Приготовано: {{ r.title }}">✓</button></form>

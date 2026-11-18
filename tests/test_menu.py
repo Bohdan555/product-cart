@@ -187,3 +187,11 @@ def test_kitchen_appliances_filter_dishes():
     assert opts and all(menu.can_cook(o.dish.recipe, ["microwave"]) for o in opts)
     m = menu.plan(offs, Profile(name="x", kitchen=["multicooker"]), dinners=5)
     assert all("oven" not in menu.recipe_needs(d.recipe) for d in m.dishes)
+
+
+def test_kcal_per_portion():
+    by = menu.RECIPE_BY_ID
+    assert set(menu.KCAL) >= set(menu.INGREDIENTS)                         # для кожного продукту є калорійність
+    assert all(menu.kcal_per_portion(r) for r in menu.RECIPES)
+    assert 200 <= menu.kcal_per_portion(by["omelette"]) <= 350            # 2 яйця, перець, сир на порцію
+    assert menu.kcal_per_portion(by["s-vitamin"]) < menu.kcal_per_portion(by["plov"])
