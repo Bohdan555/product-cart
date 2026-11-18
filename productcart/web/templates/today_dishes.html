@@ -22,9 +22,9 @@
     <div class="td-meta">
       <span class="td-pill{% if not o.lines %} ok{% endif %}">{% if not o.lines %}✓ Є все{% elif got %}Є {{ got }} з {{ total }}{% else %}Усе купити{% endif %}</span>
       <span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв</span>
+      {% if o.lines and not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}
     </div>
-    {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}
-      {% if not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}</p>
+    {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}</p>
     {% else %}<p class="td-need">Нічого не треба купувати</p>{% endif %}
     <div class="td-price"><span>порція</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
     <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}">Готую це</a>
@@ -40,18 +40,35 @@
 (function () {
   var reel = document.getElementById('tdReel'), pool = document.getElementById('tdPool');
   if (!reel || !pool || reel.dataset.bound) return; reel.dataset.bound = '1';
-  var queue = [].slice.call(pool.content.children), shown = 0;
+  var queue = [].slice.call(pool.content.children), shown = 0, busy = false;
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // фото наступних страв — заздалегідь, щоб при заміні нічого не довантажувалось на очах
+  function preload() { queue.forEach(function (a) { var im = a.querySelector('img'); if (im) { var x = new Image(); x.src = im.getAttribute('src'); } }); }
+  if ('requestIdleCallback' in window) requestIdleCallback(preload, { timeout: 1500 }); else setTimeout(preload, 800);
+  function ready(fresh) {   // чекаємо, поки фото декодується (не довше 250 мс)
+    var im = fresh.querySelector('img'); if (!im || !im.decode) return Promise.resolve();
+    im.removeAttribute('loading');
+    return Promise.race([im.decode().catch(function () {}), new Promise(function (r) { setTimeout(r, 250); })]);
+  }
   reel.addEventListener('click', function (e) {
-    var b = e.target.closest('.td-swap'); if (!b) return;
-    var old = b.closest('.td-dish'), next = queue.shift();
+    var b = e.target.closest('.td-swap'); if (!b || busy) return;
+    var card = b.closest('.td-dish'), next = queue.shift();
     if (!next) { if (window.toast) toast('Це всі варіанти для цього набору продуктів'); return; }
-    var fresh = next.cloneNode(true);
-    queue.push(old);                            // показана страва — в кінець черги: по колу лише після всіх
-    fresh.classList.add('td-in');
-    old.replaceWith(fresh);
-    shown++;
-    if (shown === queue.length) { if (window.toast) toast('Далі — по другому колу'); shown = 0; }
+    busy = true;
+    var fresh = next.cloneNode(true), keep = card.cloneNode(true);
+    queue.push(keep);                           // показана страва — в кінець черги: по колу лише після всіх
     if (window.haptic) haptic(10);
+    // картка лишається на місці й тієї ж висоти — міняється лише вміст: гасне → новий проявляється
+    card.style.minHeight = card.offsetHeight + 'px';
+    card.classList.add('td-fade');
+    Promise.all([ready(fresh), new Promise(function (r) { setTimeout(r, reduce ? 0 : 150); })]).then(function () {
+      card.innerHTML = fresh.innerHTML;
+      card.dataset.dish = fresh.dataset.dish;
+      card.style.setProperty('--c', fresh.style.getPropertyValue('--c'));
+      requestAnimationFrame(function () { requestAnimationFrame(function () { card.classList.remove('td-fade'); busy = false; }); });
+      shown++;
+      if (shown === queue.length) { if (window.toast) toast('Далі — по другому колу'); shown = 0; }
+    });
   });
 })();
 </script>
