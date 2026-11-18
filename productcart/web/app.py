@@ -1210,6 +1210,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         try:
             async with lazy_silpo(tokens["access_token"]) as get_call:
                 cart = await silpo_cart.current_cart(await get_call())
+                if silpo_cart.slot_expired(cart):     # старе вікно → «Сільпо» показує все як «немає в наявності»
+                    cart = await silpo_cart.ensure_fresh_slot(await get_call(), cart,
+                                                              {b["id"]: b for b in await silpo_branches(get_call)})
             note_cart_branch(u["id"], cart)
         except Exception as e:
             e = root_error(e)
@@ -1220,6 +1223,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             logs.event(log, "silpo.checkout_link", web=link_shape(cart.checkout), mobile=link_shape(cart.checkout_mobile),
                        inapp=in_app_browser(request) or None)
         resp = render(request, "silpo_cart.html", u, cart=cart, error=err, notice=error[:300] or None, changed=changed,
+                      slot_old=silpo_cart.slot_expired(cart),
                       store=link["store_title"], inapp=in_app_browser(request),
                       cleared=bool(cleared))
         return remember_cart(resp, cart.count if cart else 0, u["id"]) if not err else resp
@@ -1284,7 +1288,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 if link["store_id"]:
                     known = {b["id"]: b for b in await silpo_branches(get_call)}
                     branch = known.get(link["store_id"]) or {"id": link["store_id"], "title": link["store_title"]}
-                res = await silpo_cart.build(await get_call(), [want], branch)
+                res = await silpo_cart.build(await get_call(), [want], branch,
+                                             branches={b["id"]: b for b in await silpo_branches(get_call)})
         except Exception as e:
             err = root_error(e)
             log.warning("Сільпо: + у кошик: %s: %s", type(err).__name__, str(err)[:500])
@@ -1388,7 +1393,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                     if branch.get("lat") is None:
                         known = {b["id"]: b for b in await silpo_branches(get_call)}
                         branch = {**known.get(branch["id"], {}), **{k: v for k, v in branch.items() if v is not None}}
-                res = await silpo_cart.build(call, wants, branch)
+                res = await silpo_cart.build(call, wants, branch,
+                                             branches={b["id"]: b for b in await silpo_branches(get_call)})
         except Exception as e:
             err = root_error(e)
             if isinstance(err, silpo_cart.CartError):

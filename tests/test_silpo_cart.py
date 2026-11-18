@@ -275,3 +275,71 @@ def test_validation_codes_become_human_text():
     assert st.validations[0].startswith("Деяких товарів у магазині менше") and "cola" in st.flagged
     assert all("." not in v.split()[0] for v in st.validations)          # жодних сирих кодів
     assert sc.validation_text("product.offer.stock.zero").startswith("Деяких товарів у магазині менше")
+
+
+class _Tool:
+    def __init__(self, name, schema):
+        self.name, self.inputSchema = name, schema
+
+
+class OldSlotMCP(CartMCP):
+    """Кошик із минулим вікном. with_tool — є інструмент зміни вікна; без нього — лише створення нового кошика."""
+    def __init__(self, with_tool):
+        super().__init__(existing={"egg10": 2})
+        self.with_tool, self.slot, self.cid = with_tool, ("2020-01-01T08:00:00Z", "2020-01-01T09:00:00Z"), "c1"
+        tools = [_Tool(n, {}) for n in ("silpo_get_my_shopping_cart", "silpo_add_cart_products", "silpo_create_shopping_cart")]
+        if with_tool:
+            tools.append(_Tool("silpo_update_shopping_cart_timeslot",
+                               {"properties": {"shoppingCartId": {}, "timeslot": {}, "deliveryType": {}}}))
+        outer = self
+
+        class S:
+            async def list_tools(self):
+                return type("R", (), {"tools": tools})()
+        self.session = S()
+
+    async def __call__(self, name, args):
+        self.calls.append((name, args))
+        if name == "silpo_get_my_shopping_cart":
+            return {"cartId": self.cid}
+        if name == "silpo_get_shopping_cart_by_id":
+            prods = [{"id": f"line-{k}", "productId": k, "name": k, "quantity": v} for k, v in self.items.items()]
+            return {"cart": {"id": self.cid, "deliveryType": "SelfPickup", "timeslot": {"start": self.slot[0], "end": self.slot[1]},
+                             "shipments": [{"companyId": "co", "branchId": "b1", "products": prods}], "calculation": {}}}
+        if name == "silpo_get_time_slots":
+            return {"slots": [{"available": True, "start": "2099-01-01T08:00:00Z", "end": "2099-01-01T09:00:00Z"}]}
+        if name == "silpo_update_shopping_cart_timeslot":
+            assert args["shoppingCartId"] == "c1" and args["timeslot"]["start"].startswith("2099")
+            self.slot = (args["timeslot"]["start"], args["timeslot"]["end"])
+            return {"success": True}
+        if name == "silpo_get_my_delivery_addresses":
+            return {"addresses": []}
+        if name == "silpo_create_shopping_cart":
+            assert args["branchId"] == "b1" and args["deliveryType"] == "SelfPickup"
+            moved, self.items = self.items, {}
+            self.moved, self.cid, self.slot = moved, "c2", (args["timeslot"]["start"], args["timeslot"]["end"])
+            return {"shoppingCartId": "c2"}
+        if name == "silpo_add_cart_products":
+            for p in args["products"]:
+                self.items[p["productId"]] = p["quantity"]
+            return {"success": True}
+        raise AssertionError(name)
+
+
+def test_expired_cart_slot_is_refreshed_with_tool():
+    sc._schemas.clear(); sc._logged_tools = False
+    mcp = OldSlotMCP(with_tool=True)
+    cart = run(sc.current_cart(mcp))
+    assert sc.slot_expired(cart)
+    fresh = run(sc.ensure_fresh_slot(mcp, cart))
+    assert not sc.slot_expired(fresh) and fresh.cart_id == "c1" and fresh.products == {"egg10": 2}
+    sc._schemas.clear()
+
+
+def test_expired_cart_slot_new_cart_keeps_items():
+    sc._schemas.clear(); sc._logged_tools = False
+    mcp = OldSlotMCP(with_tool=False)
+    cart = run(sc.current_cart(mcp))
+    fresh = run(sc.ensure_fresh_slot(mcp, cart, {"b1": {"id": "b1", "title": "Франка", "lat": 50.4, "lon": 30.5}}))
+    assert fresh.cart_id == "c2" and not sc.slot_expired(fresh) and mcp.items == {"egg10": 2}
+    sc._schemas.clear()

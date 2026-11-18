@@ -36,9 +36,10 @@
   <div class="bar"><i style="width:{{ pct }}%"></i></div>
   <small>{% if cart.products_total >= cart.min_order %}Мінімальне замовлення набрано ✓{% else %}До мінімального замовлення ще <b>{{ uah((cart.min_order - cart.products_total)|round(0, 'ceil')) }}</b>{% endif %}</small>
 </div>
+{% elif slot_old %}<div class="note warnbox">Вікно самовивозу в цьому кошику вже минуло, тож «Сільпо» не показує, що є в наявності. Під час оплати оберіть новий час — і товари перевіряться.</div>
 {% else %}{% for v in cart.validations %}<div class="note warnbox">{{ v }}</div>{% endfor %}{% endif %}
 <div class="card sclist">
-  {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set nostock = (l.stock is not none and l.stock < l.quantity) or l.product_id in cart.flagged %}{% set stp = 0.1 if l.weighted else 1 %}
+  {% for l in cart.lines %}{% set odd = (l.weighted and l.quantity > 5) or (not l.weighted and l.quantity > 10) %}{% set nostock = not slot_old and ((l.stock is not none and l.stock < l.quantity) or l.product_id in cart.flagged) %}{% set stp = 0.1 if l.weighted else 1 %}
   <div class="scrow{% if odd or nostock %} odd{% endif %}{% if changed and changed == l.line_id %} fresh{% endif %}" id="l-{{ l.line_id }}">
     {% if l.image %}<img src="{{ l.image }}" alt="" width="52" height="52" loading="lazy">{% else %}<span class="scimg"></span>{% endif %}
     <div class="scmain"><b>{{ l.name }}</b>
@@ -66,7 +67,7 @@
   </div>
   {% endfor %}
 </div>
-{% set bad = [] %}{% for l in cart.lines %}{% if l.stock is not none and l.stock < l.quantity %}{% set _ = bad.append(l.name) %}{% endif %}{% endfor %}
+{% set bad = [] %}{% for l in cart.lines %}{% if not slot_old and l.stock is not none and l.stock < l.quantity %}{% set _ = bad.append(l.name) %}{% endif %}{% endfor %}
 {% if bad %}<div class="note warnbox">Немає в наявності: {{ bad|join(', ') }}. Приберіть або зменшіть перед оплатою.</div>{% endif %}
 {% include "_checkout.html" %}
 <details class="clearbox"><summary>Очистити кошик</summary>

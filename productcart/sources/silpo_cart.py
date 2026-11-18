@@ -173,6 +173,7 @@ VALIDATION_TEXT = {
     "product.offer.stock.max": "Деяких товарів у магазині менше, ніж у кошику. Зменште кількість у позначених рядках.",
     "product.offer.stock.min": "Для деяких товарів замало кількості — збільште її або приберіть товар.",
     "product.offer.unavailable": "Деякі товари зараз недоступні — приберіть позначені рядки.",
+    "timeslot.not_found": "Вибраний час самовивозу чи доставки вже минув — оберіть новий під час оплати в «Сільпо».",
 }
 
 
@@ -676,12 +677,90 @@ async def create_cart(call: Call, branch: dict | None) -> tuple[CartState, str]:
                     + ". Відкрийте silpo.ua або застосунок «Сільпо», додайте будь-який товар у кошик — і натисніть кнопку ще раз.")
 
 
-async def build(call: Call, wants: list[Want], branch: dict | None = None) -> dict:
+def slot_expired(cart: "CartState | None") -> bool:
+    return bool(cart and _slot_over({"timeslotEnd": cart.slot_end}))
+
+
+_logged_tools = False
+
+
+async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None = None) -> "CartState":
+    """Вікно самовивозу/доставки кошика минуло → «Сільпо» рахує залишок 0 для всього, і кожен рядок «немає в наявності».
+    1) якщо в MCP є інструмент зміни вікна кошика — ставимо найближче вільне вікно того ж магазину;
+    2) інакше створюємо новий кошик у тому ж магазині зі свіжим вікном і переносимо товари.
+    Не вийшло — повертаємо як було (оплата в «Сільпо» однаково попросить вибрати вікно)."""
+    global _logged_tools
+    if not slot_expired(cart) or not cart.branch_id:
+        return cart
+    await tool_schema(call, "silpo_get_my_shopping_cart")
+    cart_tools = sorted(n for n in _schemas if "cart" in n or "slot" in n)
+    if not _logged_tools:
+        _logged_tools = True
+        log.warning("Сільпо: інструменти кошика: %s", cart_tools)
+    dtype = cart.delivery_type or "SelfPickup"
+    try:
+        start, end = await _slot(call, cart.branch_id, dtype)
+    except Exception as e:
+        log.warning("Сільпо: немає свіжого вікна для кошика: %s", str(e)[:300])
+        return cart
+    skip = {"silpo_get_my_shopping_cart", "silpo_get_shopping_cart_by_id", "silpo_create_shopping_cart", "silpo_get_time_slots",
+            "silpo_add_cart_products", "silpo_update_cart_products", "silpo_remove_cart_products", "silpo_clear_shopping_cart"}
+    upd = [n for n in cart_tools if n not in skip and any(w in n for w in ("slot", "delivery", "update_shopping_cart", "update_cart"))]
+    for name in upd:
+        props = (_schemas.get(name) or {}).get("properties") or {}
+        args: dict = {}
+        for k in props:
+            lk = k.lower()
+            if lk in ("shoppingcartid", "cartid", "id"):
+                args[k] = cart.cart_id
+            elif lk == "timeslot":
+                args[k] = {"start": start, "end": end}
+            elif lk in ("timeslotstart", "start"):
+                args[k] = start
+            elif lk in ("timeslotend", "end"):
+                args[k] = end
+            elif lk == "deliverytype":
+                args[k] = dtype
+            elif lk == "branchid":
+                args[k] = cart.branch_id
+        if not any("slot" in k.lower() or k.lower() in ("start", "end") for k in args):
+            continue
+        try:
+            await call(name, args)
+            fresh = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
+            log.info("Сільпо: оновили вікно кошика через %s: %s–%s", name, start, end)
+            if not slot_expired(fresh):
+                return fresh
+        except Exception as e:
+            log.warning("Сільпо: %s не оновив вікно: %s", name, str(e)[:300])
+    # запасний шлях: новий кошик у тому ж магазині зі свіжим вікном, товари переносимо
+    try:
+        b = dict((branches or {}).get(cart.branch_id) or {}, id=cart.branch_id)   # потрібні координати магазину
+        if dtype == "SelfPickup":
+            new, _ = await create_cart(call, b)
+        else:
+            raise CartError("доставка: новий кошик не створюємо автоматично")
+        if new.cart_id == cart.cart_id:
+            return new
+        moved = [(Want(l["product_id"], l["name"], l["quantity"], "pcs", product_id=l["product_id"], weighted=l["weighted"]),
+                  l["product_id"], l["quantity"], l["name"], l["weighted"]) for l in cart.lines if l["quantity"]]
+        if moved:
+            await add_to_cart(call, new, moved)
+        log.info("Сільпо: вікно кошика минуло — створили новий кошик %s і перенесли %d позицій", new.cart_id, len(moved))
+        return parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": new.cart_id}) or {})
+    except Exception as e:
+        log.warning("Сільпо: не вдалося оновити кошик зі старим вікном: %s", str(e)[:300])
+        return cart
+
+
+async def build(call: Call, wants: list[Want], branch: dict | None = None, branches: dict | None = None) -> dict:
     """Повний сценарій: кошик (або новий) → пошук → додавання → перечитати суму й посилання на оплату."""
     cart = await current_cart(call)
     created = None
     if cart is None:
         cart, created = await create_cart(call, branch)
+    else:
+        cart = await ensure_fresh_slot(call, cart, branches)
     before = cart.count
     r = await resolve(call, cart, wants)
     found, missing = r["found"], r["missing"]
