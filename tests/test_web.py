@@ -638,12 +638,12 @@ def test_today_flow_guest_and_user(client):
     assert "Що є" in page and 'id="hvIn"' in page and 'id="hvMic"' in page and "Часто є вдома" not in page and 'href="/register"' in page
     r = client.get("/today/dishes", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2", "meal": "dinner"})
     assert r.status_code == 200 and "Омлет з перцем і сиром" in r.text and "✓ Є все" in r.text and "Демо-ціни" in r.text
-    assert r.text.count('class="td-dish"') == 3
+    assert r.text.split('id="tdPool"')[0].count('class="td-dish"') == 3 and r.text.count('class="td-swap"') >= 6
     assert "Сніданок" in r.text and "Салат" in r.text and "meal=breakfast" in r.text
     sal = client.get("/today/dishes", params={"have": "cucumber,tomato", "t": "30", "n": "2", "meal": "salad"}).text
     assert 'class="on" aria-current="true">🥗 Салат' in sal and "/today/dish/s-" in sal
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
-    assert 'aria-current="true">🍳 Сніданок' in bf and "meal=breakfast&amp;more=1" in bf
+    assert 'aria-current="true">🍳 Сніданок' in bf and "↻ Інша" in bf and bf.count('class="td-dish"') > 3
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
     assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
     d2 = client.get("/today/dish/flotski", params={"have": "", "t": "60", "n": "2"}).text

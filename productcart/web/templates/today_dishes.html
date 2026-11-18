@@ -12,10 +12,12 @@
 {% if not opts %}
 <div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
 {% else %}
-<div class="td-reel">
-  {% for o in opts %}{% set d = o.dish %}{% set total = d.recipe.ingredients|length %}{% set got = o.have|length %}
-  <article class="td-dish{% if more and loop.index0 >= more * 3 %} td-new{% endif %}" id="o{{ loop.index0 }}" style="--c:var(--{{ PAL[loop.index0 % 6] }})">
-    {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if loop.index0 %}loading="lazy"{% endif %}>{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+{% macro card(o, i) %}{% set d = o.dish %}{% set total = d.recipe.ingredients|length %}{% set got = o.have|length %}
+  <article class="td-dish" data-dish="{{ d.id }}" style="--c:var(--{{ PAL[i % 6] }})">
+    <div class="td-ph">
+      {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i %}loading="lazy"{% endif %}>{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+      <button type="button" class="td-swap" aria-label="Інша страва замість «{{ d.title }}»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>Інша</button>
+    </div>
     <b class="t">{{ d.title }}</b>
     <div class="td-meta">
       <span class="td-pill{% if not o.lines %} ok{% endif %}">{% if not o.lines %}✓ Є все{% elif got %}Є {{ got }} з {{ total }}{% else %}Усе купити{% endif %}</span>
@@ -27,17 +29,30 @@
     <div class="td-price"><span>порція</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
     <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}">Готую це</a>
   </article>
-  {% endfor %}
-  {% if can_more %}
-  <a class="td-more" href="/today/dishes?{{ qs }}&amp;meal={{ meal }}&amp;more={{ more + 1 }}#o{{ (more + 1) * 3 }}" data-turbo-action="replace">
-    <span class="td-more-ic" aria-hidden="true">＋</span><b>Ще 3 страви</b><small>інші варіанти з того, що є</small></a>
-  {% endif %}
+{% endmacro %}
+<div class="td-reel" id="tdReel">
+  {% for o in opts[:3] %}{{ card(o, loop.index0) }}{% endfor %}
 </div>
-<p class="td-hint">Гортайте вбік · {{ opts|length }} {{ plural(opts|length, 'варіант', 'варіанти', 'варіантів') }} · спершу ті, де найменше треба купити</p>
+{# решта варіантів — одразу на сторінці: «Інша» підміняє картку миттєво, без запиту #}
+<template id="tdPool">{% for o in opts[3:] %}{{ card(o, loop.index0 + 3) }}{% endfor %}</template>
+<p class="td-hint">Не те? Натисніть <b>↻ Інша</b> на картці · {{ opts|length }} {{ plural(opts|length, 'варіант', 'варіанти', 'варіантів') }}</p>
 <script>
-(function () {   // після «Ще 3 страви» — плавно до першої нової
-  var first = document.querySelector('.td-dish.td-new'); if (!first) return;
-  setTimeout(function () { first.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }); }, 60);
+(function () {
+  var reel = document.getElementById('tdReel'), pool = document.getElementById('tdPool');
+  if (!reel || !pool || reel.dataset.bound) return; reel.dataset.bound = '1';
+  var queue = [].slice.call(pool.content.children), shown = 0;
+  reel.addEventListener('click', function (e) {
+    var b = e.target.closest('.td-swap'); if (!b) return;
+    var old = b.closest('.td-dish'), next = queue.shift();
+    if (!next) { if (window.toast) toast('Це всі варіанти для цього набору продуктів'); return; }
+    var fresh = next.cloneNode(true);
+    queue.push(old);                            // показана страва — в кінець черги: по колу лише після всіх
+    fresh.classList.add('td-in');
+    old.replaceWith(fresh);
+    shown++;
+    if (shown === queue.length) { if (window.toast) toast('Далі — по другому колу'); shown = 0; }
+    if (window.haptic) haptic(10);
+  });
 })();
 </script>
 {% endif %}

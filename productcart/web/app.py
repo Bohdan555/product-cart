@@ -1495,19 +1495,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         have, t, n = today_args(request)
         p, link, stores, is_demo, offers = await today_offers(request, u, n)
-        try:
-            more = max(0, min(10, int(request.query_params.get("more") or 0)))
-        except ValueError:
-            more = 0
         meal = request.query_params.get("meal")
         if meal not in MEALS:
             meal = default_meal()
-        want = 3 * (more + 1)                      # «Ще 3 страви» — щоразу на три більше
-        opts = menu.today(offers, p, have, max_minutes=t, n=want, meal=meal)
+        opts = menu.today(offers, p, have, max_minutes=t, n=30, meal=meal)   # 3 видно, решта — для «↻ Інша»
         analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
-                        options=len(opts), guest=not u, more=more, meal=meal)
+                        options=len(opts), guest=not u, meal=meal)
         return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
-                      more=more, can_more=len(opts) == want and more < 10, meal=meal, meals=MEALS,
+                      meal=meal, meals=MEALS,
                       is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
 
     @app.get("/today/dish/{rid}", response_class=HTMLResponse)
