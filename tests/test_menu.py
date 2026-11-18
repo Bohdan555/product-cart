@@ -171,3 +171,19 @@ def test_breakfasts_and_salads_kept_out_of_dinner_week():
     assert len(b) == 6 and all("breakfast" in o.dish.recipe.meals for o in b)
     assert len(s) == 6 and all("salad" in o.dish.recipe.meals for o in s)
     assert any(o.dish.recipe.id.startswith("s-") for o in s)
+
+
+def test_kitchen_appliances_filter_dishes():
+    by = {r.id: r for r in menu.RECIPES}
+    assert menu.recipe_needs(by["lasagna"]) >= {"oven"} and "blender" in menu.recipe_needs(by["pumpkin-soup"])
+    assert not menu.recipe_needs(by["s-caprese"])                                   # салат — без приладів
+    assert menu.can_cook(by["s-caprese"], ["microwave"]) and not menu.can_cook(by["lasagna"], ["stove"])
+    assert menu.can_cook(by["b-semolina"], ["microwave"]) and not menu.can_cook(by["syrnyky"], ["microwave"])
+    assert menu.can_cook(by["thighs"], ["airfryer"]) and menu.cook_hint(by["thighs"], ["airfryer"]) == "в аерогрилі"
+    assert menu.cook_hint(by["plov"], ["multicooker"]) == "у мультиварці" and menu.cook_hint(by["plov"], []) is None
+    offs = planner.merge_nearby(demo.load())
+    p = Profile(name="x", kitchen=["microwave"])
+    opts = menu.today(offs, p, ["eggs"], 60, n=30, meal=None)
+    assert opts and all(menu.can_cook(o.dish.recipe, ["microwave"]) for o in opts)
+    m = menu.plan(offs, Profile(name="x", kitchen=["multicooker"]), dinners=5)
+    assert all("oven" not in menu.recipe_needs(d.recipe) for d in m.dishes)

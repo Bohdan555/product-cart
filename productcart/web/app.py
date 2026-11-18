@@ -46,9 +46,10 @@ COOKIE = "pc_session"
 GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
+cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None)   # прилади з поточного запиту
 MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "salad": "Салат"}
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking")
+              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking", "kitchen")
 # Конструктор меню: що можна любити / виключити (теги інгредієнтів)
 SETUP_TASTES = [("meat", "🍗", "М'ясо й птиця"), ("fish", "🐟", "Риба й морепродукти"), ("vegetables", "🥦", "Овочі"),
                 ("grains", "🌾", "Крупи й гарніри"), ("dairy", "🧀", "Молочне"), ("eggs", "🍳", "Яйця"),
@@ -1543,6 +1544,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             n = max(1, min(12, int(q.get("n") or 2)))
         except ValueError:
             t, n = 30, 2
+        k = q.get("k")       # кухонні прилади: є в запиті — беремо (навіть порожнє = «без обмежень»)
+        cur_kit.set(None if k is None else [x for x in dict.fromkeys(str(k).split(",")) if x in menu.KITCHEN])
         return have, t, n
 
     def default_meal() -> str:
@@ -1558,6 +1561,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         q = {"have": ",".join(have), "t": t, "n": n}
         if need:
             q["need"] = ",".join(need)
+        if cur_kit.get() is not None:
+            q["k"] = ",".join(cur_kit.get())
         return urlencode(q)
 
     def today_need(src) -> list[str]:
@@ -1565,7 +1570,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return [k for k in str(src.get("need", "")).split(",") if k in menu.ASSUMED]
 
     async def today_offers(request: Request, u, n):
-        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        p, health = load_profile(u["id"]) if u else (guest_profile(request), False)
+        kit = cur_kit.get()
+        if kit is not None and kit != p.kitchen:
+            p.kitchen = kit
+            if u:                       # запам'ятовуємо прилади — діють і на меню тижня
+                save_profile(u["id"], p, health)
         p.household = n
         link, stores, offers, notice, is_demo = await menu_offers(u, p)
         return p, link, stores, is_demo, offers
@@ -1579,7 +1589,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             have = [k for k in p.fridge if k in menu.PANTRY_WORDS]
             n = p.household or n
         words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
-        return render(request, "today.html", u, words=words, have=have, t=t, n=n)
+        kit = cur_kit.get()
+        if kit is None:
+            kit = (load_profile(u["id"])[0] if u else guest_profile(request)).kitchen
+        return render(request, "today.html", u, words=words, have=have, t=t, n=n, kit=kit, kitchen=menu.KITCHEN)
 
     @app.get("/today/dishes", response_class=HTMLResponse)
     async def today_dishes(request: Request):
@@ -1593,7 +1606,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
                         options=len(opts), guest=not u, meal=meal)
         return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
-                      meal=meal, meals=MEALS,
+                      meal=meal, meals=MEALS, kit=p.kitchen, cook_hint=menu.cook_hint,
                       is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
 
     @app.get("/today/dish/{rid}", response_class=HTMLResponse)
@@ -1602,7 +1615,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         have, t, n = today_args(request)
         need = today_need(request.query_params)
         p, link, stores, is_demo, offers = await today_offers(request, u, n)
-        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999, need=need) if o.dish.id == rid]
+        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999, need=need, meal=None) if o.dish.id == rid]
         if not opts:
             return go(f"/today/dishes?{today_qs(have, t, n)}")
         # посилання «Немає» / «Є» для запасів, що «мабуть, є»: перемикаємо продукт у need
@@ -1652,7 +1665,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if is_demo:
             return go("/silpo")
         need = today_need(form)
-        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999, need=need) if o.dish.id == rid]
+        opts = [o for o in menu.today(offers, p, have, max_minutes=180, n=999, need=need, meal=None) if o.dish.id == rid]
         if not opts or not opts[0].lines:
             return go("/today")
         o = opts[0]

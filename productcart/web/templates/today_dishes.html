@@ -22,6 +22,7 @@
     <div class="td-meta">
       <span class="td-pill{% if not o.lines %} ok{% endif %}">{% if not o.lines %}✓ Є все{% elif got %}Є {{ got }} з {{ total }}{% else %}Усе купити{% endif %}</span>
       <span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв</span>
+      {% set hint = cook_hint(d.recipe, kit) %}{% if hint %}<span class="td-pill">{{ hint }}</span>{% endif %}
       {% if o.lines and not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}
     </div>
     {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}</p>

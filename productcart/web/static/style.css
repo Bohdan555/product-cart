@@ -1319,3 +1319,10 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 /* Акції, яких немає в магазині кошика: зникають плавно, згори — коротке пояснення */
 .pcard.gone{opacity:0;transform:scale(.96);transition:opacity .25s ease,transform .25s ease}
 .stock-note{margin:0 0 12px;padding:10px 14px;border-radius:14px;background:var(--chip);color:var(--muted);font-size:14px}
+
+/* Кухонні прилади на кроці 2 */
+.td-lbl small{font-weight:500;color:var(--muted);margin-left:6px}
+.td-kit{flex-wrap:wrap}
+.td-kit button{display:inline-flex;align-items:center;gap:6px}
+.td-chips.td-kit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.td-chips.td-kit button{flex:none;width:auto;min-width:0;justify-content:flex-start;padding:14px 16px;font-size:16px;white-space:nowrap}

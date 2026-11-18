@@ -581,9 +581,59 @@ class Menu:
         return out
 
 
+# ---------- кухонні прилади ----------
+KITCHEN = {"stove": ("Плита", "🔥"), "oven": ("Духовка", "♨️"), "multicooker": ("Мультиварка", "🍲"),
+           "airfryer": ("Аерогриль", "🌀"), "microwave": ("Мікрохвильовка", "📡"), "blender": ("Блендер", "🌪️")}
+# Що страві треба зробити → якими приладами це можна: смажити — плита чи мультиварка; варити й гріти — ще й мікрохвильовка;
+# запікати — духовка чи аерогриль; збити — блендер
+CAN_DO = {"fry": ("stove", "multicooker"), "boil": ("stove", "multicooker", "microwave"),
+          "oven": ("oven", "airfryer"), "blender": ("blender",)}
+_NEEDS = {
+    "oven": re.compile(r"духовц|запік|запеч|°\s*c|°с", re.I),
+    "blender": re.compile(r"блендер", re.I),
+    "fry": re.compile(r"смаж|тушк|сковор|підрум|пасеру|обжар|\bспеч|\bпечіть|гарячою олією|на маслі", re.I),
+    "boil": re.compile(r"вар|кип|прогрій", re.I),
+}
+_needs_cache: dict[str, frozenset] = {}
+
+
+def recipe_needs(rec: Recipe) -> frozenset:
+    """Прилади, без яких страву не приготувати — за кроками рецепта (салат чи йогурт — нічого)."""
+    hit = _needs_cache.get(rec.id) if not rec.mine else None
+    if hit is not None:
+        return hit
+    text = " ".join(rec.steps)
+    need = frozenset(k for k, rx in _NEEDS.items() if rx.search(text))
+    if not rec.mine:
+        _needs_cache[rec.id] = need
+    return need
+
+
+def can_cook(rec: Recipe, kitchen) -> bool:
+    if not kitchen:
+        return True
+    have = set(kitchen)
+    return all(any(t in have for t in CAN_DO[n]) for n in recipe_needs(rec))
+
+
+def cook_hint(rec: Recipe, kitchen) -> str | None:
+    """«у мультиварці» / «в аерогрилі», якщо готуватимемо замінником, бо основного приладу немає."""
+    if not kitchen:
+        return None
+    have, need = set(kitchen), recipe_needs(rec)
+    if "oven" in need and "oven" not in have and "airfryer" in have:
+        return "в аерогрилі"
+    if need & {"fry", "boil"} and "stove" not in have:
+        if "multicooker" in have:
+            return "у мультиварці"
+        if "microwave" in have and "fry" not in need:
+            return "у мікрохвильовці"
+    return None
+
+
 def allowed(rec: Recipe, profile: Profile, max_minutes: int) -> bool:
     return (rec.minutes <= max_minutes and not (recipe_tags(rec) & profile.excluded_tags())
-            and rec.id not in profile.dish_dislikes)
+            and rec.id not in profile.dish_dislikes and can_cook(rec, getattr(profile, "kitchen", None)))
 
 
 def _cost(key: str, need: float, src: Source) -> tuple[int, float, float, float, float]:
@@ -619,7 +669,7 @@ def basket(dishes: list[Dish], sources: dict[str, Source], people: int, pantry_b
 class _Ctx:
     """Усе, що потрібно для оцінки страв: джерела цін, вподобання, пул дозволених рецептів."""
 
-    def __init__(self, offers: list[Offer], profile: Profile, max_minutes: int, meal: str = "dinner"):
+    def __init__(self, offers: list[Offer], profile: Profile, max_minutes: int, meal: str | None = "dinner"):
         self.sources = source_map(offers)
         self.likes = set(profile.likes)
         self.dish_likes = set(profile.dish_likes)
@@ -630,7 +680,7 @@ class _Ctx:
         self.mine = user_recipes(profile)
         self.by_id = {**RECIPE_BY_ID, **{r.id: r for r in self.mine}}
         self.dish_likes |= {r.id for r in self.mine}       # свої страви — як улюблені
-        self.pool = [r for r in RECIPES + self.mine if meal in r.meals and allowed(r, profile, max_minutes)]
+        self.pool = [r for r in RECIPES + self.mine if (meal is None or meal in r.meals) and allowed(r, profile, max_minutes)]
         self.people = max(1, profile.household)
 
     def score(self, r: Recipe, others: list[Recipe]) -> float:
@@ -903,7 +953,7 @@ class Option:
 
 
 def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3, need=(),
-          meal: str = "dinner") -> list[Option]:
+          meal: str | None = "dinner") -> list[Option]:
     """Три страви, для яких найменше докуповувати: спершу кількість бракуючого, далі — скільки свого
     використовуємо, далі — ціна докупки. Вподобання й «не їм» з профілю діють як завжди.
     `need` — з «мабуть, є» (олія, борошно, томатна паста) людина сказала «немає»: їх докуповуємо."""

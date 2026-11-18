@@ -5,6 +5,7 @@
   <input type="hidden" name="have" id="tdHave" value="{{ have|join(',') }}">
   <input type="hidden" name="t" id="tdT" value="{{ t }}">
   <input type="hidden" name="n" id="tdN" value="{{ n }}">
+  <input type="hidden" name="k" id="tdK" value="{{ kit|join(',') }}">
 
   <section class="td-step" data-step="1">
     <div class="td-top"><a class="td-back" href="/" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 1 з 3"><i class="on"></i><i></i><i></i></span></div>
@@ -46,6 +47,10 @@
     <div class="td-chips" data-field="tdN">
       {% for v in (1, 2, 3, 4, 6) %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == n else 'false' }}">{{ v }}</button>{% endfor %}
     </div>
+    <p class="td-lbl">Що є на кухні <small id="tdKHint">{{ 'не вибрано — покажемо все' if not kit else '' }}</small></p>
+    <div class="td-chips td-kit" id="tdKit" role="group" aria-label="Кухонні прилади">
+      {% for k, (label, emo) in kitchen.items() %}<button type="button" data-k="{{ k }}" aria-pressed="{{ 'true' if k in kit else 'false' }}"><span aria-hidden="true">{{ emo }}</span> {{ label }}</button>{% endfor %}
+    </div>
     <div class="td-nav"><button type="submit" class="btn">Показати страви</button></div>
   </section>
 </form>
@@ -66,6 +71,15 @@
   var $ = function (id) { return document.getElementById(id); };
   var steps = form.querySelectorAll('.td-step'), tap = function (ms) { if (window.haptic) haptic(ms || 8); };
   function show(i) { steps.forEach(function (s, k) { s.hidden = k !== i; }); window.scrollTo(0, 0); }
+  // Кухонні прилади: кілька можна вибрати; нічого не вибрано — без обмежень
+  var kit = $('tdKit');
+  if (kit) kit.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-k]'); if (!b) return;
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); tap();
+    var on = [].slice.call(kit.querySelectorAll('button[aria-pressed="true"]')).map(function (x) { return x.dataset.k; });
+    $('tdK').value = on.join(',');
+    $('tdKHint').textContent = on.length ? '' : 'не вибрано — покажемо все';
+  });
   var WORDS = {{ words|tojson }}, have = {{ have|tojson }}, other = [];
   var inp = $('hvIn'), sug = $('hvSug');
   function norm(t) { return (t || '').toLowerCase().replace(/[’ʼ]/g, "'").replace(/\s+/g, ' ').trim(); }
@@ -287,7 +301,7 @@
   form.querySelector('[data-next]').onclick = function () { if (inp.value.trim()) flush(); tap(12); show(1); };
   form.querySelector('[data-skip]').onclick = function () { have = []; other = []; sync(); show(1); };
   form.querySelector('[data-prev]').onclick = function () { show(0); };
-  form.querySelectorAll('.td-chips').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
+  form.querySelectorAll('.td-chips[data-field]').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
     g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); $(g.dataset.field).value = b.dataset.v; tap(); }; }); });
   // фото холодильника: розпізнаємо й позначаємо знайдене
   function onPhoto() {

@@ -108,6 +108,7 @@ class Profile:
     fridge_other: list[str] = field(default_factory=list)  # решта знайденого на фото (не з довідника) — лише показуємо
     fridge_at: str | None = None                           # коли сфотографували (через тиждень забуваємо)
     menu_days: list[int] = field(default_factory=list)     # у які дні готуємо (0 = пн); порожньо — підряд з понеділка
+    kitchen: list[str] = field(default_factory=list)       # кухонні прилади, що є (menu.KITCHEN); порожньо — без обмежень
     cooking: list[dict] = field(default_factory=list)      # «Готую»: збережені рецепти {id, n, at, src}, найновіші першими
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо

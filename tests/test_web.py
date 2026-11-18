@@ -652,6 +652,11 @@ def test_today_flow_guest_and_user(client):
     assert r.status_code == 200 and "Омлет з перцем і сиром" in r.text and "✓ Є все" in r.text and "Демо-ціни" in r.text
     assert r.text.split('id="tdPool"')[0].count('class="td-dish"') == 3 and r.text.count('class="td-swap"') >= 6
     assert "Сніданок" in r.text and "Салат" in r.text and "meal=breakfast" in r.text
+    assert 'data-k="multicooker"' in client.get("/today").text
+    mw = client.get("/today/dishes", params={"have": "eggs", "t": "60", "n": "2", "meal": "breakfast", "k": "microwave"}).text
+    assert "k=microwave" in mw and "Сирники" not in mw and "Скрембл" not in mw
+    ac = client.get("/today/dishes", params={"have": "chicken_thigh", "t": "60", "n": "2", "meal": "dinner", "k": "airfryer,multicooker"}).text
+    assert "в аерогрилі" in ac or "у мультиварці" in ac
     sal = client.get("/today/dishes", params={"have": "cucumber,tomato", "t": "30", "n": "2", "meal": "salad"}).text
     assert 'class="on" aria-current="true">🥗 Салат' in sal and "/today/dish/s-" in sal
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
