@@ -704,12 +704,12 @@ def test_today_missing_to_silpo_cart(tmp_path):
 
 def test_me_profile_page(client):
     g = client.get("/me").text
-    assert "Ви поки гість" in g and "Реальні ціни вашого «Сільпо»" in g and 'href="/register"' in g
+    assert "Ви поки гість" in g and "реальні ціни свого «Сільпо»" in g and 'href="/register"' in g
     token = register(client)
     client.post("/today/cooked", data={"csrf": token, "id": "omelette"})
     client.post("/cook/done", data={"csrf": token, "id": "omelette"})
     me = client.get("/me").text
-    assert "Ваш профіль" in me and "Приготовано" not in me and "«Сільпо» не підключено" in me
+    assert "Профіль" in me and "Приготовано" not in me and "«Сільпо» не підключено" in me
     assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
 
 
@@ -760,5 +760,5 @@ def test_cook_list_saves_recipes_for_guest_and_user(client):
     assert "Тут з'являться рецепти" in client.get("/cook").text
     token = register(client)
     client.post("/today/cooked", data={"csrf": token, "id": "plov", "n": "2"})
-    assert "Плов з куркою" in client.get("/cook").text and "1 рецепт збережено" in client.get("/me").text
+    assert "Плов з куркою" in client.get("/cook").text and "1 рецепт" in client.get("/me").text
     assert "Як готувати" in client.get("/cook/borscht").text      # не з мого списку — теж відкривається

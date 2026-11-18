@@ -1356,3 +1356,20 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 .fr-or{margin:14px 0 8px;color:var(--muted);font-size:14px;text-align:center}
 .fr .fr-shot{min-height:0;aspect-ratio:auto;padding:22px 16px}
 .fr .fr-shot .cam{font-size:38px}
+
+/* Профіль — легкий: без великих карток і кольорових плиток, як налаштування в телефоні */
+.me-lite .xh{margin-bottom:4px}
+.me-sub{display:flex;align-items:center;gap:8px;margin:0 0 14px;color:var(--muted);font-size:15px}
+.me-sub .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.me-guest{display:grid;gap:10px;margin:6px 0 14px}
+.me-guest p{margin:0;color:var(--muted);line-height:1.45}.me-guest p b{color:var(--ink)}
+.me-guest .btn{text-align:center}
+.me-lite .ph{font:700 13px var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 4px 8px}
+.me-lite .pgroup{border-radius:18px;box-shadow:none;border:1px solid var(--line)}
+.me-lite .prow{padding:12px 14px;gap:12px}
+.me-lite .pico{display:grid;place-items:center;width:28px;flex:none}
+.me-lite .pico .ico{width:22px;height:22px;--ic:transparent;color:var(--accent)}
+.me-lite .pt{min-width:0;flex:1}
+.me-lite .pt b{font-weight:650;font-size:16px}
+.me-lite .pt small{display:block;color:var(--muted);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me-lite .pwa-card{margin:6px 0 4px}

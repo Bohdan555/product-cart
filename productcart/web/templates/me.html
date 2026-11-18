@@ -1,28 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Профіль — Кошик з акцій{% endblock %}
 {% block body %}
-{% macro row(href, icon, tone, title, sub, tail="") %}
-<a class="prow" href="{{ href }}"><span class="icotile" style="--t:var(--p-{{ tone }});--ic:var(--s-{{ tone }})">{{ ic(icon) }}</span>
+{% macro row(href, icon, title, sub, tail="") %}
+<a class="prow" href="{{ href }}"><span class="pico">{{ ic(icon) }}</span>
   <span class="pt"><b>{{ title }}</b>{% if sub %}<small>{{ sub }}</small>{% endif %}</span>{{ tail or '<i class="chev" aria-hidden="true">›</i>'|safe }}</a>
 {% endmacro %}
+<div class="me-lite">
 <h1 class="xh">Профіль</h1>
 
 {% if user %}
-<section class="me-card">
-  <span class="pava">{{ ic("chef", "big") }}</span>
-  <div class="pwho"><b>Ваш профіль</b>
-    <span>{% if link and link.store_id %}<i class="dot"></i>«Сільпо» · {{ link.store_title }}{% elif link %}<i class="dot"></i>«Сільпо» підключено{% else %}«Сільпо» не підключено{% endif %}</span></div>
-</section>
+<p class="me-sub">{% if link and link.store_id %}<i class="dot"></i>«Сільпо» · {{ link.store_title }}{% elif link %}<i class="dot"></i>«Сільпо» підключено{% else %}«Сільпо» не підключено{% endif %}</p>
 {% else %}
-<section class="me-card guest">
-  <span class="pava">{{ ic("user", "big") }}</span>
-  <div class="pwho"><b>Ви поки гість</b><span>Ціни демонстраційні, смаки зберігаються лише в цьому браузері</span></div>
-  <ul class="pbenefits">
-    <li>{{ ic("tag", "mid") }}Реальні ціни вашого «Сільпо»</li>
-    <li>{{ ic("cart", "mid") }}Кошик одним дотиком</li>
-    <li>{{ ic("brain", "mid") }}Пам'ятаємо смаки й свої страви</li>
-    <li>{{ ic("plane", "mid") }}Тиждень і знижки в Telegram</li>
-  </ul>
+<section class="me-guest">
+  <p><b>Ви поки гість.</b> Увійдіть, щоб бачити реальні ціни свого «Сільпо», збирати кошик одним дотиком і зберігати смаки.</p>
   {% if google_on %}<a class="btn" href="/auth/google" data-turbo="false">Увійти через Google</a>{% endif %}
   <a class="btn{% if google_on %} alt{% endif %}" href="/register">{{ 'Увійти з email' if google_on else 'Увійти' }}</a>
 </section>
@@ -32,16 +22,12 @@
 
 <h2 class="ph">Кухня</h2>
 <div class="pgroup">
-  {{ row("/cook", "pan", "tomato", "Готую", (cook_n ~ " " ~ plural(cook_n, 'рецепт', 'рецепти', 'рецептів') ~ " збережено") if cook_n else "рецепти страв, які ви обрали") }}
-  {{ row("/menu/setup", "family", "citrus", "Сім'я і дні", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей') ~ " · " ~ (days|join(', '))) }}
-  {{ row("/menu/setup", "clock", "sky", "Час і бюджет", "до " ~ p.max_minutes ~ " хв · " ~ ((p.menu_budget|int ~ " ₴ на тиждень") if p.menu_budget else "без обмежень")) }}
-  <a class="prow" href="/menu/setup"><span class="icotile" style="--t:var(--p-berry);--ic:var(--s-berry)">{{ ic("taste") }}</span>
-    <span class="pt"><b>Смаки</b>
-      <span class="ptaste">{% for t in likes %}<span class="yes">♥ {{ t }}</span>{% endfor %}{% for t in hides %}<span class="no">{{ t }}</span>{% endfor %}<span class="add">{{ '+ змінити' if likes or hides else '+ обрати' }}</span></span></span></a>
+  {{ row("/cook", "pan", "Готую", (cook_n ~ " " ~ plural(cook_n, 'рецепт', 'рецепти', 'рецептів')) if cook_n else "збережені рецепти") }}
+  {{ row("/menu/setup", "calendar", "Меню на тиждень", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей') ~ " · " ~ (days|join(', ')) ~ " · до " ~ p.max_minutes ~ " хв" ~ ((" · " ~ p.menu_budget|int ~ " ₴") if p.menu_budget else "")) }}
+  {{ row("/menu/setup", "taste", "Смаки", ((likes|join(', ')) if likes else "не вибрано") ~ ((" · без: " ~ hides|join(', ')) if hides else "")) }}
   {% if user %}
-  {% set thumbs %}<span class="pthumbs" aria-hidden="true">{% for r in mine[:3] %}<i>{{ r.emoji }}</i>{% endfor %}<i>+</i></span>{% endset %}
-  {{ row("/dishes", "book", "plum", "Мої страви", (mine|length ~ " " ~ plural(mine|length, 'рецепт', 'рецепти', 'рецептів')) if mine else "запишіть свої рецепти", thumbs) }}
-  {{ row("/profile", "leaf", "basil", "Дієти й анкета", "обмеження, що купуєте щотижня") }}
+  {{ row("/dishes", "book", "Мої страви", (mine|length ~ " " ~ plural(mine|length, 'рецепт', 'рецепти', 'рецептів')) if mine else "запишіть свої") }}
+  {{ row("/profile", "leaf", "Дієти й анкета", "обмеження, що купуєте щотижня") }}
   {% endif %}
 </div>
 
@@ -50,12 +36,11 @@
   {% if user %}
   {% set ok %}<span class="pok">{{ ic("check", "sm") }}</span>{% endset %}
   {% set go_btn %}<span class="pgo">Підключити</span>{% endset %}
-  {{ row("/silpo", "store", "basil", "«Сільпо»", (link.store_title or "підключено") if link else "реальні ціни й кошик", ok if link else go_btn) }}
-  {{ row("/silpo/cart", "cart", "citrus", "Кошик «Сільпо»", ((cart_n ~ " " ~ plural(cart_n, 'товар', 'товари', 'товарів')) if cart_n else "переглянути, змінити, оплатити")) }}
-  {{ row("/notify", "plane", "sky", "Сповіщення", ("на телефон" if push_n else "") ~ (" і " if push_n and chat else "") ~ ("Telegram" if chat else "") ~ ((" · " ~ (p.watch|length) ~ " " ~ plural(p.watch|length, 'обраний товар', 'обрані товари', 'обраних товарів')) if (push_n or chat) else "") if (push_n or chat) else "знижки й меню — на телефон або в Telegram", ok if (push_n or chat) else "") }}
+  {{ row("/silpo", "store", "«Сільпо»", (link.store_title or "підключено") if link else "реальні ціни й кошик", ok if link else go_btn) }}
+  {{ row("/notify", "bell", "Сповіщення", ((["на телефон"] if push_n else []) + (["Telegram"] if chat else []))|join(" і ") or "знижки й меню", ok if (push_n or chat) else "") }}
   {% else %}
-  {{ row("/register", "store", "basil", "«Сільпо»", "після входу") }}
-  {{ row("/register", "plane", "sky", "Сповіщення", "після входу") }}
+  {{ row("/register", "store", "«Сільпо»", "після входу") }}
+  {{ row("/register", "bell", "Сповіщення", "після входу") }}
   {% endif %}
 </div>
 
@@ -64,4 +49,5 @@
   <button type="submit">{{ ic("out", "sm") }} Вийти</button></form>
 {% if is_admin %}<p style="text-align:center"><a href="/admin/stats">Статистика сайту</a></p>{% endif %}
 {% endif %}
+</div>
 {% endblock %}
