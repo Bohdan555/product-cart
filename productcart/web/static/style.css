@@ -1345,3 +1345,6 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 .pstats{grid-template-columns:repeat(2,1fr)}
 
 .td-price .kcal{color:var(--muted);font-weight:600}
+
+/* Логотип у шапці — та сама іконка, що й у додатка на телефоні */
+.logo img{width:30px;height:30px;border-radius:8px;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.18)}
