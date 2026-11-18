@@ -58,6 +58,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
   {% for c in cats %}<button type="button" class="fchip{% if cat == c %} on{% endif %}" data-cat="{{ c }}"><span aria-hidden="true">{{ CEMO.get(c, "🛒") }}</span>{{ c }}</button>{% endfor %}
 </div>
 {% endif %}
+<div class="stock-note" id="stockNote" hidden role="status"></div>
 <div class="grid" id="feed">
 {% include "_cards.html" %}
 </div>
@@ -67,6 +68,34 @@ document.getElementById('loc-btn').addEventListener('click', function () {
   var CSRF = '{{ user.csrf if user else "" }}', KEY = 'pc-sort';
   var sel = document.getElementById('sortSel');
   var state = { sort: '{{ sort }}', cat: {{ cat|tojson }} }, loading = false, io = null;
+
+  // Наявність: показані акції перевіряємо в магазині вашого кошика «Сільпо»; яких немає — ховаємо
+  var hidden = 0;
+  function checkStock() {
+    if (!CSRF || !window.fetch) return;
+    var btns = [].slice.call(feed.querySelectorAll('.padd[data-pid]:not([data-stock])')).slice(0, 60);
+    if (!btns.length) return;
+    btns.forEach(function (b) { b.dataset.stock = '…'; });
+    fetch('/offers/stock', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF': CSRF },
+      body: JSON.stringify({ items: btns.map(function (b) { return { pid: b.dataset.pid, name: b.dataset.name, w: b.dataset.w === '1' }; }) }) })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        var out = {}; (d.out || []).forEach(function (p) { out[p] = 1; });
+        btns.forEach(function (b) {
+          b.dataset.stock = out[b.dataset.pid] ? 'out' : 'ok';
+          if (!out[b.dataset.pid]) return;
+          var card = b.closest('.pcard'); if (!card) return;
+          card.classList.add('gone'); hidden++;
+          setTimeout(function () { card.remove(); }, 260);
+        });
+        var note = document.getElementById('stockNote');
+        if (note && hidden) {
+          note.hidden = false;
+          note.textContent = 'Сховали ' + hidden + ' ' + (hidden % 10 === 1 && hidden % 100 !== 11 ? 'акцію' : (hidden % 10 >= 2 && hidden % 10 <= 4 && (hidden % 100 < 10 || hidden % 100 >= 20)) ? 'акції' : 'акцій')
+            + ', яких зараз немає ' + (d.store ? 'в «Сільпо» · ' + d.store : 'у магазині вашого кошика') + '.';
+        }
+      }).catch(function () { btns.forEach(function (b) { delete b.dataset.stock; }); });
+  }
+  checkStock();
 
   // «+ У кошик»: одна обробка для всіх карток, і довантажених теж
   // «🔔»: стежити за таким товаром — пишемо в Telegram, коли буде знижка
@@ -107,7 +136,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
     if (loading || !more.isConnected) return; loading = true;
     fetch(more.dataset.next, { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
       var t = document.createElement('template'); t.innerHTML = html;
-      more.replaceWith(t.content); loading = false; watch();
+      more.replaceWith(t.content); loading = false; watch(); checkStock();
     }).catch(function () { loading = false; });
   }
   // сортування й категорія — з сервера, з першої сторінки
@@ -116,7 +145,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
     history.replaceState(history.state, '', '/list' + q);
     feed.classList.add('busy');
     fetch('/list' + q + '&page=1&partial=1', { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
-      feed.innerHTML = html; feed.classList.remove('busy'); window.scrollTo({ top: feed.offsetTop - 120 }); watch();
+      feed.innerHTML = html; feed.classList.remove('busy'); window.scrollTo({ top: feed.offsetTop - 120 }); watch(); checkStock();
     }).catch(function () { feed.classList.remove('busy'); });
   }
   if (sel) sel.addEventListener('change', function () { state.sort = sel.value; try { localStorage.setItem(KEY, sel.value); } catch (e) {} reload(); });

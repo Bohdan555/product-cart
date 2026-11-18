@@ -35,7 +35,6 @@
 </div>
 {# решта варіантів — одразу на сторінці: «Інша» підміняє картку миттєво, без запиту #}
 <template id="tdPool">{% for o in opts[3:] %}{{ card(o, loop.index0 + 3) }}{% endfor %}</template>
-<p class="td-hint">Не те? Натисніть <b>↻ Інша</b> на картці · {{ opts|length }} {{ plural(opts|length, 'варіант', 'варіанти', 'варіантів') }}</p>
 <script>
 (function () {
   var reel = document.getElementById('tdReel'), pool = document.getElementById('tdPool');

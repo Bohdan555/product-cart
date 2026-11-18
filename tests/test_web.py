@@ -531,7 +531,9 @@ def test_add_deal_to_silpo_cart(tmp_path):
 
     class Combined(FakeMCP):
         async def __call__(self, name, args):
-            if "cart" in name or name == "silpo_find_products_batch":
+            if name == "silpo_find_products_batch":        # перевірка наявності шукає з вікном магазину
+                return await shared(name, dict(args, deliveryType="SelfPickup"))
+            if "cart" in name:
                 return await shared(name, args)
             return await super().__call__(name, args)
 
@@ -556,6 +558,16 @@ def test_add_deal_to_silpo_cart(tmp_path):
         c.post("/silpo/cart/add", data={"csrf": token, "pid": "p2", "name": "Кава"})
         assert shared.items["p2"] == 2 and shared.items["other"] == 1               # ще раз — +1, чуже не чіпаємо
         assert c.post("/silpo/cart/add", data={"csrf": "bad", "pid": "p2"}).status_code == 400
+
+        # наявність у магазині кошика: p2 є; товар, якого пошук не знаходить серед знайденого, — немає; невідоме — не чіпаємо
+        import re as _re
+        pids = _re.findall(r'class="padd" data-pid="([^"]+)"', c.get("/list").text)
+        victim = next(x for x in pids if x != "p2")
+        items = [{"pid": "p2", "name": "Кава"}, {"pid": victim, "name": "Кава"}, {"pid": "q", "name": "Щось невідоме"}]
+        assert c.post("/offers/stock", json={"items": items}, headers={"x-csrf": "bad"}).status_code == 400
+        assert c.post("/offers/stock", json={"items": items}, headers={"x-csrf": token}).json()["out"] == [victim]
+        page = c.get("/list").text
+        assert f'data-pid="{victim}"' not in page and 'data-pid="p2"' in page and 'id="stockNote"' in page
 
 
 def test_deals_infinite_feed(client):
@@ -643,7 +655,7 @@ def test_today_flow_guest_and_user(client):
     sal = client.get("/today/dishes", params={"have": "cucumber,tomato", "t": "30", "n": "2", "meal": "salad"}).text
     assert 'class="on" aria-current="true">🥗 Салат' in sal and "/today/dish/s-" in sal
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
-    assert 'aria-current="true">🍳 Сніданок' in bf and "↻ Інша" in bf and bf.count('class="td-dish"') > 3
+    assert 'aria-current="true">🍳 Сніданок' in bf and "Інша страва замість" in bf and bf.count('class="td-dish"') > 3
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
     assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
     d2 = client.get("/today/dish/flotski", params={"have": "", "t": "60", "n": "2"}).text

@@ -689,7 +689,7 @@ async def build(call: Call, wants: list[Want], branch: dict | None = None) -> di
     after = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
     return {"placed": placed, "missing": missing, "had": before, "total": after.total,
             "checkout": after.checkout, "count": after.count, "created": created, "replaced": r["replaced"],
-            "products_total": after.products_total, "delivery": after.delivery}
+            "products_total": after.products_total, "delivery": after.delivery, "branch_id": cart.branch_id}
 
 
 # ---------- зміна кошика зі сторінки «Мій кошик» ----------

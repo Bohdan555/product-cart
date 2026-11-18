@@ -67,7 +67,7 @@ ERROR_PAGE = ("<!doctype html><meta charset=utf-8><meta name=viewport content='w
               "<title>Помилка — Кошик з акцій</title><body style='font:16px/1.5 system-ui;padding:32px;max-width:520px'>"
               "<h1>Щось пішло не так</h1><p>Ми вже бачимо цю помилку в логах. Спробуйте оновити сторінку.</p>"
               "<p><a href='/'>На головну</a></p><p style='color:#888'>Код запиту: {rid}</p>")
-STALE_TTL = timedelta(days=7)   # старіший кеш не показуємо навіть тимчасово
+STALE_TTL = timedelta(days=1)   # старіший кеш не показуємо навіть тимчасово (акції швидко розкуповують)
 offers_stale = contextvars.ContextVar("offers_stale", default=False)  # показали акції з застарілого кешу
 MAX_NEARBY = 4  # щонайбільше магазинів поруч в одному списку
 LIKE_TAGS = ["vegetables", "fruits", "coffee", "tea", "meat", "fish", "dairy", "eggs", "grains", "sweets"]
@@ -832,13 +832,91 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return go("/silpo")
 
     async def current_offers(user_id: int, p: Profile, refresh: bool):
-        """Акції магазинів поруч (або демо, якщо «Сільпо» не підключено)."""
+        """Акції магазинів поруч (або демо, якщо «Сільпо» не підключено).
+        Те, чого (за свіжою перевіркою) немає в магазині кошика людини, не показуємо."""
         link = silpo_link(user_id)
         stores, offers, notice = await silpo_list_input(user_id, p, force=refresh) if link else ([], [], None)
         is_demo = not offers and not notice
         if is_demo:
             offers = demo.load()
-        return link, stores, planner.merge_nearby(offers), notice, is_demo
+        merged = planner.merge_nearby(offers)
+        if not is_demo:
+            merged = drop_out_of_stock(user_id, link, merged)
+        return link, stores, merged, notice, is_demo
+
+    # ---------- наявність акцій у «моєму» магазині (де кошик «Сільпо») ----------
+    STOCK_TTL = 2 * 3600
+    cart_branch_mem: dict[int, tuple[float, str]] = {}            # uid → (коли, магазин кошика)
+    stock_mem: dict[tuple[str, str], tuple[float, bool]] = {}     # (магазин, товар) → (коли, є в наявності)
+    ctx_mem: dict[str, tuple[float, dict]] = {}                   # магазин → (коли, контекст пошуку зі слотом)
+
+    def note_cart_branch(uid: int, cart) -> None:
+        if cart is not None and getattr(cart, "branch_id", None):
+            cart_branch_mem[uid] = (time.monotonic(), str(cart.branch_id))
+
+    def home_branch(uid: int, link) -> str | None:
+        """Магазин, де людина купує: магазин її кошика «Сільпо» (за останні 6 год), інакше вибраний вручну."""
+        hit = cart_branch_mem.get(uid)
+        if hit and time.monotonic() - hit[0] < 6 * 3600:
+            return hit[1]
+        return link["store_id"] if link and link["store_id"] else None
+
+    def known_out(branch: str, pid: str) -> bool:
+        hit = stock_mem.get((branch, pid))
+        return bool(hit and not hit[1] and time.monotonic() - hit[0] < STOCK_TTL)
+
+    def drop_out_of_stock(uid: int, link, offers: list[Offer]) -> list[Offer]:
+        branch = home_branch(uid, link)
+        return [o for o in offers if not known_out(branch, o.product_id)] if branch else offers
+
+    @app.post("/offers/stock")
+    async def offers_stock(request: Request):
+        """Перевіряє, чи є показані акції в магазині кошика. → {"out": [productId…], "store": назва}.
+        Немає в наявності, або пошук магазину інші товари знаходить, а цього — ні: вважаємо, що немає."""
+        u = user_of(request)
+        if u is None or not secrets.compare_digest(request.headers.get("x-csrf", ""), u["csrf"]):
+            return JSONResponse({"out": []}, status_code=400)
+        try:
+            items = [(str(x["pid"])[:64], str(x.get("name") or "")[:200], bool(x.get("w")))
+                     for x in ((await request.json()).get("items") or [])[:60] if x.get("pid")]
+        except Exception:
+            return JSONResponse({"out": []}, status_code=400)
+        link = silpo_link(u["id"])
+        tokens = silpo_tokens(u["id"]) if link else None
+        if not tokens or not items:
+            return {"out": []}
+        now = time.monotonic()
+        branch = home_branch(u["id"], link)
+        fresh = lambda pid: (h := stock_mem.get((branch, pid))) and now - h[0] < STOCK_TTL
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                if branch is None:
+                    cart = await silpo_cart.current_cart(await get_call())
+                    note_cart_branch(u["id"], cart)
+                    branch = home_branch(u["id"], link)
+                    if branch is None:
+                        return {"out": []}
+                todo = [(pid, name, w) for pid, name, w in items if name and not fresh(pid)]
+                if todo:
+                    call = await get_call()
+                    hit = ctx_mem.get(branch)
+                    if not hit or now - hit[0] > 1800:
+                        hit = ctx_mem[branch] = (now, await silpo.branch_context(call, branch))
+                    found = await silpo_cart._search(call, dict(hit[1]), [name for _, name, _ in todo])
+                    for pid, name, w in todo:
+                        got = found.get(name.lower(), [])
+                        same = next((x for x in got if str(silpo_cart._first(x, "id", "productId")) == pid), None)
+                        if same is not None:
+                            stock_mem[(branch, pid)] = (now, silpo_cart._stock_ok(same, 0.3 if w else 1))
+                        elif got:
+                            stock_mem[(branch, pid)] = (now, False)    # магазин інше знаходить, а цього немає
+        except Exception as e:
+            log.warning("Сільпо: перевірка наявності акцій: %s", str(root_error(e))[:300])
+            return {"out": []}
+        out = [pid for pid, _, _ in items if known_out(branch, pid)]
+        logs.event(log, "offers.stock", checked=len(items), out=len(out))
+        title = link["store_title"] if link and link["store_id"] == branch else None
+        return {"out": out, "store": title}
 
     # ---------- список ----------
     PAGE = 20
@@ -1132,6 +1210,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         try:
             async with lazy_silpo(tokens["access_token"]) as get_call:
                 cart = await silpo_cart.current_cart(await get_call())
+            note_cart_branch(u["id"], cart)
         except Exception as e:
             e = root_error(e)
             log.warning("Сільпо: перегляд кошика: %s: %s", type(e).__name__, str(e)[:800])
@@ -1212,8 +1291,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             msg = str(err) if isinstance(err, silpo_cart.CartError) else "«Сільпо» не відповіло"
             return JSONResponse({"error": msg[:200]}, status_code=502)
         if not res["placed"]:
+            if res.get("branch_id"):
+                stock_mem[(str(res["branch_id"]), pid)] = (time.monotonic(), False)
             return JSONResponse({"error": "Немає й схожого"}, status_code=409)
         swap = res["replaced"][0][1] if res["replaced"] else None
+        if res.get("branch_id"):
+            cart_branch_mem[u["id"]] = (time.monotonic(), str(res["branch_id"]))
+            if swap or not res["placed"]:          # акційного в магазині кошика немає — більше не показуємо
+                stock_mem[(str(res["branch_id"]), pid)] = (time.monotonic(), False)
         analytics.track(conn, u["id"], "deal_added", chain="silpo", product_id=pid, replaced=bool(swap))
         return remember_cart(JSONResponse({"ok": True, "count": res["count"], "replaced": swap}), res["count"], u["id"])
 
