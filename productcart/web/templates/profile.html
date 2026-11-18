@@ -1,224 +1,68 @@
 {% extends "base.html" %}
-{% block title %}Профіль — Кошик з акцій{% endblock %}
+{% block title %}Дієти й анкета — Кошик з акцій{% endblock %}
 {% block body %}
-{% set EMO = {"dairy": "🥛", "meat": "🥩", "fish": "🦐", "eggs": "🥚", "vegetables": "🥦", "fruits": "🍎", "grains": "🌾",
-              "coffee": "☕", "tea": "🍵", "sweets": "🍫", "alcohol": "🍷", "pork": "🐖", "household": "🧴"} %}
 {% set DIET_EMO = {"no_gluten": "🌾", "no_lactose": "🥛", "vegetarian": "🥕", "vegan": "🌱", "no_pork": "🐖",
                    "no_alcohol": "🍷", "no_sugar": "🍬"} %}
-{% set taste_tags = (like_tags + hide_tags)|unique|list %}
 {% set chosen_diets = picked_diets or p.diets %}
-<form class="wiz{% if not welcome %} edit{% endif %}" id="wiz" method="post" action="/profile" novalidate>
+<div class="me-lite">
+<h1 class="xh">{% if welcome %}Про <span class="hl">вас</span>{% else %}Дієти й <span class="hl">анкета</span>{% endif %}</h1>
+<p class="me-sub">Хвилина — і підбір акцій та меню стане точнішим.</p>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+<form class="anketa" id="anketa" method="post" action="/profile" novalidate>
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
-  <div class="wiz-top">
-    <h1 class="xh">{% if welcome %}Про <span class="hl">вас</span>{% else %}Ваш <span class="hl">профіль</span>{% endif %}</h1>
-    {% if error %}<div class="err">{{ error }}</div>{% endif %}
-    {% if silpo %}
-    <div class="autofill" id="autofill">
-      <button type="button" class="btn" id="fillBtn"><span aria-hidden="true">✨</span> Заповнити за мене з «Сільпо»</button>
-      <small class="hint" id="fillTxt"></small>
-    </div>
-    {% else %}
-    <a class="autofill-alt" href="/silpo">✨ Підключіть «Сільпо» — заповнимо за вас →</a>
-    {% endif %}
-    <a class="notify-link" href="/notify">🔔 Сповіщення в Telegram →</a>
-    <div class="wiz-prog" aria-hidden="true"><i id="wizBar"></i></div>
-    <ol class="wiz-dots" id="wizDots">
-      {% for t in ['Сім\'я', 'Смак', 'Обмеження', 'Щотижня', 'Гроші', 'Готово'] %}<li><button type="button" data-go="{{ loop.index0 }}">{{ t }}</button></li>{% endfor %}
-    </ol>
+  {% if welcome %}<input type="hidden" name="welcome" value="1">{% endif %}
+  <input type="hidden" name="_f" value="diets"><input type="hidden" name="_f" value="regulars"><input type="hidden" name="_f" value="min_discount">
+
+  {% if silpo %}
+  <div class="autofill" id="autofill">
+    <button type="button" class="btn alt small" id="fillBtn">Заповнити з «Сільпо»</button>
+    <small class="hint" id="fillTxt"></small>
+  </div>
+  {% endif %}
+
+  <h2 class="ph">Обмеження в харчуванні</h2>
+  <div class="an-chips" id="diets">
+    {% for d in diets %}
+    <label class="an-chip"><input type="checkbox" name="diets" value="{{ d }}" {% if d in chosen_diets %}checked{% endif %}>
+      <span><i aria-hidden="true">{{ DIET_EMO.get(d, '•') }}</i>{{ DIET_LABELS[d] }}</span></label>
+    {% endfor %}
+  </div>
+  <label class="consent" id="consentBox"><input type="checkbox" name="health_consent" value="1" {% if consent %}checked{% endif %}>
+    <span>Дозволяю враховувати ці обмеження (дані про здоров'я) лише для підбору акцій і меню.</span></label>
+
+  <h2 class="ph">Що купуєте майже щотижня</h2>
+  <div class="taginput" data-for="regulars">
+    <input type="hidden" name="regulars" id="regulars" value="{{ p.regulars|join(', ') }}">
+    <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="напр. кава зернова" aria-label="Додати товар" enterkeyhint="done"></div>
+    <div class="sugg">{% for s in ['молоко', 'яйця', 'хліб', 'сир твердий', 'йогурт', 'масло вершкове', 'курятина', 'банани', 'кава зернова', 'сметана'] %}<button type="button" data-add="{{ s }}">+ {{ s }}</button>{% endfor %}</div>
   </div>
 
-  <!-- 1. Сім'я -->
-  <section class="wstep card" data-step="0">
-    <h2>Скільки вас удома?</h2>
-    <div class="people" id="people" aria-hidden="true"></div>
-    <div class="bigstep">
-      <button type="button" data-step-btn="-1" aria-label="Менше людей">−</button>
-      <input id="household" type="number" name="household" min="1" max="12" value="{{ p.household }}" inputmode="numeric" aria-label="Скільки людей">
-      <button type="button" data-step-btn="1" aria-label="Більше людей">+</button>
-    </div>
-    <p class="react" id="peopleTxt"></p>
-    <div><label for="city">Місто</label>
-      <input id="city" type="text" name="city" value="{{ p.city or '' }}" placeholder="Київ" list="cities" autocomplete="address-level2">
-      <datalist id="cities">{% for c in ['Київ', 'Львів', 'Одеса', 'Дніпро', 'Харків', 'Вінниця', 'Запоріжжя', 'Івано-Франківськ', 'Полтава', 'Черкаси', 'Житомир', 'Рівне', 'Луцьк', 'Тернопіль', 'Хмельницький', 'Чернігів', 'Суми', 'Ужгород', 'Біла Церква', 'Бровари', 'Ірпінь', 'Буча'] %}<option value="{{ c }}">{% endfor %}</datalist></div>
-  </section>
-
-  <!-- 2. Смак -->
-  <section class="wstep card" data-step="1">
-    <h2>Що вам до смаку?</h2>
-    <p class="hint">Оцініть страви</p>
-    <input type="hidden" name="dish_likes" id="dish_likes" value="{{ p.dish_likes|join(',') }}">
-    <input type="hidden" name="dish_dislikes" id="dish_dislikes" value="{{ p.dish_dislikes|join(',') }}">
-    <div class="swipe" id="swipe" data-dishes='{{ dishes|tojson }}' data-photos='{{ photos|tojson }}'>
-      <div class="deck" id="deck" aria-live="polite"></div>
-      <div class="swipe-act">
-        <button type="button" class="sw-no" id="swNo"><span aria-hidden="true">👎</span> Не моє</button>
-        <button type="button" class="sw-skip" id="swSkip">Пропустити</button>
-        <button type="button" class="sw-yes" id="swYes"><span aria-hidden="true">😋</span> Смачно</button>
-      </div>
-      <p class="react" id="swipeTxt"></p>
-    </div>
-    <details class="more" id="tasteMore"><summary>Ще за категоріями продуктів</summary>
-    <p class="hint">Торкніться раз — <b>люблю</b>, ще раз — <b>не показувати</b>, втретє — байдуже.</p>
-    <div id="taste">
-      {% for gname, gtags in taste_groups %}
-      <div class="tgroup"><small class="tgname">{{ gname }}</small><div class="tiles">
-      {% for t in gtags %}{% set st = 'like' if t in p.likes else ('hide' if t in p.dislikes else '') %}
-      <button type="button" class="tile3" data-tag="{{ t }}" data-state="{{ st }}" data-can-like="{{ 1 if t in like_tags else 0 }}" data-can-hide="{{ 1 if t in hide_tags else 0 }}">
-        <span class="te" aria-hidden="true">{{ EMO.get(t, '•') }}</span><span class="tl">{{ TAG_LABELS[t] }}</span><span class="ts"></span>
-        {% if t in like_tags %}<input type="checkbox" name="likes" value="{{ t }}" hidden {% if st == 'like' %}checked{% endif %}>{% endif %}
-        {% if t in hide_tags %}<input type="checkbox" name="dislikes" value="{{ t }}" hidden {% if st == 'hide' %}checked{% endif %}>{% endif %}
-      </button>{% endfor %}
-      </div></div>
-      {% endfor %}
-    </div>
-    <p class="react" id="tasteTxt"></p>
-    </details>
-  </section>
-
-  <!-- 3. Обмеження -->
-  <section class="wstep card" data-step="2">
-    <h2>Є обмеження в харчуванні?</h2>
-    <div class="tiles" id="diets">
-      {% for d in diets %}
-      <label class="tile2"><input type="checkbox" name="diets" value="{{ d }}" {% if d in chosen_diets %}checked{% endif %}>
-        <span class="te" aria-hidden="true">{{ DIET_EMO.get(d, '•') }}</span><span class="tl">{{ DIET_LABELS[d] }}</span></label>
-      {% endfor %}
-    </div>
-    <label class="consent" id="consentBox"><input type="checkbox" name="health_consent" value="1" {% if consent %}checked{% endif %}>
-      <span>Дозволяю враховувати ці обмеження (дані про здоров'я) лише для підбору акцій і меню.</span></label>
-  </section>
-
-  <!-- 4. Щотижня -->
-  <section class="wstep card" data-step="3">
-    <h2>Що купуєте майже щотижня?</h2>
-    <p class="hint">Торкніться або впишіть своє</p>
-    <div class="taginput" data-for="regulars">
-      <input type="hidden" name="regulars" id="regulars" value="{{ p.regulars|join(', ') }}">
-      <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="напр. кава зернова" aria-label="Додати товар" enterkeyhint="done"></div>
-      <div class="sugg">{% for s in ['молоко', 'яйця', 'хліб', 'сир твердий', 'йогурт', 'масло вершкове', 'курятина', 'фарш', 'банани', 'яблука', 'картопля', 'помідори', 'гречка', 'макарони', 'кава зернова', 'чай', 'вода мінеральна', 'сметана', 'ковбаса', 'шоколад'] %}<button type="button" data-add="{{ s }}">+ {{ s }}</button>{% endfor %}</div>
-    </div>
-    <details class="more"{% if p.brands_like or p.brands_avoid %} open{% endif %}><summary>Бренди</summary>
-      <div class="stack">
-        <div class="taginput" data-for="brands_like"><label>Улюблені бренди</label>
-          <input type="hidden" name="brands_like" value="{{ p.brands_like|join(', ') }}">
-          <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="напр. Галичина" aria-label="Додати улюблений бренд"></div></div>
-        <div class="taginput" data-for="brands_avoid"><label>Не купую</label>
-          <input type="hidden" name="brands_avoid" value="{{ p.brands_avoid|join(', ') }}">
-          <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="бренд" aria-label="Додати бренд, який не купуєте"></div></div>
-      </div>
-    </details>
-  </section>
-
-  <!-- 5. Гроші -->
-  <section class="wstep card" data-step="4">
-    <h2>Скільки готові витрачати?</h2>
-    <div class="slider">
-      <div class="sl-h"><label for="budget">Бюджет на тиждень</label><output id="budgetOut"></output></div>
-      <input type="range" id="budget" min="0" max="6000" step="100" value="{{ p.budget_week|int if p.budget_week else 0 }}">
-      <input type="hidden" name="budget_week" id="budget_week" value="{{ p.budget_week|int if p.budget_week else '' }}">
-      <div class="sl-s"><span>без ліміту</span><span>6 000 ₴</span></div>
-    </div>
-    <div class="slider">
-      <div class="sl-h"><label for="min_discount">Показувати знижки від</label><output id="discOut"></output></div>
-      <input type="range" id="min_discount" name="min_discount" min="0" max="50" step="5" value="{{ p.min_discount|int }}">
-      <div class="sl-s"><span>будь-які</span><span>від 50%</span></div>
-    </div>
-    <details class="more"><summary>Ще налаштування</summary>
-      <div class="stack">
-        <div class="slider">
-          <div class="sl-h"><label for="radius_km">Магазини в радіусі</label><output id="radOut"></output></div>
-          <input type="range" id="radius_km" name="radius_km" min="0.5" max="5" step="0.5" value="{{ p.radius_km }}">
-        </div>
-        <div class="slider">
-          <div class="sl-h"><label for="max_items">Позицій у списку акцій</label><output id="itemsOut"></output></div>
-          <input type="range" id="max_items" name="max_items" min="5" max="40" step="1" value="{{ p.max_items }}">
-        </div>
-      </div>
-    </details>
-    <p class="react" id="moneyTxt"></p>
-  </section>
-
-  <!-- 6. Готово -->
-  <section class="wstep card" data-step="5">
-    <h2>Готово</h2>
-    <div class="summary" id="summary"></div>
-    <div><label for="name">Ім'я</label>
-      <input id="name" type="text" name="name" value="{{ p.name }}" maxlength="60"></div>
-  </section>
-
-  <div class="wiz-foot">
-  <div class="live" id="live" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="liveTxt">…</span></div>
-  <div class="wiz-nav">
-    <button type="button" class="btn alt" id="wizBack">Назад</button>
-    <button type="button" class="btn" id="wizNext">Далі</button>
-    <button type="submit" class="btn" id="wizSave">{{ 'Готово — до акцій' if welcome else 'Зберегти' }}</button>
+  <h2 class="ph">Знижки</h2>
+  <div class="slider">
+    <div class="sl-h"><label for="min_discount">Показувати від</label><output id="discOut"></output></div>
+    <input type="range" id="min_discount" name="min_discount" min="0" max="50" step="5" value="{{ p.min_discount|int }}">
+    <div class="sl-s"><span>будь-які</span><span>від 50%</span></div>
   </div>
-  </div>
+
+  <div class="an-save"><button type="submit" class="btn">{{ 'Готово' if welcome else 'Зберегти' }}</button></div>
 </form>
+</div>
 
 <script>
 (function () {
-  var form = document.getElementById('wiz');
-  form.classList.add('js');
-  var steps = [].slice.call(form.querySelectorAll('.wstep'));
-  var dots = [].slice.call(document.querySelectorAll('#wizDots button'));
-  var cur = 0;
-  var hasError = {{ 'true' if error else 'false' }};
-  var LABEL = {{ TAG_LABELS|tojson }}, DIETL = {{ DIET_LABELS|tojson }};
-
-  function show(i) {
-    cur = Math.max(0, Math.min(steps.length - 1, i));
-    steps.forEach(function (s, k) { s.hidden = k !== cur; });
-    dots.forEach(function (d, k) { d.classList.toggle('on', k === cur); d.classList.toggle('done', k < cur); d.setAttribute('aria-current', k === cur ? 'step' : 'false'); });
-    document.getElementById('wizBar').style.width = ((cur + 1) / steps.length * 100) + '%';
-    document.getElementById('wizBack').hidden = cur === 0;
-    document.getElementById('wizNext').hidden = cur === steps.length - 1;
-    if (cur === steps.length - 1) summary();
-    var h = steps[cur].querySelector('h2'); if (h && window.scrollY > form.offsetTop) form.scrollIntoView({ behavior: 'smooth' });
-  }
-  document.getElementById('wizNext').onclick = function () { show(cur + 1); };
-  document.getElementById('wizBack').onclick = function () { show(cur - 1); };
-  dots.forEach(function (d) { d.onclick = function () { show(+d.dataset.go); }; });
-
-  // 1. Сім'я
-  var hh = document.getElementById('household');
-  var FACES = ['🧑', '👩', '👨', '👧', '👦', '👵', '👴', '🧒', '👩‍🦰', '🧔', '👱', '👶'];
-  function people() {
-    var n = Math.max(1, Math.min(12, parseInt(hh.value, 10) || 1)); hh.value = n;
-    var box = document.getElementById('people'); box.innerHTML = '';
-    for (var k = 0; k < n; k++) { var s = document.createElement('span'); s.textContent = FACES[k]; s.style.animationDelay = (k * 40) + 'ms'; box.appendChild(s); }
-    document.getElementById('peopleTxt').textContent = '';
-  }
-  form.querySelectorAll('[data-step-btn]').forEach(function (b) { b.onclick = function () { hh.value = (parseInt(hh.value, 10) || 1) + (+b.dataset.stepBtn); people(); }; });
-  hh.addEventListener('input', people);
-
-  // 2. Смак: люблю → не показувати → байдуже
-  function tasteText() {
-    var like = [], hide = [];
-    form.querySelectorAll('.tile3').forEach(function (t) { if (t.dataset.state === 'like') like.push(LABEL[t.dataset.tag]); if (t.dataset.state === 'hide') hide.push(LABEL[t.dataset.tag]); });
-    document.getElementById('tasteTxt').textContent = like.length || hide.length
-      ? (like.length ? 'Більше: ' + like.join(', ') + '. ' : '') + (hide.length ? 'Сховаємо: ' + hide.join(', ') + '.' : '')
-      : '';
-  }
-  form.querySelectorAll('.tile3').forEach(function (t) {
-    var like = t.querySelector('input[name=likes]'), hide = t.querySelector('input[name=dislikes]');
-    var order = [''].concat(like ? ['like'] : []).concat(hide ? ['hide'] : []);
-    function paint() {
-      var st = t.dataset.state;
-      if (like) like.checked = st === 'like'; if (hide) hide.checked = st === 'hide';
-      t.querySelector('.ts').textContent = st === 'like' ? '♥' : st === 'hide' ? '✕' : '';
-      t.setAttribute('aria-label', LABEL[t.dataset.tag] + ': ' + (st === 'like' ? 'люблю' : st === 'hide' ? 'не показувати' : 'байдуже'));
-    }
-    t.onclick = function () { t.dataset.state = order[(order.indexOf(t.dataset.state) + 1) % order.length]; paint(); t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); tasteText(); };
-    paint();
-  });
-
-  // 3. Обмеження: згода потрібна, лише коли щось вибрано
+  var form = document.getElementById('anketa'); if (!form) return;
+  // згода потрібна, лише коли вибрано обмеження
   var consentBox = document.getElementById('consentBox');
   function diets() { consentBox.hidden = !form.querySelector('#diets input:checked'); }
   form.querySelectorAll('#diets input').forEach(function (i) { i.addEventListener('change', diets); });
+  form.addEventListener('submit', function (e) {
+    if (form.querySelector('#diets input:checked') && !consentBox.querySelector('input').checked) {
+      e.preventDefault(); consentBox.classList.add('shake'); setTimeout(function () { consentBox.classList.remove('shake'); }, 600);
+    }
+  });
 
-  // 4. Поля-теги
+  // «що купуєте щотижня» — теги
   form.querySelectorAll('.taginput').forEach(function (w) {
     var hidden = w.querySelector('input[type=hidden]'), typed = w.querySelector('.tagtyped'), box = w.querySelector('.tags-in');
     var items = hidden.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
@@ -242,187 +86,32 @@
     sync();
   });
 
-  // 5. Гроші
-  var budget = document.getElementById('budget'), bw = document.getElementById('budget_week');
-  var disc = document.getElementById('min_discount'), rad = document.getElementById('radius_km'), items = document.getElementById('max_items');
-  function fmt(n) { return Math.round(n).toLocaleString('uk-UA').replace(/ /g, ' '); }
+  // знижки
+  var disc = document.getElementById('min_discount');
   function money() {
-    var b = +budget.value; bw.value = b ? b : '';
-    document.getElementById('budgetOut').textContent = b ? fmt(b) + ' ₴' : 'без ліміту';
     document.getElementById('discOut').textContent = +disc.value ? 'від ' + disc.value + '%' : 'будь-які';
-    document.getElementById('radOut').textContent = String(rad.value).replace('.', ',') + ' км';
-    document.getElementById('itemsOut').textContent = items.value;
-    var n = Math.max(1, parseInt(hh.value, 10) || 1);
-    document.getElementById('moneyTxt').textContent = b ? '≈ ' + fmt(b / n / 7) + ' ₴ на людину в день' : '';
-    [budget, disc, rad, items].forEach(function (r) { r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min) * 100) + '%'); });
+    disc.style.setProperty('--p', ((disc.value - disc.min) / (disc.max - disc.min) * 100) + '%');
   }
-  [budget, disc, rad, items].forEach(function (r) { r.addEventListener('input', money); });
+  disc.addEventListener('input', money);
 
-  // 6. Підсумок
-  function summary() {
-    var n = +hh.value, rows = [];
-    rows.push(['👪', n === 1 ? 'Готуєте для себе' : 'Вас удома: ' + n]);
-    var city = document.getElementById('city').value.trim(); if (city) rows.push(['📍', city]);
-    var like = [], hide = [];
-    form.querySelectorAll('.tile3').forEach(function (t) { if (t.dataset.state === 'like') like.push(LABEL[t.dataset.tag]); if (t.dataset.state === 'hide') hide.push(LABEL[t.dataset.tag]); });
-    if (like.length) rows.push(['♥', 'Любите: ' + like.join(', ')]);
-    if (hide.length) rows.push(['🙈', 'Не показуємо: ' + hide.join(', ')]);
-    var d = [].map.call(form.querySelectorAll('#diets input:checked'), function (i) { return DIETL[i.value]; });
-    if (d.length) rows.push(['🛡', 'Обмеження: ' + d.join(', ')]);
-    var dl = document.getElementById('dish_likes').value, dd = document.getElementById('dish_dislikes').value;
-    function titles(v) { return v.split(',').filter(Boolean).map(function (id) { var d = DISHES.filter(function (x) { return x.id === id; })[0]; return d ? d.title.toLowerCase() : id; }).join(', '); }
-    if (dl) rows.push(['😋', 'Смачно: ' + titles(dl)]);
-    if (dd) rows.push(['👎', 'Не пропонуємо: ' + titles(dd)]);
-    var reg = document.getElementById('regulars').value; if (reg) rows.push(['🛒', 'Щотижня: ' + reg]);
-    rows.push(['💸', (+budget.value ? 'Бюджет ' + fmt(+budget.value) + ' ₴ на тиждень' : 'Без ліміту бюджету') + ' · знижки ' + (+disc.value ? 'від ' + disc.value + '%' : 'будь-які')]);
-    var box = document.getElementById('summary'); box.innerHTML = '';
-    rows.forEach(function (r) { var div = document.createElement('div'); var i = document.createElement('span'); i.textContent = r[0]; var t = document.createElement('span'); t.textContent = r[1]; div.appendChild(i); div.appendChild(t); box.appendChild(div); });
-  }
-
-  form.addEventListener('submit', function (e) {
-    var any = form.querySelector('#diets input:checked'), ok = form.querySelector('#consentBox input').checked;
-    if (any && !ok) { e.preventDefault(); show(2); consentBox.classList.add('shake'); setTimeout(function () { consentBox.classList.remove('shake'); }, 600); }
-  });
-
-  // ---------- свайп страв ----------
-  var sw = document.getElementById('swipe'), DISHES = JSON.parse(sw.dataset.dishes), PH = JSON.parse(sw.dataset.photos);
-  var likesIn = document.getElementById('dish_likes'), hatesIn = document.getElementById('dish_dislikes');
-  var likes = likesIn.value ? likesIn.value.split(',') : [], hates = hatesIn.value ? hatesIn.value.split(',') : [];
-  var queue = DISHES.filter(function (d) { return likes.indexOf(d.id) < 0 && hates.indexOf(d.id) < 0; }), deck = document.getElementById('deck');
-  var busy = false;
-  function swipeTxt() {
-    var left = queue.length;
-    document.getElementById('swipeTxt').textContent = (likes.length || hates.length ? 'Смачно: ' + likes.length + ' · Не моє: ' + hates.length + (left ? ' · ще ' + left : '') : '');
-  }
-  function card(d) {
-    var c = document.createElement('div'); c.className = 'dcard';
-    c.innerHTML = (PH[d.id] ? '<img src="' + PH[d.id] + '" alt="" draggable="false">' : '<span class="demo-emoji">' + d.emoji + '</span>') +
-      '<div class="dcap"><b></b><small>' + d.minutes + ' хв</small></div><span class="stamp yes">СМАЧНО</span><span class="stamp no">НЕ МОЄ</span>';
-    c.querySelector('b').textContent = d.title;
-    return c;
-  }
-  function doneCard() {
-    var c = document.createElement('div'); c.className = 'dcard top done';
-    c.innerHTML = '<span class="demo-emoji">🍽️</span><div class="dcap"><b>Готово!</b><small>Меню врахує ваш смак</small></div>';
-    return c;
-  }
-  // колода: зверху queue[0] (.top), під нею queue[1]; після рішення верхня відлітає, нижня підіймається
-  function fill() {
-    var cards = deck.querySelectorAll('.dcard:not(.gone)');
-    if (!cards.length) {
-      if (!queue.length) { deck.appendChild(doneCard()); setButtons(false); return; }
-      var t = card(queue[0]); t.classList.add('top'); deck.appendChild(t); drag(t);
-    }
-    if (queue[1] && deck.querySelectorAll('.dcard:not(.gone)').length < 2) {
-      var u = card(queue[1]); deck.insertBefore(u, deck.firstChild);
-    }
-    swipeTxt();
-  }
-  function setButtons(on) {
-    document.getElementById('swNo').hidden = document.getElementById('swYes').hidden = !on;
-    var sk = document.getElementById('swSkip'); sk.textContent = on ? 'Пропустити' : 'Почати знову';
-    sk.onclick = on ? function () { decide('skip'); } : restart;
-  }
-  function decide(kind, fromX) {
-    var top = deck.querySelector('.dcard.top:not(.gone)'), d = queue[0];
-    if (!top || !d || busy) return;
-    busy = true;
-    if (kind === 'yes') likes.push(d.id); else if (kind === 'no') hates.push(d.id);
-    likesIn.value = likes.join(','); hatesIn.value = hates.join(',');
-    queue.shift();
-    top.classList.add('gone', 'lean-' + (kind === 'skip' ? 'x' : kind));
-    var x = kind === 'yes' ? 1 : kind === 'no' ? -1 : 0;
-    top.style.transition = 'transform .28s ease-out, opacity .28s ease-out';
-    top.style.transform = x ? 'translateX(' + (x * (deck.offsetWidth + 120)) + 'px) rotate(' + (x * 18) + 'deg)' : 'translateY(-40px) scale(.96)';
-    top.style.opacity = '0';
-    var next = deck.querySelector('.dcard:not(.gone):not(.top)');
-    if (next) { next.classList.add('top'); drag(next); }
-    setTimeout(function () { top.remove(); busy = false; fill(); }, 280);
-    swipeTxt();
-    form.dispatchEvent(new Event('change'));
-  }
-  function restart() {
-    likes = []; hates = []; likesIn.value = hatesIn.value = ''; queue = DISHES.slice();
-    deck.innerHTML = ''; setButtons(true); fill(); form.dispatchEvent(new Event('change'));
-  }
-  function drag(el) {
-    if (el._drag) return; el._drag = true;
-    var x0 = null, y0 = 0, dx = 0, locked = null, trail = [];
-    el.addEventListener('pointerdown', function (e) {
-      if (!el.classList.contains('top') || el.classList.contains('gone')) return;
-      x0 = e.clientX; y0 = e.clientY; dx = 0; locked = null; trail = [[Date.now(), 0]];
-      el.style.transition = 'none';
-      try { el.setPointerCapture(e.pointerId); } catch (_) {}
-    });
-    el.addEventListener('pointermove', function (e) {
-      if (x0 === null) return;
-      var mx = e.clientX - x0, my = e.clientY - y0;
-      if (locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) locked = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
-      if (locked !== 'x') return;
-      e.preventDefault(); dx = mx; trail.push([Date.now(), mx]); if (trail.length > 6) trail.shift();
-      el.style.transform = 'translateX(' + dx + 'px) rotate(' + dx / 16 + 'deg)';
-      el.classList.toggle('lean-yes', dx > 30); el.classList.toggle('lean-no', dx < -30);
-    });
-    function end() {
-      if (x0 === null) return;
-      // швидкість за останні ~100 мс руху: швидкий короткий змах теж рахується
-      var now = Date.now(), from = trail.filter(function (p) { return now - p[0] <= 120; })[0] || trail[0];
-      var speed = Math.abs(dx - from[1]) / Math.max(16, now - from[0]);
-      x0 = null;
-      if (locked === 'x' && (Math.abs(dx) > 80 || (Math.abs(dx) > 25 && speed > 0.35))) { decide(dx > 0 ? 'yes' : 'no'); return; }
-      el.style.transition = 'transform .2s ease'; el.style.transform = ''; el.classList.remove('lean-yes', 'lean-no');
-    }
-    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
-  }
-  document.getElementById('swYes').onclick = function () { decide('yes'); };
-  document.getElementById('swNo').onclick = function () { decide('no'); };
-  setButtons(queue.length > 0); fill();
-
-  // ---------- «Заповнити за мене» ----------
+  // «Заповнити з «Сільпо»»: обмеження й регулярні покупки з історії
   var fillBtn = document.getElementById('fillBtn');
   if (fillBtn) fillBtn.onclick = function () {
     var txt = document.getElementById('fillTxt');
-    fillBtn.disabled = true; fillBtn.lastChild.textContent = ' Читаємо «Сільпо»…';
+    fillBtn.disabled = true; fillBtn.textContent = 'Читаємо «Сільпо»…';
     fetch('/profile/silpo-hints', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
-      fillBtn.disabled = false; fillBtn.lastChild.textContent = ' Заповнити ще раз';
+      fillBtn.disabled = false; fillBtn.textContent = 'Заповнити ще раз';
       if (d.error) { txt.textContent = d.error; return; }
       var got = [];
-      if (d.household) { hh.value = d.household; people(); got.push('сім\'я з ' + d.household); }
-      (d.diets || []).forEach(function (k) { var i = form.querySelector('#diets input[value="' + k + '"]'); if (i && !i.checked) { i.checked = true; } });
+      (d.diets || []).forEach(function (k) { var i = form.querySelector('#diets input[value="' + k + '"]'); if (i) i.checked = true; });
       if ((d.diets || []).length) { diets(); got.push('обмеження: ' + d.diets.length); }
       var reg = form.querySelector('.taginput[data-for="regulars"]');
       if ((d.regulars || []).length && reg && reg._add) { d.regulars.forEach(reg._add); got.push('щотижня: ' + d.regulars.slice(0, 4).join(', ') + (d.regulars.length > 4 ? '…' : '')); }
-      var br = form.querySelector('.taginput[data-for="brands_like"]');
-      if ((d.brands || []).length && br && br._add) { d.brands.forEach(br._add); got.push('бренди: ' + d.brands.join(', ')); }
-      txt.textContent = got.length ? 'Заповнили з «Сільпо»: ' + got.join(' · ') + '. Перевірте кроки й приберіть зайве.'
-        : (d.orders ? 'У «Сільпо» знайшли ' + d.orders + ' покупок, але регулярних товарів поки не видно.' : '«Сільпо» не дало історії покупок — заповніть, будь ласка, вручну.');
-      if ((d.diets || []).length) txt.textContent += ' Обмеження з «Сільпо» потребують вашої згоди на кроці 3.';
-      form.dispatchEvent(new Event('change'));
-    }).catch(function () { fillBtn.disabled = false; fillBtn.lastChild.textContent = ' Заповнити за мене з «Сільпо»'; txt.textContent = 'Не вдалося зв\'язатися з «Сільпо». Спробуйте ще раз.'; });
+      txt.textContent = got.length ? 'Заповнили: ' + got.join(' · ') + '. Перевірте й збережіть.' : '«Сільпо» поки не дало історії покупок — заповніть самі.';
+    }).catch(function () { fillBtn.disabled = false; fillBtn.textContent = 'Заповнити з «Сільпо»'; txt.textContent = 'Не вдалося зв\'язатися з «Сільпо».'; });
   };
 
-  // ---------- живий підсумок ----------
-  var liveTimer, liveSeq = 0;
-  function live() {
-    clearTimeout(liveTimer);
-    liveTimer = setTimeout(function () {
-      var box = document.getElementById('live'); if (!box || !document.body.contains(form)) return;   // уже пішли зі сторінки
-      var my = ++liveSeq; box.classList.add('busy');
-      fetch('/profile/preview', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
-        .then(function (r) { return r.json(); }).then(function (d) {
-          if (my !== liveSeq || d.list === undefined || !document.body.contains(box)) return;
-          var parts = [d.matched + ' акцій'];
-          if (d.per_portion) parts.push('≈ ' + d.per_portion + ' ₴ порція');
-          var sv = Math.max(d.list_saving || 0, d.menu_saving || 0); if (sv > 0) parts.push('−' + sv + ' ₴');
-          document.getElementById('liveTxt').textContent = parts.join(' · ');
-          box.classList.remove('busy');
-        }).catch(function () {});
-    }, 500);
-  }
-  form.addEventListener('input', live); form.addEventListener('change', live); form.addEventListener('click', function (e) { if (e.target.closest('.tile3,[data-step-btn],[data-add],.chipx')) live(); });
-
-  people(); tasteText(); diets(); money(); live();
-  show(hasError ? 2 : 0);
+  diets(); money();
 })();
 </script>
 {% endblock %}

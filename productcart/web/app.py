@@ -671,7 +671,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         updated_at=excluded.updated_at""",
                      (u["id"], json.dumps(p.to_dict(), ensure_ascii=False), int(consent), security.iso(security.now())))
         analytics.track(conn, u["id"], "profile_saved", diets=len(p.diets), regulars=len(p.regulars), budget=bool(p.budget_week))
-        return go("/silpo" if not silpo_link(u["id"]) else "/list")
+        if form.get("welcome"):             # перше заповнення — далі підключити «Сільпо» або до акцій
+            return go("/silpo" if not silpo_link(u["id"]) else "/list")
+        return go("/me?saved=1")
 
     # ---------- «Сільпо» ----------
     @app.get("/silpo", response_class=HTMLResponse)
@@ -2193,28 +2195,40 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     recipe_ids = {r.id for r in menu.RECIPES}
     diets = [d for d in form.getlist("diets") if d in DIETS]
     consent = bool(form.get("health_consent"))
-    p = Profile(
-        name=str(form.get("name") or "Мій профіль")[:60],
-        household=max(1, min(12, num("household", 1, int))),
-        diets=diets if consent else [],
-        likes=[t for t in form.getlist("likes") if t in TAG_LABELS],
-        dislikes=[t for t in form.getlist("dislikes") if t in TAG_LABELS],
-        regulars=lst("regulars")[:30],
-        brands_like=lst("brands_like")[:20],
-        brands_avoid=lst("brands_avoid")[:20],
-        city=str(form.get("city") or "")[:60] or None,
-        budget_week=num("budget_week", None) or None,
-        min_discount=max(0.0, min(80.0, num("min_discount", 10.0))),
-        max_items=max(5, min(40, num("max_items", 20, int))),
-        radius_km=max(0.3, min(5.0, num("radius_km", 1.0))),
-        dish_likes=[x for x in lst("dish_likes") if x in recipe_ids][:30],
-        dish_dislikes=[x for x in lst("dish_dislikes") if x in recipe_ids][:30],
-    )
+    # Оновлюємо лише те, що є у формі (коротка анкета не має скидати сім'ю, смаки, меню тощо).
+    # «_f» — які групи редагує форма (порожні чекбокси інакше не відрізнити від «поля немає»).
+    marked = set(form.getlist("_f"))
+    has = lambda key: key in form or key in marked
+    p = Profile.from_dict(prev.to_dict())
     p.lat, p.lon, p.location_at = prev.lat, prev.lon, prev.location_at
-    for k in ("dinners", "max_minutes", "menu_budget", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "watch", "watch_min", "watch_default", "tg_deals", "tg_weekly", "my_dishes",
-              "fridge", "fridge_other", "fridge_at", "menu_days", "cooking"):
-        setattr(p, k, getattr(prev, k))
+    if has("name"):
+        p.name = str(form.get("name") or "Мій профіль")[:60]
+    if has("household"):
+        p.household = max(1, min(12, num("household", 1, int)))
+    if has("diets") or has("health_consent"):
+        p.diets = diets if consent else []
+    if has("likes") or has("dislikes"):
+        p.likes = [t for t in form.getlist("likes") if t in TAG_LABELS]
+        p.dislikes = [t for t in form.getlist("dislikes") if t in TAG_LABELS]
+    for key, cap in (("regulars", 30), ("brands_like", 20), ("brands_avoid", 20)):
+        if has(key):
+            setattr(p, key, lst(key)[:cap])
+    if has("city"):
+        p.city = str(form.get("city") or "")[:60] or None
+    if has("budget_week"):
+        p.budget_week = num("budget_week", None) or None
+    if has("min_discount"):
+        p.min_discount = max(0.0, min(80.0, num("min_discount", 10.0)))
+    if has("max_items"):
+        p.max_items = max(5, min(40, num("max_items", 20, int)))
+    if has("radius_km"):
+        p.radius_km = max(0.3, min(5.0, num("radius_km", 1.0)))
+    if has("dish_likes"):
+        p.dish_likes = [x for x in lst("dish_likes") if x in recipe_ids][:30]
+    if has("dish_dislikes"):
+        p.dish_dislikes = [x for x in lst("dish_dislikes") if x in recipe_ids][:30]
+    if not has("diets") and not has("health_consent"):
+        diets, consent = list(prev.diets), bool(prev.diets)
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
         p.menu = [x for x in p.menu if x not in p.dish_dislikes]
     return p, diets, consent

@@ -83,7 +83,7 @@ def test_health_consent_and_csrf(client):
     assert r.status_code == 400 and "згоду" in r.text
     assert client.post("/profile", data=dict(data, csrf="forged")).status_code == 400
     r = client.post("/profile", data=dict(data, health_consent="1"))
-    assert r.status_code == 303 and r.headers["location"] == "/silpo"
+    assert r.status_code == 303 and r.headers["location"] == "/me?saved=1"
     page, rejected = client.get("/list").text.split("<details")
     assert "Демо-ціни" in page and "Молоко 2,5% 900 г" not in page and "безлактозне" in page
     assert "Молоко 2,5% 900 г — без лактози" in rejected
@@ -449,12 +449,12 @@ def test_profile_wizard_extras(tmp_path):
     with TestClient(app, follow_redirects=False) as c:
         token = register(c)
         page = c.get("/profile").text
-        assert "Підключіть «Сільпо» — заповнимо за вас" in page and 'id="swipe"' in page and 'id="live"' in page
+        assert "Обмеження в харчуванні" in page and "Що купуєте майже щотижня" in page and 'id="fillBtn"' not in page
         assert c.get("/profile/silpo-hints").status_code == 409
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
         c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
-        assert "Заповнити за мене" in c.get("/profile").text
+        assert "Заповнити з «Сільпо»" in c.get("/profile").text
         h = c.get("/profile/silpo-hints").json()
         assert h["household"] == 3 and h["diets"] == ["no_gluten", "vegetarian"]
         assert h["regulars"][:2] == ["молоко", "яйця курячі"] and "пакет-майка" not in h["regulars"]
@@ -467,6 +467,11 @@ def test_profile_wizard_extras(tmp_path):
         c.post("/profile", data={"csrf": token, "household": "2", "dish_dislikes": "syrnyky,omelette", "dish_likes": "plov"})
         menu_page = c.get("/menu").text
         assert "Сирники" not in menu_page and "Омлет" not in menu_page
+        # коротка анкета не скидає решту: сім'я лишається 2, обмеження й регулярні — з форми
+        c.post("/profile", data={"csrf": token, "_f": ["diets", "regulars", "min_discount"], "regulars": "кава",
+                                 "min_discount": "20"})
+        me = c.get("/me").text
+        assert "2 людини" in me and "Обмеження" not in me
     assert S.generic_name("Сир твердий Гауда 45%") == "сир твердий"
 
 
@@ -516,7 +521,7 @@ def test_onboarding_start_and_auto_store(client):
     link = client.app.state.conn.execute("SELECT store_id FROM silpo_links").fetchone()
     assert link["store_id"] == "b1"
     assert "✓ Готово" in client.get("/menu?ready=1").text
-    assert 'value="3"' in client.get("/profile").text                  # сім'я з «Сільпо»
+    assert "3 людини" in client.get("/me").text                        # сім'я з «Сільпо»
     assert client.get("/start").headers["location"] == "/menu"         # уже підключено — одразу в меню
 
 

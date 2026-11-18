@@ -18,6 +18,7 @@
 </section>
 {% endif %}
 
+{% if request.query_params.get("saved") %}<div class="ok" style="margin-bottom:12px">Збережено ✓</div>{% endif %}
 {% include "_install.html" %}
 
 <h2 class="ph">Кухня</h2>

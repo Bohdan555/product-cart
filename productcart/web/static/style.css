@@ -1373,3 +1373,17 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 .me-lite .pt b{font-weight:650;font-size:16px}
 .me-lite .pt small{display:block;color:var(--muted);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .me-lite .pwa-card{margin:6px 0 4px}
+
+/* Дієти й анкета — коротка сторінка */
+.anketa{display:flex;flex-direction:column}
+.anketa .autofill{display:grid;gap:6px;margin:4px 0 2px}
+.an-chips{display:flex;flex-wrap:wrap;gap:8px}
+.an-chip input{position:absolute;opacity:0;pointer-events:none}
+.an-chip span{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:999px;background:var(--chip);font-weight:650;font-size:15px;cursor:pointer;border:1.5px solid transparent}
+.an-chip input:checked + span{background:var(--soft);border-color:var(--accent);color:var(--ink)}
+.an-chip input:focus-visible + span{outline:3px solid var(--accent);outline-offset:2px}
+.an-chip i{font-style:normal}
+.anketa .consent{margin-top:10px}
+.anketa .sugg{margin-top:8px}
+.an-save{margin:24px 0 8px}
+.an-save .btn{width:100%;text-align:center}
