@@ -343,3 +343,31 @@ def test_expired_cart_slot_new_cart_keeps_items():
     fresh = run(sc.ensure_fresh_slot(mcp, cart, {"b1": {"id": "b1", "title": "Франка", "lat": 50.4, "lon": 30.5}}))
     assert fresh.cart_id == "c2" and not sc.slot_expired(fresh) and mcp.items == {"egg10": 2}
     sc._schemas.clear()
+
+
+def test_update_shopping_cart_args_follow_schema():
+    """Як справжній silpo_update_shopping_cart: вимагає address і shipments; зайвих полів не приймає."""
+    schema = {"type": "object", "required": ["shoppingCartId", "address", "shipments"], "properties": {
+        "shoppingCartId": {"type": "string"},
+        "address": {"type": "object", "properties": {"latitude": {}, "longitude": {}, "city": {}, "addressType": {}}},
+        "shipments": {"type": "array", "items": {"type": "object", "properties": {
+            "branchId": {}, "deliveryType": {}, "timeslot": {"type": "object", "properties": {"start": {}, "end": {}}}}}}}}
+    sc._schemas.clear(); sc._logged_tools = False
+    mcp = OldSlotMCP(with_tool=False)
+    sc._schemas.update({"silpo_update_shopping_cart": schema, "silpo_get_my_shopping_cart": {}, "silpo_create_shopping_cart": {}})
+    seen = {}
+
+    async def call(name, args):
+        if name == "silpo_update_shopping_cart":
+            assert set(args) == {"shoppingCartId", "address", "shipments"} and args["address"]["latitude"] == 50.4
+            sh = args["shipments"][0]
+            assert sh["branchId"] == "b1" and sh["timeslot"]["start"].startswith("2099") and "products" not in sh
+            seen["ok"] = True
+            mcp.slot = (sh["timeslot"]["start"], sh["timeslot"]["end"])
+            return {"success": True}
+        return await mcp(name, args)
+    call.session = mcp.session
+    cart = run(sc.current_cart(call))
+    fresh = run(sc.ensure_fresh_slot(call, cart, {"b1": {"id": "b1", "lat": 50.4, "lon": 30.5, "city": "Київ"}}))
+    assert seen.get("ok") and not sc.slot_expired(fresh) and fresh.cart_id == "c1"
+    sc._schemas.clear()

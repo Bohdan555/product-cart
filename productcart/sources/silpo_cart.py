@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import math
 import re
 from datetime import datetime, timezone
@@ -684,6 +685,34 @@ def slot_expired(cart: "CartState | None") -> bool:
 _logged_tools = False
 
 
+def fill_from_schema(schema: dict, src, over: dict, depth: int = 0):
+    """Аргументи за JSON-схемою інструмента: значення беремо з `src` (дані кошика), а поля з `over` — підміняємо
+    (нове вікно, тип доставки). Поля, яких немає в схемі, не передаємо — «Сільпо» суворо перевіряє вхід."""
+    if depth > 6 or not isinstance(schema, dict):
+        return src
+    t = schema.get("type")
+    if "anyOf" in schema or "oneOf" in schema:
+        opts = schema.get("anyOf") or schema.get("oneOf") or []
+        obj = next((o for o in opts if isinstance(o, dict) and o.get("type") == "object"), None)
+        return fill_from_schema(obj, src, over, depth + 1) if obj and isinstance(src, dict) else src
+    if t == "array" or "items" in schema:
+        if not isinstance(src, list):
+            return src
+        return [fill_from_schema(schema.get("items") or {}, x, over, depth + 1) for x in src]
+    props = schema.get("properties")
+    if t == "object" or props:
+        if not isinstance(src, dict):
+            return src
+        out = {}
+        for k, sub in (props or {}).items():
+            if k in over:
+                out[k] = over[k]
+            elif k in src and src[k] is not None:
+                out[k] = fill_from_schema(sub, src[k], over, depth + 1)
+        return out
+    return src
+
+
 async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None = None) -> "CartState":
     """Вікно самовивозу/доставки кошика минуло → «Сільпо» рахує залишок 0 для всього, і кожен рядок «немає в наявності».
     1) якщо в MCP є інструмент зміни вікна кошика — ставимо найближче вільне вікно того ж магазину;
@@ -705,34 +734,36 @@ async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None
         return cart
     skip = {"silpo_get_my_shopping_cart", "silpo_get_shopping_cart_by_id", "silpo_create_shopping_cart", "silpo_get_time_slots",
             "silpo_add_cart_products", "silpo_update_cart_products", "silpo_remove_cart_products", "silpo_clear_shopping_cart"}
-    upd = [n for n in cart_tools if n not in skip and any(w in n for w in ("slot", "delivery", "update_shopping_cart", "update_cart"))]
-    for name in upd:
-        props = (_schemas.get(name) or {}).get("properties") or {}
-        args: dict = {}
-        for k in props:
-            lk = k.lower()
-            if lk in ("shoppingcartid", "cartid", "id"):
+    over = {"timeslot": {"start": start, "end": end}, "timeslotStart": start, "timeslotEnd": end,
+            "shoppingCartId": cart.cart_id, "cartId": cart.cart_id}
+    for name in [n for n in cart_tools if n == "silpo_update_shopping_cart"] + \
+            [n for n in cart_tools if n not in skip and n != "silpo_update_shopping_cart" and "slot" in n]:
+        schema = _schemas.get(name) or {}
+        log.warning("Сільпо: схема %s: %s", name, json.dumps(schema, ensure_ascii=False)[:1500])
+        raw = dict(cart.raw or {})
+        if not raw.get("address"):
+            saved = await _saved_address(call)
+            b = (branches or {}).get(cart.branch_id) or {}
+            lat = _num(_first(saved or {}, "latitude", "lat")) or _num(b.get("lat"))
+            lon = _num(_first(saved or {}, "longitude", "lon")) or _num(b.get("lon"))
+            if lat is not None and lon is not None:
+                raw["address"] = _address_args(saved or {"city": b.get("city"), "street": b.get("address")}, lat, lon)
+        args = fill_from_schema(schema, raw, over) if schema.get("properties") else {"shoppingCartId": cart.cart_id}
+        for k in ("shoppingCartId", "cartId"):
+            if k in (schema.get("properties") or {}):
                 args[k] = cart.cart_id
-            elif lk == "timeslot":
-                args[k] = {"start": start, "end": end}
-            elif lk in ("timeslotstart", "start"):
-                args[k] = start
-            elif lk in ("timeslotend", "end"):
-                args[k] = end
-            elif lk == "deliverytype":
-                args[k] = dtype
-            elif lk == "branchid":
-                args[k] = cart.branch_id
-        if not any("slot" in k.lower() or k.lower() in ("start", "end") for k in args):
-            continue
+        if "deliveryType" in (schema.get("properties") or {}) and "deliveryType" not in args:
+            args["deliveryType"] = dtype
         try:
             await call(name, args)
             fresh = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
             log.info("Сільпо: оновили вікно кошика через %s: %s–%s", name, start, end)
             if not slot_expired(fresh):
                 return fresh
+            log.warning("Сільпо: %s відповів, але вікно лишилось %s", name, fresh.slot_end)
         except Exception as e:
-            log.warning("Сільпо: %s не оновив вікно: %s", name, str(e)[:300])
+            log.warning("Сільпо: %s не оновив вікно: %s · аргументи: %s", name, str(e)[:400],
+                        json.dumps(args, ensure_ascii=False, default=str)[:800])
     # запасний шлях: новий кошик у тому ж магазині зі свіжим вікном, товари переносимо
     try:
         b = dict((branches or {}).get(cart.branch_id) or {}, id=cart.branch_id)   # потрібні координати магазину
