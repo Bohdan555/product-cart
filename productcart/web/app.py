@@ -1686,7 +1686,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         p = load_profile(u["id"])[0] if u else None
         choices = sorted(((k, v[0]) for k, v in menu.INGREDIENTS.items()), key=lambda x: x[1])
-        return render(request, "fridge.html", u, p=p, choices=choices, names=dict(choices))
+        words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
+        return render(request, "fridge.html", u, p=p, choices=choices, names=dict(choices), words=words)
 
     @app.post("/fridge/scan")
     async def fridge_scan(request: Request):

@@ -1348,3 +1348,11 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 
 /* Логотип у шапці — та сама іконка, що й у додатка на телефоні */
 .logo img{width:30px;height:30px;border-radius:8px;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+
+/* План тижня, «Що є»: поле з голосом замість списку категорій */
+.fr-say{display:flex;flex-direction:column;gap:8px;margin:14px 0 4px}
+.fr-say-h{font-size:15px}
+
+.fr-or{margin:14px 0 8px;color:var(--muted);font-size:14px;text-align:center}
+.fr .fr-shot{min-height:0;aspect-ratio:auto;padding:22px 16px}
+.fr .fr-shot .cam{font-size:38px}

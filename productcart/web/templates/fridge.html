@@ -4,7 +4,7 @@
 {% set step = 1 %}{% include "_week.html" %}
 <section class="intro">
   <h1 class="xh">Що в <span class="hl">холодильнику?</span></h1>
-  <p class="lead">Сфотографуйте — меню спершу доїсть те, що вже є, а решту купимо з акцій.</p>
+  <p class="lead">Скажіть, напишіть або сфотографуйте — меню спершу доїсть те, що вже є, а решту купимо з акцій.</p>
 </section>
 
 {% if not user %}
@@ -14,6 +14,20 @@
 <form class="fr" id="fr" method="post" action="/fridge/save" data-turbo="false">
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
 
+  <div class="fr-say">
+    
+    {% with say_hint = "Натисніть 🎤 і скажіть: «курка, пів пачки масла, яйця і трохи сиру» — або напишіть через кому." %}{% include "_say.html" %}{% endwith %}
+  </div>
+  <div class="fr-found" id="frFound"{% if not p.fridge and not p.fridge_other %} hidden{% endif %}>
+    <div class="fr-h"><b>Є вдома <span class="fr-n" id="frN"></span></b><button type="button" class="fr-all" id="frAll">Прибрати все</button></div>
+    <div class="fr-undo" id="frUndo" hidden><span id="frUndoTxt"></span><button type="button" id="frUndoBtn">↩ Повернути</button></div>
+    <div class="fr-chips" id="frChips">
+      {% for k in p.fridge %}<button type="button" class="fr-chip" data-key="{{ k }}" aria-label="Прибрати: {{ names[k] }}"><i>{{ name_visual(names[k]).emoji }}</i>{{ names[k] }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
+      {% for n in p.fridge_other %}<button type="button" class="fr-chip other" data-other="{{ n }}" aria-label="Прибрати: {{ n }}"><i>{{ name_visual(n).emoji }}</i>{{ n }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
+    </div>
+    <small class="hint fr-note">Сірі — не з наших рецептів: у меню не підуть, але й купувати їх не будемо.</small>
+  </div>
+  <p class="fr-or">або сфотографуйте холодильник</p>
   <div class="fr-shot" id="frShot">
     <img id="frImg" alt="" hidden>
     <span class="fr-scan" aria-hidden="true"></span>
@@ -24,20 +38,6 @@
     <label class="btn alt pick-btn">{{ ic("image", "sm") }} Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
   </div>
   <p class="fr-state" id="frState" aria-live="polite"></p>
-
-  <div class="fr-found" id="frFound"{% if not p.fridge and not p.fridge_other %} hidden{% endif %}>
-    <div class="fr-h"><b>Є вдома <span class="fr-n" id="frN"></span></b><button type="button" class="fr-all" id="frAll">Прибрати все</button></div>
-    <div class="fr-undo" id="frUndo" hidden><span id="frUndoTxt"></span><button type="button" id="frUndoBtn">↩ Повернути</button></div>
-    <div class="fr-chips" id="frChips">
-      {% for k in p.fridge %}<button type="button" class="fr-chip" data-key="{{ k }}" aria-label="Прибрати: {{ names[k] }}"><i>{{ name_visual(names[k]).emoji }}</i>{{ names[k] }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
-      {% for n in p.fridge_other %}<button type="button" class="fr-chip other" data-other="{{ n }}" aria-label="Прибрати: {{ n }}"><i>{{ name_visual(n).emoji }}</i>{{ n }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
-    </div>
-    <small class="hint fr-note">Сірі — не з наших рецептів: у меню не підуть, але й купувати їх не будемо.</small>
-  </div>
-
-  <details class="fr-add"><summary>+ Додати вручну</summary>
-    <div class="fr-pick">{% for k, n in choices %}<button type="button" data-addkey="{{ k }}" data-name="{{ n }}">{{ name_visual(n).emoji }} {{ n }}</button>{% endfor %}</div>
-  </details>
 
   <div id="frHidden"></div>
   <div class="fr-go">
@@ -70,6 +70,13 @@
   }
 
   // лічильник, «змінено» і повернення прибраного
+  // голос / текст → ті самі чипи «Є вдома»
+  var WORDS = {{ words|tojson }};
+  window.initSay({ words: WORDS, inline: false, onAdd: function (keys, others) {
+    keys.forEach(function (k, i) { chip({ ingredient: k, label: WORDS[k][0], emoji: WORDS[k][1] }, i); });
+    others.forEach(function (o, i) { chip({ ingredient: 'other', name: o, emoji: '🛒' }, keys.length + i); });
+    $('frFound').hidden = false; if (typeof dirty === 'function') dirty();
+  } });
   var removed = [], undoTimer = null, saved = {{ 'true' if (p.fridge or p.fridge_other) else 'false' }};
   function count() {
     var n = $('frChips').querySelectorAll('.fr-chip:not(.gone)').length;

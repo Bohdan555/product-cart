@@ -10,15 +10,7 @@
   <section class="td-step" data-step="1">
     <div class="td-top"><a class="td-back" href="/" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 1 з 3"><i class="on"></i><i></i><i></i></span></div>
     <h1 class="xh">Що є <span class="hl">під рукою?</span></h1>
-    <div class="hv-box" id="hvBox">
-      <div class="hv-field" id="hvField">
-        <span id="hvChips" class="hv-chips"></span>
-        <input type="text" id="hvIn" placeholder="Напишіть: курка, рис, яйця…" autocomplete="off" autocapitalize="off" enterkeyhint="done" aria-label="Що є вдома" aria-describedby="hvHint">
-        <button type="button" class="hv-mic" id="hvMic" aria-label="Надиктувати, що є"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-      </div>
-      <div class="hv-sug" id="hvSug" role="listbox" hidden></div>
-    </div>
-    <p class="hv-hint" id="hvHint" aria-live="polite">Напишіть або натисніть 🎤 і скажіть: «курка, рис, яйця і трохи сиру».</p>
+    {% include "_say.html" %}
 
     {% if user %}
     <div class="hv-photo" id="tdShot">
@@ -55,16 +47,6 @@
   </section>
 </form>
 
-<dialog class="mic-sheet" id="micSheet" aria-labelledby="micT">
-  <div class="mic-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></div>
-  <h2 id="micT"></h2>
-  <p id="micP"></p>
-  <ol class="mic-steps" id="micSteps" hidden></ol>
-  <div class="mic-btns">
-    <button type="button" class="btn" id="micGo"></button>
-    <button type="button" class="btn alt" id="micType">Краще напишу</button>
-  </div>
-</dialog>
 <script>
 (function () {
   var form = document.getElementById('td'); if (!form) return;
@@ -88,226 +70,10 @@
     $('tdK').value = on.join(',');
     $('tdKHint').textContent = on.length ? '' : 'не вибрано — покажемо все';
   });
-  var WORDS = {{ words|tojson }}, have = {{ have|tojson }}, other = [];
-  var inp = $('hvIn'), sug = $('hvSug');
-  function norm(t) { return (t || '').toLowerCase().replace(/[’ʼ]/g, "'").replace(/\s+/g, ' ').trim(); }
-  function match(t) {          // те саме, що word_to_key на сервері
-    t = norm(t); if (t.length < 2) return null;
-    for (var k in WORDS) if (WORDS[k][2].indexOf(t) >= 0) return k;
-    for (var k2 in WORDS) if (WORDS[k2][2].some(function (w) { return w.indexOf(t) === 0 || (t.length > 4 && t.indexOf(w) === 0); })) return k2;
-    return null;
-  }
-  function sync() {
-    $('tdHave').value = have.join(',');
-    var box = $('hvChips'); box.innerHTML = '';
-    have.forEach(function (k) { box.appendChild(chipEl(WORDS[k][1] + ' ' + WORDS[k][0], function () { have = have.filter(function (x) { return x !== k; }); sync(); })); });
-    other.forEach(function (t) { var c = chipEl(t, function () { other = other.filter(function (x) { return x !== t; }); sync(); }); c.classList.add('other'); c.title = 'Цього немає в наших рецептах'; box.appendChild(c); });
-    inp.placeholder = have.length || other.length ? 'Ще щось?' : 'Напишіть: курка, рис, яйця…';
-  }
-  function chipEl(text, onRemove) {
-    var c = document.createElement('button'); c.type = 'button'; c.className = 'hv-chip';
-    c.textContent = text; c.setAttribute('aria-label', 'Прибрати: ' + text);
-    var x = document.createElement('i'); x.textContent = '×'; x.setAttribute('aria-hidden', 'true'); c.appendChild(x);
-    c.onclick = function () { onRemove(); tap(); inp.focus(); }; return c;
-  }
-  function suggest() {
-    var t = norm(inp.value.split(',').pop()); sug.innerHTML = '';
-    if (t.length < 1) { sug.hidden = true; return; }
-    var hits = Object.keys(WORDS).filter(function (k) { return have.indexOf(k) < 0 && (WORDS[k][0].toLowerCase().indexOf(t) === 0 || WORDS[k][2].some(function (w) { return w.indexOf(t) === 0; })); }).slice(0, 6);
-    hits.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'option'); b.textContent = WORDS[k][1] + ' ' + WORDS[k][0];
-      b.onmousedown = function (e) { e.preventDefault(); }; b.onclick = function () { if (have.indexOf(k) < 0) have.push(k); inp.value = ''; sug.hidden = true; tap(); sync(); inp.focus(); }; sug.appendChild(b); });
-    sug.hidden = !hits.length;
-  }
-  // Фраза → продукти: «в мене є курка рис і трохи твердого сиру» → курка, рис, сир. Довші збіги (2–3 слова) — першими.
-  var STOP = ['є', 'в', 'у', 'мене', 'нас', 'вдома', 'дома', 'трохи', 'пів', 'кілька', 'ще', 'і', 'й', 'та', 'а', 'також', 'ну',
-    'так', 'десь', 'шт', 'штук', 'штуки', 'кг', 'кіло', 'грам', 'грамів', 'літр', 'літра', 'пачка', 'пачки', 'банка', 'упаковка',
-    'половина', 'одна', 'один', 'два', 'дві', 'три', 'чотири', "п'ять", 'багато', 'мало', 'для', 'з', 'із', 'ось', 'там', 'це',
-    'може', 'свіжий', 'свіжа', 'свіже', 'свіжі', 'залишки', 'треба', 'доїсти', 'ще', 'маю', 'є'];
-  // Слова в будь-якому відмінку: «сиру» = «сир», «курки» = «курка», «твердого сиру» = «твердий сир».
-  function stem(x) { return x.length > 4 ? x.slice(0, -2) : (x.length > 3 ? x.slice(0, -1) : x); }
-  function wordEq(a, b) {
-    if (a === b) return true;
-    var sa = stem(a), sb = stem(b);
-    return sa === sb || (sb.length >= 4 && a.indexOf(sb) === 0) || (sa.length >= 4 && b.indexOf(sa) === 0);
-  }
-  function gramKey(ws) {      // n слів → ключ продукту, якщо якась назва складається рівно з цих слів
-    for (var k in WORDS) for (var j = 0; j < WORDS[k][2].length; j++) {
-      var sw = WORDS[k][2][j].split(' ');
-      if (sw.length === ws.length && sw.every(function (x, i) { return wordEq(ws[i], x); })) return k;
-    }
-    return null;
-  }
-  function parsePhrase(text) {
-    var keys = [], others = [];
-    var t = norm(text).replace(/[.!?;:]/g, ',').replace(/\d+([.,]\d+)?/g, ' ');
-    t.split(/,|\s(?:і|й|та|а також|а|ще)\s/).forEach(function (part) {
-      var w = norm(part).split(' ').filter(function (x) { return x && STOP.indexOf(x) < 0; }), i = 0, unk = [];
-      while (i < w.length) {
-        var hit = null, len = 0;
-        for (var n = Math.min(3, w.length - i); n >= 1; n--) { var k = gramKey(w.slice(i, i + n)); if (k) { hit = k; len = n; break; } }
-        if (hit) { if (unk.length) { others.push(unk.join(' ')); unk = []; } if (keys.indexOf(hit) < 0) keys.push(hit); i += len; }
-        else { unk.push(w[i]); i++; }
-      }
-      if (unk.length) others.push(unk.join(' '));
-    });
-    return { keys: keys, others: others };
-  }
-  function addPhrase(text) {
-    var r = parsePhrase(text), n = 0;
-    r.keys.forEach(function (k) { if (have.indexOf(k) < 0) { have.push(k); n++; } });
-    r.others.forEach(function (o) { if (o.length > 1 && other.indexOf(o) < 0) other.push(o); });
-    sync(); return { added: n, others: r.others };
-  }
-  function flush() {
-    var txt = inp.value; inp.value = ''; sug.hidden = true; if (!norm(txt)) return;
-    var r = addPhrase(txt); tap();
-    $('hvHint').textContent = r.added ? 'Додали: ' + r.added + (r.others.length ? ' · «' + r.others.join('», «') + '» немає в рецептах' : '') : (r.others.length ? '«' + r.others.join('», «') + '» немає в наших рецептах' : '');
-  }
-
-  // 🎤 Диктування: розпізнавання мови браузера (безкоштовно, без ШІ). Де його немає — мікрофон клавіатури.
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false, mic = $('hvMic');
-  function hint(t) { $('hvHint').textContent = t; }
-  // ---- Дозвіл на мікрофон: пояснюємо до запиту браузера й підказуємо, як увімкнути, якщо заблоковано ----
-  var sheet = $('micSheet'), micAfter = null;
-  var UA = navigator.userAgent || '';
-  var IOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && 'ontouchend' in document);
-  var SAMSUNG = /SamsungBrowser/.test(UA), ANDROID = /Android/.test(UA), INAPP = /Telegram|FBAN|FBAV|Instagram|; wv\)/.test(UA);
-  function deniedSteps() {
-    if (INAPP) return ['Натисніть ⋮ або «…» угорі й оберіть «Відкрити в браузері»', 'У браузері натисніть 🎤 ще раз і дозвольте мікрофон'];
-    if (IOS) return ['Відкрийте «Параметри» iPhone → Safari → Мікрофон', 'Оберіть «Дозволити» або «Запитувати»', 'Поверніться сюди й натисніть «Спробувати ще раз»'];
-    if (SAMSUNG) return ['Натисніть ☰ внизу → Налаштування → Сайти й завантаження → Дозволи сайтів', 'Мікрофон → знайдіть цей сайт і дозвольте', 'Поверніться сюди й натисніть «Спробувати ще раз»'];
-    if (ANDROID) return ['Торкніться значка 🔒 або ⚙ ліворуч від адреси сайту → Дозволи → Мікрофон → «Дозволити»',
-                         'Якщо там уже дозволено: Налаштування телефона → Програми → ' + (SAMSUNG ? 'Samsung Internet' : 'Chrome') + ' → Дозволи → Мікрофон → «Дозволити»',
-                         'Натисніть «Спробувати ще раз»'];
-    return ['Натисніть значок 🔒 ліворуч від адреси сайту', 'Мікрофон → «Дозволити»', 'Натисніть «Спробувати ще раз»'];
-  }
-  function showSheet(kind) {
-    var steps = $('micSteps'); steps.innerHTML = ''; steps.hidden = true;
-    if (kind === 'ask') {
-      $('micT').textContent = 'Дозвольте мікрофон';
-      $('micP').textContent = 'Скажіть, що є вдома, — а ми розкладемо на продукти. Слухаємо лише поки кнопка червона, запис ніде не зберігаємо.';
-      $('micGo').textContent = 'Дозволити й говорити';
-    } else if (kind === 'denied') {
-      $('micT').textContent = 'Мікрофон вимкнено для сайту';
-      $('micP').textContent = 'Щоб надиктувати продукти, увімкніть мікрофон:';
-      deniedSteps().forEach(function (t) { var li = document.createElement('li'); li.textContent = t; steps.appendChild(li); });
-      steps.hidden = false;
-      $('micGo').textContent = 'Спробувати ще раз';
-    } else if (kind === 'nosr') {
-      $('micT').textContent = 'Тут голос не розпізнається';
-      $('micP').textContent = 'Мікрофон дозволено, але цей браузер не вміє перетворювати мову на текст. Два прості виходи:';
-      (SAMSUNG || !/Chrome\//.test(UA) || INAPP
-        ? ['Натисніть «Краще напишу», а потім 🎤 на клавіатурі телефона — диктування клавіатури працює всюди', 'Або відкрийте сайт у Google Chrome — там кнопка 🎤 працює напряму']
-        : ['Натисніть «Краще напишу», а потім 🎤 на клавіатурі телефона', 'Або перевірте, що в телефоні встановлено «Google» і увімкнено голосовий ввід Google']
-      ).forEach(function (t) { var li = document.createElement('li'); li.textContent = t; steps.appendChild(li); });
-      steps.hidden = false;
-      $('micGo').textContent = 'Спробувати ще раз';
-    } else {
-      $('micT').textContent = kind === 'busy' ? 'Мікрофон зайнятий' : 'Мікрофон не знайдено';
-      $('micP').textContent = kind === 'busy' ? 'Його використовує інша програма (дзвінок, запис). Закрийте її й спробуйте ще раз.' : 'Перевірте, що мікрофон підключений і не вимкнений у налаштуваннях телефона.';
-      $('micGo').textContent = 'Спробувати ще раз';
-    }
-    sheet.dataset.kind = kind;
-    if (sheet.showModal) { if (!sheet.open) sheet.showModal(); } else sheet.setAttribute('open', '');
-    if (window.haptic) haptic(12);
-  }
-  function closeSheet() { if (sheet.open) { if (sheet.close) sheet.close(); else sheet.removeAttribute('open'); } }
-  $('micType').onclick = function () { closeSheet(); inp.focus(); hint('Напишіть через кому: курка, рис, яйця…'); };
-  $('micGo').onclick = function () { closeSheet(); try { localStorage.setItem('pc-mic-asked', '1'); } catch (e) {} listen(); };
-  sheet.addEventListener('click', function (e) { if (e.target === sheet) closeSheet(); });
-
-  // Чи справді є доступ до мікрофона (а не лише служби розпізнавання): коротко відкриваємо й одразу закриваємо
-  function micWorks() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve('unknown');
-    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
-      st.getTracks().forEach(function (t) { t.stop(); }); return 'ok';
-    }, function (e) { return e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'denied' : (e && e.name === 'NotFoundError' ? 'nomic' : 'busy'); });
-  }
-  function report(err, extra) {     // у логи сайту — щоб бачити, що саме відповідає браузер на телефоні
-    try {
-      var fd = new FormData(); fd.append('event', 'mic'); fd.append('error', err || ''); fd.append('extra', extra || '');
-      if (navigator.sendBeacon) navigator.sendBeacon('/client-log', fd); else fetch('/client-log', { method: 'POST', body: fd });
-    } catch (e) {}
-  }
-  function explain(err) {           // помилка розпізнавання → правильне пояснення
-    micWorks().then(function (m) {
-      report(err, 'mic=' + m);
-      if (err === 'perm-denied' && m === 'ok') { listen(); return; }   // браузер помилився щодо дозволу — мікрофон працює
-      if (m === 'denied') { hint('Мікрофон вимкнено для сайту'); showSheet('denied'); }
-      else if (m === 'nomic') { hint('Мікрофон не знайдено'); showSheet('nomic'); }
-      else if (m === 'busy') showSheet('busy');
-      else { hint('Голос тут не розпізнається — напишіть або скористайтесь 🎤 клавіатури'); showSheet('nosr'); }
-    });
-  }
-
-  function micState() {          // 'granted' | 'prompt' | 'denied' | 'unknown'
-    try {
-      if (navigator.permissions && navigator.permissions.query) {
-        return navigator.permissions.query({ name: 'microphone' }).then(function (st) {
-          st.onchange = function () { if (st.state === 'granted' && sheet.open && sheet.dataset.kind === 'denied') { closeSheet(); listen(); } };
-          return st.state;
-        }, function () { return 'unknown'; });
-      }
-    } catch (e) {}
-    return Promise.resolve('unknown');
-  }
-
-  function listen() {
-    var heard = '';
-    try {
-      rec = new SR(); rec.lang = 'uk-UA'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
-    } catch (e) { inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є.'); return; }
-    rec.onresult = function (e) {
-      var interim = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) heard += e.results[i][0].transcript + ' '; else interim += e.results[i][0].transcript; }
-      inp.value = (heard + interim).trim();
-    };
-    rec.onerror = function (e) {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture' || e.error === 'language-not-supported') { explain(e.error); return; }
-      hint(e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : e.error === 'network' ? 'Розпізнаванню мови потрібен інтернет. Спробуйте ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
-    };
-    rec.onend = function () {
-      listening = false; mic.classList.remove('on'); $('hvField').classList.remove('listening');
-      var txt = (heard || inp.value).trim(); inp.value = '';
-      if (txt) { var r = addPhrase(txt); hint(r.added ? '«' + txt + '» → додали ' + r.added : 'Почули «' + txt + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
-    };
-    try { rec.start(); } catch (e) { explain('start:' + (e && e.name)); return; }
-    listening = true; mic.classList.add('on'); $('hvField').classList.add('listening'); hint('Слухаю… скажіть, що є'); tap(15);
-  }
-
-  mic.addEventListener('click', function () {
-    if (!SR) {
-      if (INAPP) { showSheet('denied'); return; }           // вбудований браузер (Telegram тощо): відкрити у звичайному
-      inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є — ми розберемо.'); return;
-    }
-    if (listening && rec) { rec.stop(); return; }
-    micState().then(function (st) {
-      var asked = false; try { asked = localStorage.getItem('pc-mic-asked') === '1'; } catch (e) {}
-      if (st === 'denied') { explain('perm-denied'); return; }
-      else if (st === 'prompt' || (st === 'unknown' && !asked)) showSheet('ask');   // пояснюємо перед системним запитом
-      else listen();
-    });
-  });
-  inp.addEventListener('input', function () {
-    if (/,/.test(inp.value)) {      // кома — частина до неї готова: розбираємо як фразу («пів курки» → курка)
-      var parts = inp.value.split(','); inp.value = parts.pop();
-      var r = addPhrase(parts.join(',')); if (r.added) tap();
-      if (r.others.length) $('hvHint').textContent = '«' + r.others.join('», «') + '» немає в наших рецептах';
-    }
-    suggest();
-  });
-  inp.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      var first = sug.querySelector('button');      // підказку беремо, лише коли фраза сама нічого не дала («тв» → «Твердий сир»)
-      if (first && !sug.hidden && !parsePhrase(inp.value).keys.length) first.click(); else flush();
-    }
-    if (e.key === 'Backspace' && !inp.value) { if (other.length) other.pop(); else have.pop(); sync(); }
-  });
-  inp.addEventListener('blur', function () { setTimeout(function () { if (inp.value.trim()) flush(); sug.hidden = true; }, 150); });
-  $('hvField').addEventListener('click', function (e) { if (e.target === $('hvField')) inp.focus(); });
-  form.querySelector('[data-next]').onclick = function () { if (inp.value.trim()) flush(); tap(12); show(1); };
-  form.querySelector('[data-skip]').onclick = function () { have = []; other = []; sync(); show(1); };
+  var WORDS = {{ words|tojson }};
+  var say = window.initSay({ words: WORDS, have: {{ have|tojson }}, onChange: function (h) { $('tdHave').value = h.join(','); } });
+  form.querySelector('[data-next]').onclick = function () { say.flush(); tap(12); show(1); };
+  form.querySelector('[data-skip]').onclick = function () { say.clear(); show(1); };
   form.querySelector('[data-prev]').onclick = function () { if (history.state && history.state.tdStep) history.back(); else show(0, true); };
   form.querySelectorAll('.td-chips[data-field]').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
     g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); $(g.dataset.field).value = b.dataset.v; tap(); }; }); });
@@ -322,17 +88,15 @@
     }).then(function (d) {
       $('tdShot').classList.remove('scanning');
       if (d.error) { $('tdShotTxt').textContent = d.error; return; }
-      var n = 0;
-      d.items.forEach(function (it) {
-        if (it.ingredient !== 'other' && WORDS[it.ingredient]) { if (have.indexOf(it.ingredient) < 0) { have.push(it.ingredient); n++; } }
-        else if (other.indexOf(norm(it.name)) < 0) other.push(norm(it.name));
-      });
+      var before = say.have().length;
+      say.add(d.items.filter(function (it) { return it.ingredient !== 'other' && WORDS[it.ingredient]; }).map(function (it) { return it.ingredient; }),
+              d.items.filter(function (it) { return it.ingredient === 'other' || !WORDS[it.ingredient]; }).map(function (it) { return it.name; }));
+      var n = say.have().length - before;
       $('tdShotTxt').textContent = n ? 'Знайшли й додали: ' + n : 'Нічого з наших рецептів не знайшли — допишіть вручну';
-      sync(); tap(25);
+      tap(25);
     }).catch(function () { $('tdShot').classList.remove('scanning'); $('tdShotTxt').textContent = 'Не вдалося надіслати фото. Перевірте інтернет.'; });
   }
   form.querySelectorAll('[data-photo]').forEach(function (i) { i.addEventListener('change', onPhoto); });
-  sync();
 })();
 </script>
 {% endblock %}
