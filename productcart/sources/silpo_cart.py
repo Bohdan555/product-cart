@@ -683,6 +683,8 @@ def slot_expired(cart: "CartState | None") -> bool:
 
 
 _logged_tools = False
+_logged_schemas: set = set()
+_slot_fail: dict[str, float] = {}      # кошик → коли востаннє не вдалося оновити вікно (не смикаємо «Сільпо» щоразу)
 
 
 def fill_from_schema(schema: dict, src, over: dict, depth: int = 0):
@@ -709,6 +711,10 @@ def fill_from_schema(schema: dict, src, over: dict, depth: int = 0):
                 out[k] = over[k]
             elif k in src and src[k] is not None:
                 out[k] = fill_from_schema(sub, src[k], over, depth + 1)
+        if schema.get("additionalProperties", True) is not False and "additionalProperties" in schema:
+            for k, v in src.items():               # «повний об'єкт» (адреса з координатами) — беремо як є
+                if k not in out and v is not None:
+                    out[k] = over.get(k, v)
         return out
     return src
 
@@ -721,6 +727,10 @@ async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None
     global _logged_tools
     if not slot_expired(cart) or not cart.branch_id:
         return cart
+    import time as _t
+    if _t.monotonic() - _slot_fail.get(cart.cart_id, -1e9) < 600:
+        return cart
+    _slot_fail[cart.cart_id] = _t.monotonic()     # успіх нижче — приберемо
     await tool_schema(call, "silpo_get_my_shopping_cart")
     cart_tools = sorted(n for n in _schemas if "cart" in n or "slot" in n)
     if not _logged_tools:
@@ -739,15 +749,25 @@ async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None
     for name in [n for n in cart_tools if n == "silpo_update_shopping_cart"] + \
             [n for n in cart_tools if n not in skip and n != "silpo_update_shopping_cart" and "slot" in n]:
         schema = _schemas.get(name) or {}
-        log.warning("Сільпо: схема %s: %s", name, json.dumps(schema, ensure_ascii=False)[:1500])
+        if not _logged_tools or name not in _logged_schemas:
+            _logged_schemas.add(name)
+            log.warning("Сільпо: схема %s: %s", name, json.dumps(schema, ensure_ascii=False)[:6000])
         raw = dict(cart.raw or {})
-        if not raw.get("address"):
+        log.warning("Сільпо: кошик для оновлення вікна: адреса %s; відправлення %s",
+                    json.dumps(raw.get("address"), ensure_ascii=False, default=str)[:600],
+                    json.dumps([{k: v for k, v in (x or {}).items() if k != "products"} for x in (raw.get("shipments") or [])],
+                               ensure_ascii=False, default=str)[:800])
+        addr = raw.get("address") if isinstance(raw.get("address"), dict) else {}
+        if not (_first(addr, "latitude", "lat") and _first(addr, "longitude", "lon")):
             saved = await _saved_address(call)
             b = (branches or {}).get(cart.branch_id) or {}
             lat = _num(_first(saved or {}, "latitude", "lat")) or _num(b.get("lat"))
             lon = _num(_first(saved or {}, "longitude", "lon")) or _num(b.get("lon"))
+            if dtype == "SelfPickup" and _num(b.get("lat")) is not None:     # самовивіз — координати магазину
+                lat, lon = _num(b.get("lat")), _num(b.get("lon"))
             if lat is not None and lon is not None:
-                raw["address"] = _address_args(saved or {"city": b.get("city"), "street": b.get("address")}, lat, lon)
+                base = _address_args(saved or {"city": b.get("city"), "street": b.get("address")}, lat, lon)
+                raw["address"] = {**base, **{k: v for k, v in addr.items() if v is not None}, "latitude": lat, "longitude": lon}
         args = fill_from_schema(schema, raw, over) if schema.get("properties") else {"shoppingCartId": cart.cart_id}
         for k in ("shoppingCartId", "cartId"):
             if k in (schema.get("properties") or {}):
@@ -759,6 +779,7 @@ async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None
             fresh = parse_cart(await call("silpo_get_shopping_cart_by_id", {"shoppingCartId": cart.cart_id}) or {})
             log.info("Сільпо: оновили вікно кошика через %s: %s–%s", name, start, end)
             if not slot_expired(fresh):
+                _slot_fail.pop(cart.cart_id, None)
                 return fresh
             log.warning("Сільпо: %s відповів, але вікно лишилось %s", name, fresh.slot_end)
         except Exception as e:

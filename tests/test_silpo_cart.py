@@ -327,7 +327,7 @@ class OldSlotMCP(CartMCP):
 
 
 def test_expired_cart_slot_is_refreshed_with_tool():
-    sc._schemas.clear(); sc._logged_tools = False
+    sc._schemas.clear(); sc._logged_tools = False; sc._slot_fail.clear()
     mcp = OldSlotMCP(with_tool=True)
     cart = run(sc.current_cart(mcp))
     assert sc.slot_expired(cart)
@@ -337,7 +337,7 @@ def test_expired_cart_slot_is_refreshed_with_tool():
 
 
 def test_expired_cart_slot_new_cart_keeps_items():
-    sc._schemas.clear(); sc._logged_tools = False
+    sc._schemas.clear(); sc._logged_tools = False; sc._slot_fail.clear()
     mcp = OldSlotMCP(with_tool=False)
     cart = run(sc.current_cart(mcp))
     fresh = run(sc.ensure_fresh_slot(mcp, cart, {"b1": {"id": "b1", "title": "Франка", "lat": 50.4, "lon": 30.5}}))
@@ -352,7 +352,7 @@ def test_update_shopping_cart_args_follow_schema():
         "address": {"type": "object", "properties": {"latitude": {}, "longitude": {}, "city": {}, "addressType": {}}},
         "shipments": {"type": "array", "items": {"type": "object", "properties": {
             "branchId": {}, "deliveryType": {}, "timeslot": {"type": "object", "properties": {"start": {}, "end": {}}}}}}}}
-    sc._schemas.clear(); sc._logged_tools = False
+    sc._schemas.clear(); sc._logged_tools = False; sc._slot_fail.clear()
     mcp = OldSlotMCP(with_tool=False)
     sc._schemas.update({"silpo_update_shopping_cart": schema, "silpo_get_my_shopping_cart": {}, "silpo_create_shopping_cart": {}})
     seen = {}
@@ -371,3 +371,14 @@ def test_update_shopping_cart_args_follow_schema():
     fresh = run(sc.ensure_fresh_slot(call, cart, {"b1": {"id": "b1", "lat": 50.4, "lon": 30.5, "city": "Київ"}}))
     assert seen.get("ok") and not sc.slot_expired(fresh) and fresh.cart_id == "c1"
     sc._schemas.clear()
+
+
+def test_fill_from_schema_keeps_full_address():
+    schema = {"type": "object", "properties": {"address": {"type": "object", "properties": {"addressType": {}},
+                                                           "additionalProperties": {}},
+                                               "shipments": {"type": "array", "items": {"type": "object", "properties": {"branchId": {}}}}}}
+    src = {"address": {"addressType": "self-pickup", "latitude": 50.4, "longitude": 30.5, "city": "Київ"},
+           "shipments": [{"branchId": "b1", "products": [1, 2]}], "calculation": {}}
+    out = sc.fill_from_schema(schema, src, {})
+    assert out == {"address": {"addressType": "self-pickup", "latitude": 50.4, "longitude": 30.5, "city": "Київ"},
+                   "shipments": [{"branchId": "b1"}]}
