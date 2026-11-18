@@ -112,6 +112,7 @@ class Profile:
     cooking: list[dict] = field(default_factory=list)      # «Готую»: збережені рецепти {id, n, at, src}, найновіші першими
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо
+    taste_done: bool = False                               # пройшов анкету смаків (або пропустив) — більше не питаємо
     my_dishes: list[dict] = field(default_factory=list)    # власні страви: {id, title, emoji, minutes, ing, extra, steps}
     # Сповіщення в Telegram
     watch: list[str] = field(default_factory=list)         # обрані товари (слова): «кава», «лосось»

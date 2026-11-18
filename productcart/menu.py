@@ -715,6 +715,8 @@ class _Ctx:
         self.mine = user_recipes(profile)
         self.by_id = {**RECIPE_BY_ID, **{r.id: r for r in self.mine}}
         self.dish_likes |= {r.id for r in self.mine}       # свої страви — як улюблені
+        # з анкети смаків: основні продукти вподобаних страв — схожі страви теж трохи вище
+        self.like_proteins = {self.by_id[x].protein for x in self.dish_likes if x in self.by_id}
         self.pool = [r for r in RECIPES + self.mine if (meal is None or meal in r.meals) and allowed(r, profile, max_minutes)]
         self.people = max(1, profile.household)
 
@@ -728,7 +730,7 @@ class _Ctx:
         fresh = [k for k in r.ingredients if INGREDIENTS[k][4]]
         shared = [k for k in fresh if any(k in o.ingredients for o in others)]
         overlap = len(shared) / len(fresh) if fresh else 0
-        pref = len(recipe_tags(r) & self.likes) + 0.5 * len(self._regs(r)) + (2.0 if r.id in self.dish_likes else 0)
+        pref = self.taste(r) + 0.5 * len(self._regs(r))
         same = sum(1 for o in others if o.protein == r.protein)
         penalty = 2.0 if same >= 2 else (0.6 if same else 0)
         base = _base(r)   # однаковий гарнір (рис, гречка, макарони, картопля) кілька днів поспіль набридає
@@ -741,6 +743,11 @@ class _Ctx:
         home = sum(3.0 if INGREDIENTS[k][4] else 1.0 for k in r.ingredients if k in self.have)   # спершу доїдаємо своє
         return (2.0 * pref + 6.0 * (saving / cost if cost else 0) + 0.4 * n_promo + 1.5 * overlap + home - penalty
                 + self.jitter(r))
+
+    def taste(self, r: Recipe) -> float:
+        """Наскільки страва під смаки з анкети: улюблені продукти, вподобана страва, схожа на вподобану."""
+        return (len(recipe_tags(r) & self.likes) + (2.0 if r.id in self.dish_likes else 0)
+                + (0.5 if r.protein in self.like_proteins and r.id not in self.dish_likes else 0))
 
     def jitter(self, r: Recipe) -> float:
         """Невелика «випадковість», що змінюється щотижня: за тих самих акцій меню не повторюється тиждень у тиждень."""
@@ -1005,7 +1012,8 @@ def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n:
         opts.append(Option(d, [k for k in r.ingredients if k in have], lines))
     # що докупити мінус що вже є: страва, яка бере обидва ваші продукти й просить 3 нових, краща за ту,
     # що бере один і просить 2 (інакше з великим вибором страв те, що є вдома, губиться)
-    opts.sort(key=lambda o: (len(o.lines) - len(o.have), -len(o.have),
+    # смаки з анкети важать як один продукт докупки: улюблену страву покажемо, навіть якщо треба докупити ще щось
+    opts.sort(key=lambda o: (len(o.lines) - len(o.have) - min(1.5, 0.5 * ctx.taste(o.dish.recipe)), -len(o.have),
                              -ctx.score(o.dish.recipe, []) * 0.05 + o.buy_cost / 100))
     out, proteins = [], set()
     for o in opts:          # різноманітність: не три страви з курки
