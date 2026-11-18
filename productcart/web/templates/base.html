@@ -93,7 +93,6 @@ document.addEventListener('turbo:before-prefetch', function (e) {
     <a class="tabbed" href="/list">Акції</a>
     <a class="tabbed" href="/me">Профіль</a>
     {% if is_admin %}<a href="/admin/stats" {% if request.url.path == '/admin/stats' %}class="on"{% endif %}>Статистика</a>{% endif %}
-    <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button type="submit">Вийти</button></form>
   </nav>
   {% else %}
   <nav class="top"><a class="tabbed" href="/login">Увійти</a></nav>
@@ -103,6 +102,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
     <b id="hcartN" class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b>
   </a>
 </header>
+{% if back_url %}<div class="td-top page-back"><a class="td-back" href="{{ back_url }}" aria-label="Назад">←</a></div>{% endif %}
 {% block body %}{% endblock %}
 <footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
 </div>

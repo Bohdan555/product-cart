@@ -2,7 +2,7 @@
 {% block title %}{{ o.dish.title }} — Кошик з акцій{% endblock %}
 {% block body %}
 {% set d = o.dish %}
-<div class="td-top"><a class="td-back" href="/today/dishes?{{ qs }}" aria-label="Назад">←</a></div>
+<div class="td-top"><a class="td-back" href="/today/dishes?{{ qs }}{% if meal %}&amp;meal={{ meal }}{% endif %}" aria-label="Назад">←</a></div>
 <section class="td-hero">
   {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="">{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
   <div><h1 class="xh">{{ d.title }}</h1><span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв · {{ n }} {{ plural(n, 'порція', 'порції', 'порцій') }}</span></div>

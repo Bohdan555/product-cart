@@ -14,7 +14,7 @@
   <div class="su-top">
     <a class="su-x" href="/menu" aria-label="Закрити">×</a>
     <ol class="su-dots" id="suDots">
-      {% for e in ['👥', '📅', '⏱️', '😋', '💰'] %}<li><button type="button" data-go="{{ loop.index0 }}" aria-label="Крок {{ loop.index }}">{{ e }}</button></li>{% endfor %}
+      {% for e, lbl in [('family', 'Скільки людей'), ('calendar', 'Дні'), ('clock', 'Час'), ('taste', 'Смаки'), ('wallet', 'Бюджет')] %}<li><button type="button" data-go="{{ loop.index0 }}" aria-label="Крок {{ loop.index }}: {{ lbl }}">{{ ic(e) }}</button></li>{% endfor %}
     </ol>
   </div>
 

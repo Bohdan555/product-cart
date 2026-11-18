@@ -18,7 +18,7 @@
       <div class="pacts">
         {% if user and o.chain == 'silpo' and link %}<button type="button" class="padd" data-pid="{{ o.product_id }}" data-name="{{ o.name }}" data-w="{{ 1 if o.weighted else 0 }}">+ У кошик</button>
         {% else %}<a class="padd" href="{{ '/silpo' if user else '/register' }}">+ У кошик</a>{% endif %}
-        {% if user %}<button type="button" class="pbell" data-word="{{ watch_word(o.name) }}" aria-label="Стежити: {{ watch_word(o.name) }}" title="Стежити">🔔</button>{% endif %}
+        {% if user %}<button type="button" class="pbell" data-word="{{ watch_word(o.name) }}" aria-label="Стежити: {{ watch_word(o.name) }}" title="Стежити">{{ ic("bell", "sm") }}</button>{% endif %}
         {% if link_url %}<a class="pgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити в «{{ chain_name(o.chain) }}»">↗</a>{% endif %}
       </div>
     </div>

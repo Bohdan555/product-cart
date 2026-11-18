@@ -658,9 +658,9 @@ def test_today_flow_guest_and_user(client):
     ac = client.get("/today/dishes", params={"have": "chicken_thigh", "t": "60", "n": "2", "meal": "dinner", "k": "airfryer,multicooker"}).text
     assert "в аерогрилі" in ac or "у мультиварці" in ac
     sal = client.get("/today/dishes", params={"have": "cucumber,tomato", "t": "30", "n": "2", "meal": "salad"}).text
-    assert 'class="on" aria-current="true">🥗 Салат' in sal and "/today/dish/s-" in sal
+    assert re.search(r'class="on" aria-current="true">[^<]*<svg[^>]*>.*?</svg> Салат', sal) and "/today/dish/s-" in sal
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
-    assert 'aria-current="true">🍳 Сніданок' in bf and "Інша страва замість" in bf and bf.count('class="td-dish"') > 3
+    assert re.search(r'aria-current="true">[^<]*<svg[^>]*>.*?</svg> Сніданок', bf) and "Інша страва замість" in bf and bf.count('class="td-dish"') > 3
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
     assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
     d2 = client.get("/today/dish/flotski", params={"have": "", "t": "60", "n": "2"}).text

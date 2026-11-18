@@ -46,6 +46,9 @@ COOKIE = "pc_session"
 GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
+# Кнопка «←» на внутрішніх сторінках: куди повертатись (вкладки й сторінки зі своєю «←» тут не перелічені)
+BACK = {"/fridge": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
+        "/silpo": "/me", "/privacy": "/me", "/photos": "/me", "/admin/stats": "/me", "/login": "/", "/register": "/"}
 cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None)   # прилади з поточного запиту
 MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "salad": "Салат"}
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
@@ -224,6 +227,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if todo:
             photo_job.set(None)
             bg = BackgroundTask(unsplash.run, conn, todo)
+        ctx.setdefault("back_url", BACK.get(request.url.path))
         return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled,
                                                         cart_n=int(n) if n.isdigit() else None), status_code=status,
                                     background=bg)
@@ -1623,7 +1627,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                   for k in opts[0].dish.recipe.ingredients if k in menu.ASSUMED}
         return render(request, "today_dish.html", u, o=opts[0], qs=today_qs(have, t, n), is_demo=is_demo,
                       link=link, photos=menu_photos(), ingredients=menu.INGREDIENTS, fmt_qty=menu.fmt_qty,
-                      t=t, n=n, have=have, need=need, toggle=toggle)
+                      t=t, n=n, have=have, need=need, toggle=toggle,
+                      meal=request.query_params.get("meal") if request.query_params.get("meal") in MEALS else None)
 
     @app.post("/today/cooked", response_class=HTMLResponse)
     async def today_cooked(request: Request):

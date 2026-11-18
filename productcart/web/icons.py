@@ -19,6 +19,19 @@ ICONS = {
     "leaf": '<path d="M5 19C4 11 9 5 19.5 4.5 20 15 14 20 6 19z" class="f"/><path d="M5 19C4 11 9 5 19.5 4.5 20 15 14 20 6 19zM5 19c3-4.5 6-7.5 10-10"/>',
     "out": '<path d="M14 4.5H7.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14"/><path d="M11 12h9.5M17 8.5l3.5 3.5-3.5 3.5"/>',
     "check": '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    "camera": '<rect x="3" y="7" width="18" height="13" rx="3.5" class="f"/><path d="M3 10.5A3.5 3.5 0 0 1 6.5 7h1.8l1.5-2.5h4.4L15.7 7h1.8A3.5 3.5 0 0 1 21 10.5v6A3.5 3.5 0 0 1 17.5 20h-11A3.5 3.5 0 0 1 3 16.5z"/><circle cx="12" cy="13.3" r="3.4"/>',
+    "image": '<rect x="3.5" y="4.5" width="17" height="15" rx="3.5" class="f"/><rect x="3.5" y="4.5" width="17" height="15" rx="3.5"/><circle cx="9" cy="9.5" r="1.6"/><path d="M4 17l4.8-4.8a1.5 1.5 0 0 1 2.1 0L16 17.3M14 15.2l1.7-1.7a1.5 1.5 0 0 1 2.1 0l2.5 2.5"/>',
+    "bell": '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" class="f"/><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 21h4"/>',
+    "bolt": '<path d="M13.5 2.5L5 13.5h6l-1 8 8.5-11h-6z" class="f"/><path d="M13.5 2.5L5 13.5h6l-1 8 8.5-11h-6z"/>',
+    "wallet": '<rect x="3" y="6.5" width="18" height="13.5" rx="3.5" class="f"/><path d="M17 6.5V5a1.5 1.5 0 0 0-1.9-1.4L5.6 6.2A3.5 3.5 0 0 0 3 9.6v6.9A3.5 3.5 0 0 0 6.5 20h11a3.5 3.5 0 0 0 3.5-3.5v-6.5A3.5 3.5 0 0 0 17.5 6.5H6"/><path d="M16.5 13.5h.01"/>',
+    "sun": '<circle cx="12" cy="12" r="4.5" class="f"/><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+    # кухонні прилади
+    "stove": '<rect x="3" y="5" width="18" height="14" rx="3" class="f"/><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8.5" cy="10.5" r="2.4"/><circle cx="15.5" cy="10.5" r="2.4"/><path d="M7 16h.01M12 16h.01M17 16h.01"/>',
+    "oven": '<rect x="7" y="11" width="10" height="6" rx="1.5" class="f"/><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 8.5h17M7.5 6h.01M11 6h.01"/><rect x="7" y="11" width="10" height="6" rx="1.5"/>',
+    "multicooker": '<path d="M4 11h16v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" class="f"/><path d="M4 11h16v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM4 11c0-2.8 3.6-5 8-5s8 2.2 8 5M10.5 3.5h3M12 3.5V6M10 15h4"/>',
+    "airfryer": '<rect x="5" y="3" width="14" height="18" rx="5" class="f"/><rect x="5" y="3" width="14" height="18" rx="5"/><path d="M5 13.5h14M10 17h4"/><circle cx="12" cy="8.2" r="2.2"/>',
+    "microwave": '<rect x="2.5" y="5" width="19" height="14" rx="3" class="f"/><rect x="2.5" y="5" width="19" height="14" rx="3"/><rect x="5.5" y="8" width="9" height="8" rx="1.5"/><path d="M18 9h.01M18 12h.01M17 16h2"/>',
+    "blender": '<path d="M7 3.5h10l-1.6 10H8.6z" class="f"/><path d="M7 3.5h10l-1.6 10H8.6zM10 9.5l2 1.5 2-1.5"/><rect x="6.5" y="15" width="11" height="6" rx="2"/><path d="M12 13.5V15M11 18h2"/>',
     "lock": '<rect x="5" y="10.5" width="14" height="10" rx="3" class="f"/><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
 }
 

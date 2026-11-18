@@ -1326,3 +1326,19 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 .td-kit button{display:inline-flex;align-items:center;gap:6px}
 .td-chips.td-kit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .td-chips.td-kit button{flex:none;width:auto;min-width:0;justify-content:flex-start;padding:14px 16px;font-size:16px;white-space:nowrap}
+
+.td-kit .ico{width:22px;height:22px;--ic:var(--s-sky)}
+.td-kit button[aria-pressed=true] .ico{--ic:var(--s-citrus)}
+/* «←» на внутрішніх сторінках — той самий вигляд, що в «Що готуємо» */
+.page-back{margin:-4px 0 6px}
+
+/* Іконки в кнопках замість емодзі */
+.pick-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.pick-btn .ico{--ic:transparent}
+.td-chips button .ico.sm{vertical-align:-3px;--ic:transparent}
+.td-meals a{display:inline-flex;align-items:center;gap:6px}
+.td-meals a .ico{--ic:transparent}
+.su-dots button .ico{width:26px;height:26px;--ic:var(--s-citrus)}
+.pbell{display:grid;place-items:center}
+.pbell .ico{--ic:transparent;width:18px;height:18px}
+.pbell.on .ico{--ic:var(--s-citrus)}

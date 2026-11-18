@@ -25,8 +25,8 @@
       <span class="icotile">{{ ic("fridge", "mid") }}</span>
       <span class="hv-photo-t"><b id="tdShotTxt">Або сфотографуйте холодильник</b><small>знайдене додамо само</small></span>
       <div class="pick-row">
-        <label class="btn small pick-btn">📷 Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
-        <label class="btn alt small pick-btn">🖼 Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
+        <label class="btn small pick-btn">{{ ic("camera", "sm") }} Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
+        <label class="btn alt small pick-btn">{{ ic("image", "sm") }} Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
       </div>
     </div>
     {% else %}
@@ -41,7 +41,7 @@
     <h1 class="xh">Скільки часу <span class="hl">і на скількох?</span></h1>
     <p class="td-lbl">Час</p>
     <div class="td-chips" data-field="tdT">
-      {% for v, l in [(15, '⚡ 15 хв'), (30, '30 хв'), (60, '1 год'), (180, 'не важливо')] %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == t else 'false' }}">{{ l }}</button>{% endfor %}
+      {% for v, l in [(15, '15 хв'), (30, '30 хв'), (60, '1 год'), (180, 'не важливо')] %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == t else 'false' }}">{% if v == 15 %}{{ ic("bolt", "sm") }} {% endif %}{{ l }}</button>{% endfor %}
     </div>
     <p class="td-lbl">Нас</p>
     <div class="td-chips" data-field="tdN">
@@ -49,7 +49,7 @@
     </div>
     <p class="td-lbl">Що є на кухні <small id="tdKHint">{{ 'не вибрано — покажемо все' if not kit else '' }}</small></p>
     <div class="td-chips td-kit" id="tdKit" role="group" aria-label="Кухонні прилади">
-      {% for k, (label, emo) in kitchen.items() %}<button type="button" data-k="{{ k }}" aria-pressed="{{ 'true' if k in kit else 'false' }}"><span aria-hidden="true">{{ emo }}</span> {{ label }}</button>{% endfor %}
+      {% for k, label in kitchen.items() %}<button type="button" data-k="{{ k }}" aria-pressed="{{ 'true' if k in kit else 'false' }}">{{ ic(k) }} {{ label }}</button>{% endfor %}
     </div>
     <div class="td-nav"><button type="submit" class="btn">Показати страви</button></div>
   </section>
@@ -70,7 +70,15 @@
   var form = document.getElementById('td'); if (!form) return;
   var $ = function (id) { return document.getElementById(id); };
   var steps = form.querySelectorAll('.td-step'), tap = function (ms) { if (window.haptic) haptic(ms || 8); };
-  function show(i) { steps.forEach(function (s, k) { s.hidden = k !== i; }); window.scrollTo(0, 0); }
+  function show(i, fromHistory) {
+    steps.forEach(function (s, k) { s.hidden = k !== i; }); window.scrollTo(0, 0);
+    // крок 2 — окремий запис в історії: жест «назад» повертає на крок 1, а не виходить зі сценарію
+    if (!fromHistory && i === 1) history.pushState({ tdStep: 1 }, '', location.href);
+  }
+  window.addEventListener('popstate', function (e) {
+    if (!document.getElementById('td')) return;
+    if (!(e.state && e.state.tdStep) && !steps[1].hidden) show(0, true);
+  });
   // Кухонні прилади: кілька можна вибрати; нічого не вибрано — без обмежень
   var kit = $('tdKit');
   if (kit) kit.addEventListener('click', function (e) {
@@ -300,7 +308,7 @@
   $('hvField').addEventListener('click', function (e) { if (e.target === $('hvField')) inp.focus(); });
   form.querySelector('[data-next]').onclick = function () { if (inp.value.trim()) flush(); tap(12); show(1); };
   form.querySelector('[data-skip]').onclick = function () { have = []; other = []; sync(); show(1); };
-  form.querySelector('[data-prev]').onclick = function () { show(0); };
+  form.querySelector('[data-prev]').onclick = function () { if (history.state && history.state.tdStep) history.back(); else show(0, true); };
   form.querySelectorAll('.td-chips[data-field]').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
     g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); $(g.dataset.field).value = b.dataset.v; tap(); }; }); });
   // фото холодильника: розпізнаємо й позначаємо знайдене
