@@ -4,6 +4,9 @@
 {% set PAL = ["p-citrus", "p-tomato", "p-basil", "p-plum", "p-sky", "p-berry"] %}
 <div class="td-top"><a class="td-back" href="/today?{{ qs }}" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 3 з 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
 <h1 class="xh">Ось що <span class="hl">можна приготувати</span></h1>
+<nav class="td-meals" aria-label="Що готуємо">
+  {% for k, label in meals.items() %}<a href="/today/dishes?{{ qs }}&amp;meal={{ k }}" data-turbo-action="replace"{% if k == meal %} class="on" aria-current="true"{% endif %}>{{ {'breakfast': '🍳', 'dinner': '🍲', 'salad': '🥗'}[k] }} {{ label }}</a>{% endfor %}
+</nav>
 {% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни вашого «Сільпо» · {{ store }}</span>{% endif %}
 
 {% if not opts %}
@@ -26,7 +29,7 @@
   </article>
   {% endfor %}
   {% if can_more %}
-  <a class="td-more" href="/today/dishes?{{ qs }}&amp;more={{ more + 1 }}#o{{ (more + 1) * 3 }}" data-turbo-action="replace">
+  <a class="td-more" href="/today/dishes?{{ qs }}&amp;meal={{ meal }}&amp;more={{ more + 1 }}#o{{ (more + 1) * 3 }}" data-turbo-action="replace">
     <span class="td-more-ic" aria-hidden="true">＋</span><b>Ще 3 страви</b><small>інші варіанти з того, що є</small></a>
   {% endif %}
 </div>

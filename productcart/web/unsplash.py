@@ -69,6 +69,8 @@ QUERIES = {
 
 from ..recipes_more import PHOTO_QUERIES as _MORE  # noqa: E402
 QUERIES.update(_MORE)
+from ..recipes_bs import PHOTO_QUERIES as _BS  # noqa: E402
+QUERIES.update(_BS)
 
 # Невдалі перші підбори: перешукати (нові записи зберігають свій запит у "q").
 REDO = {"liver", "lentils", "casserole", "fish-cream", "zucchini-stew"}

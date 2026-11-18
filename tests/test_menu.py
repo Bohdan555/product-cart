@@ -113,7 +113,7 @@ def test_pantry_words_cover_dictionary_and_synonyms():
     assert set(menu.PANTRY_WORDS) == set(menu.INGREDIENTS)
     assert menu.word_to_key("Курятина") == "chicken_fillet" and menu.word_to_key("картошка") == "potato"
     assert menu.word_to_key("помідори") == "tomato" and menu.word_to_key("томати в соку") == "tomatoes_can" and menu.word_to_key("творог") == "cottage"
-    assert menu.word_to_key("сир") == "cheese" and menu.word_to_key("авокадо") is None
+    assert menu.word_to_key("сир") == "cheese" and menu.word_to_key("авокадо") == "avocado" and menu.word_to_key("кумкват") is None
 
 
 def test_other_products_with_ingredient_word_do_not_match():
@@ -158,3 +158,16 @@ def test_today_more_options():
     b = menu.today(offs, Profile(name="x"), ["eggs"], 40, n=9)
     assert len(b) == 9 and [o.dish.recipe.id for o in b[:3]] == [o.dish.recipe.id for o in a]
     assert len({o.dish.recipe.id for o in b}) == 9
+
+
+def test_breakfasts_and_salads_kept_out_of_dinner_week():
+    offs = planner.merge_nearby(demo.load())
+    p = Profile(name="x")
+    assert sum("breakfast" in r.meals for r in menu.RECIPES) >= 30 and sum("salad" in r.meals for r in menu.RECIPES) >= 20
+    m = menu.plan(offs, p, dinners=7)
+    assert all("dinner" in d.recipe.meals for d in m.dishes)
+    b = menu.today(offs, p, ["eggs", "milk"], 30, n=6, meal="breakfast")
+    s = menu.today(offs, p, ["cucumber", "tomato"], 30, n=6, meal="salad")
+    assert len(b) == 6 and all("breakfast" in o.dish.recipe.meals for o in b)
+    assert len(s) == 6 and all("salad" in o.dish.recipe.meals for o in s)
+    assert any(o.dish.recipe.id.startswith("s-") for o in s)

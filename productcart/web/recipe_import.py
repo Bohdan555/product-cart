@@ -224,7 +224,7 @@ _SPICE = ("чорн", "мелен", "духмян", "горош", "чилі", "�
 _PIECE_G = {"potato": 150, "onion": 100, "carrot": 100, "pepper": 150, "zucchini": 300, "beet": 200, "cabbage": 1500,
             "chicken_thigh": 150, "chicken_fillet": 250, "sausages": 50, "tomatoes_can": 100, "tomato": 120, "cucumber": 150,
             "eggplant": 300, "apples": 180, "pumpkin": 1500, "broccoli": 400, "cauliflower": 800, "garlic": 40,
-            "turkey": 300, "lavash": 90}
+            "turkey": 300, "lavash": 90, "banana": 120, "avocado": 200, "radish": 20}
 _DEFAULT = {"g": 200, "ml": 100, "pcs": 2}
 _STOP = {"свіжий", "свіжа", "свіже", "свіжі", "великий", "велика", "середня", "середній", "дрібна", "дрібний", "нарізаний",
          "подрібнений", "смак", "за", "на", "для", "або", "і", "та", "й", "з", "із", "у", "в", "по", "трохи", "кілька"}

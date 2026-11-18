@@ -10,7 +10,7 @@ import hashlib
 import math
 from datetime import date
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .catalog import TAG_LABELS
 from .models import DIETS, Offer, Profile
@@ -79,6 +79,17 @@ INGREDIENTS: dict[str, tuple] = {
     "varenyky": ("Вареники з картоплею", "g", 800, 130, False, {"grains", "gluten"}, [["варени", "картопл"]], ["ліниві"]),
     "mayo": ("Майонез", "g", 300, 150, False, {"eggs"}, [["майонез"]], []),
     "soy_sauce": ("Соєвий соус", "ml", 250, 200, False, set(), [["соус", "соєв"]], []),
+    # --- сніданки й салати ---
+    "banana": ("Банани", "g", 1000, 70, True, {"fruits"}, [["банан"]], ["чипс", "сушен", "пюре", "йогурт", "сік"]),
+    "berries": ("Ягоди заморожені", "g", 400, 250, False, {"fruits"}, [["ягід", "замор"], ["ягоди", "замор"], ["полуниц"], ["лохин"], ["малин"], ["чорниц"]],
+                ["варення", "джем", "йогурт", "сік", "чай", "цукерк", "сушен"]),
+    "avocado": ("Авокадо", "g", 400, 300, True, {"fruits"}, [["авокадо"]], ["олія", "соус"]),
+    "yogurt": ("Йогурт натуральний", "g", 400, 160, True, {"dairy", "lactose"}, [["йогурт"]], ["питн", "фрукт", "полуниц", "вишн", "персик", "печиво"]),
+    "semolina": ("Манна крупа", "g", 800, 45, False, {"grains", "gluten"}, [["манн"]], []),
+    "crab_sticks": ("Крабові палички", "g", 200, 250, True, {"fish"}, [["краб"]], ["чипс", "смак"]),
+    "radish": ("Редиска", "g", 300, 120, True, {"vegetables"}, [["редис"]], []),
+    "lettuce": ("Листя салату", "g", 150, 400, True, {"vegetables"}, [["салат", "лист"], ["айсберг"], ["руккол"], ["салат", "ромен"], ["шпинат"]],
+                ["готов", "заправ", "крабов", "олів"]),
 }
 PANTRY = {"oil", "rice", "buckwheat", "pasta", "flour", "lentils", "tomato_paste", "garlic", "soy_sauce", "bulgur",
           "millet", "oats", "chickpeas"}
@@ -95,6 +106,7 @@ class Recipe:
     steps: tuple = ()
     extras: tuple = ()          # власна страва: інгредієнти поза довідником («паприка», «лаваш») — без ціни
     mine: bool = False          # страва, яку записав сам користувач
+    meals: frozenset = frozenset({"dinner"})   # коли їдять: dinner (обід/вечеря), breakfast, salad
 
 
 def _r(id, title, minutes, likes, protein, emoji, ingredients, *steps):
@@ -307,6 +319,11 @@ RECIPES: list[Recipe] = [
 
 from .recipes_more import more as _more  # noqa: E402 — ще страви, окремим файлом
 RECIPES += _more(_r)
+from .recipes_bs import ALSO_BREAKFAST, ALSO_SALAD, breakfasts, salads  # noqa: E402 — сніданки й салати
+RECIPES = [replace(r, meals=r.meals | ({"breakfast"} if r.id in ALSO_BREAKFAST else set())
+                   | ({"salad"} if r.id in ALSO_SALAD else set())) for r in RECIPES]
+RECIPES += [replace(r, meals=frozenset({"breakfast"})) for r in breakfasts(_r)]
+RECIPES += [replace(r, meals=frozenset({"salad"})) for r in salads(_r)]
 RECIPE_BY_ID = {r.id: r for r in RECIPES}
 
 # ---------- власні страви користувача ----------
@@ -602,7 +619,7 @@ def basket(dishes: list[Dish], sources: dict[str, Source], people: int, pantry_b
 class _Ctx:
     """Усе, що потрібно для оцінки страв: джерела цін, вподобання, пул дозволених рецептів."""
 
-    def __init__(self, offers: list[Offer], profile: Profile, max_minutes: int):
+    def __init__(self, offers: list[Offer], profile: Profile, max_minutes: int, meal: str = "dinner"):
         self.sources = source_map(offers)
         self.likes = set(profile.likes)
         self.dish_likes = set(profile.dish_likes)
@@ -613,7 +630,7 @@ class _Ctx:
         self.mine = user_recipes(profile)
         self.by_id = {**RECIPE_BY_ID, **{r.id: r for r in self.mine}}
         self.dish_likes |= {r.id for r in self.mine}       # свої страви — як улюблені
-        self.pool = [r for r in RECIPES + self.mine if allowed(r, profile, max_minutes)]
+        self.pool = [r for r in RECIPES + self.mine if meal in r.meals and allowed(r, profile, max_minutes)]
         self.people = max(1, profile.household)
 
     def score(self, r: Recipe, others: list[Recipe]) -> float:
@@ -764,6 +781,14 @@ PANTRY_WORDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "varenyky": ("Вареники", "🥟", ("вареники",)),
     "mayo": ("Майонез", "🫙", ("майонез",)),
     "soy_sauce": ("Соєвий соус", "🫙", ("соєвий соус", "соус соєвий")),
+    "banana": ("Банани", "🍌", ("банан", "банани")),
+    "berries": ("Ягоди", "🫐", ("ягоди", "заморожені ягоди", "полуниця", "лохина", "малина", "чорниця")),
+    "avocado": ("Авокадо", "🥑", ("авокадо",)),
+    "yogurt": ("Йогурт", "🥛", ("йогурт", "грецький йогурт")),
+    "semolina": ("Манка", "🌾", ("манка", "манна крупа")),
+    "crab_sticks": ("Крабові палички", "🦀", ("крабові палички", "крабові")),
+    "radish": ("Редиска", "🌱", ("редиска", "редис")),
+    "lettuce": ("Листя салату", "🥬", ("салат листовий", "листя салату", "айсберг", "руккола", "шпинат")),
 }
 
 
@@ -828,6 +853,14 @@ SEARCH_TERMS: dict[str, tuple[str, ...]] = {
     "varenyky": ("вареники з картоплею", "вареники"),
     "mayo": ("майонез",),
     "soy_sauce": ("соус соєвий", "соєвий соус"),
+    "banana": ("банани",),
+    "berries": ("ягоди заморожені", "суміш ягід заморожена", "полуниця"),
+    "avocado": ("авокадо",),
+    "yogurt": ("йогурт натуральний", "йогурт грецький"),
+    "semolina": ("крупа манна", "манка"),
+    "crab_sticks": ("крабові палички",),
+    "radish": ("редиска", "редис"),
+    "lettuce": ("салат листовий", "салат айсберг", "руккола", "шпинат"),
 }
 
 
@@ -869,12 +902,13 @@ class Option:
         return round(sum(l.regular - l.cost for l in self.lines), 2)
 
 
-def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3, need=()) -> list[Option]:
+def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3, need=(),
+          meal: str = "dinner") -> list[Option]:
     """Три страви, для яких найменше докуповувати: спершу кількість бракуючого, далі — скільки свого
     використовуємо, далі — ціна докупки. Вподобання й «не їм» з профілю діють як завжди.
     `need` — з «мабуть, є» (олія, борошно, томатна паста) людина сказала «немає»: їх докуповуємо."""
     have = set(have) & set(INGREDIENTS)
-    ctx = _Ctx(offers, profile, max_minutes)
+    ctx = _Ctx(offers, profile, max_minutes, meal)
     ctx.have = have
     home = have | (ASSUMED - set(need))
     opts = []

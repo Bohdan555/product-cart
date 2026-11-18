@@ -1296,3 +1296,9 @@ html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:
 .td-more b{font:800 17px/1.2 var(--display)}
 .td-more small{color:var(--muted)}
 .td-dish.td-new{animation:vt-in .35s cubic-bezier(.2,.8,.2,1) both}
+
+/* «Що готуємо сьогодні»: обід / сніданок / салат */
+.td-meals{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:2px 0 12px;padding:2px}
+.td-meals::-webkit-scrollbar{display:none}
+.td-meals a{flex:none;padding:9px 14px;border-radius:999px;background:var(--chip);color:var(--ink);text-decoration:none;font-weight:700;font-size:14px;white-space:nowrap}
+.td-meals a.on{background:var(--ink);color:var(--bg)}

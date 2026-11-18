@@ -16,7 +16,7 @@ import json
 import re
 import os
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from urllib.parse import quote, unquote, urlencode
 from pathlib import Path
@@ -46,6 +46,7 @@ COOKIE = "pc_session"
 GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного входу через Google, зашифровані
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
+MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "salad": "Салат"}
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
               "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking")
 # Конструктор меню: що можна любити / виключити (теги інгредієнтів)
@@ -1453,6 +1454,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             t, n = 30, 2
         return have, t, n
 
+    def default_meal() -> str:
+        """Зранку (5:00–10:59 за Києвом) спершу показуємо сніданки, решту дня — обід і вечерю."""
+        try:
+            from zoneinfo import ZoneInfo
+            h = datetime.now(ZoneInfo("Europe/Kyiv")).hour
+        except Exception:
+            h = (datetime.now(timezone.utc).hour + 2) % 24
+        return "breakfast" if 5 <= h < 11 else "dinner"
+
     def today_qs(have, t, n, need=()) -> str:
         q = {"have": ",".join(have), "t": t, "n": n}
         if need:
@@ -1489,12 +1499,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             more = max(0, min(10, int(request.query_params.get("more") or 0)))
         except ValueError:
             more = 0
+        meal = request.query_params.get("meal")
+        if meal not in MEALS:
+            meal = default_meal()
         want = 3 * (more + 1)                      # «Ще 3 страви» — щоразу на три більше
-        opts = menu.today(offers, p, have, max_minutes=t, n=want)
+        opts = menu.today(offers, p, have, max_minutes=t, n=want, meal=meal)
         analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
-                        options=len(opts), guest=not u, more=more)
+                        options=len(opts), guest=not u, more=more, meal=meal)
         return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
-                      more=more, can_more=len(opts) == want and more < 10,
+                      more=more, can_more=len(opts) == want and more < 10, meal=meal, meals=MEALS,
                       is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
 
     @app.get("/today/dish/{rid}", response_class=HTMLResponse)
