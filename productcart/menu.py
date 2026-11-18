@@ -896,6 +896,8 @@ def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n:
         proteins.add(o.dish.recipe.protein)
         if len(out) == n:
             break
+    if len(out) < n:        # «ще варіанти»: різні основні продукти вичерпались — добираємо за рейтингом
+        out += [o for o in opts if o not in out][:n - len(out)]
     return out
 
 
@@ -908,12 +910,16 @@ def swap(offers: list[Offer], profile: Profile, current: list[str], i: int, max_
     if not 0 <= i < len(recipes):
         return None
     others = recipes[:i] + recipes[i + 1:]
+    old = recipes[i]
+    # Уже показані цього тижня (skip) не повторюємо, доки не переберемо весь вибір — тоді нове коло.
     cands = [r for r in ctx.pool if r not in recipes and r.id not in skip]
     if not cands:
         cands = [r for r in ctx.pool if r not in recipes]
     if not cands:
         return None
-    new = max(cands, key=lambda r: ctx.score(r, others))
+    # «Інша страва» — зазвичай хочеться чогось іншого: спершу з іншим основним продуктом, ніж у заміненої
+    diff = [r for r in cands if r.protein != old.protein]
+    new = max(diff or cands, key=lambda r: ctx.score(r, others))
     return [r.id for r in recipes[:i] + [new] + recipes[i + 1:]]
 
 

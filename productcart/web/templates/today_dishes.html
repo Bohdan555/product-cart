@@ -11,7 +11,7 @@
 {% else %}
 <div class="td-reel">
   {% for o in opts %}{% set d = o.dish %}{% set total = d.recipe.ingredients|length %}{% set got = o.have|length %}
-  <article class="td-dish" style="--c:var(--{{ PAL[loop.index0 % 6] }})">
+  <article class="td-dish{% if more and loop.index0 >= more * 3 %} td-new{% endif %}" id="o{{ loop.index0 }}" style="--c:var(--{{ PAL[loop.index0 % 6] }})">
     {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if loop.index0 %}loading="lazy"{% endif %}>{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
     <b class="t">{{ d.title }}</b>
     <div class="td-meta">
@@ -25,7 +25,17 @@
     <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}">Готую це</a>
   </article>
   {% endfor %}
+  {% if can_more %}
+  <a class="td-more" href="/today/dishes?{{ qs }}&amp;more={{ more + 1 }}#o{{ (more + 1) * 3 }}" data-turbo-action="replace">
+    <span class="td-more-ic" aria-hidden="true">＋</span><b>Ще 3 страви</b><small>інші варіанти з того, що є</small></a>
+  {% endif %}
 </div>
-<p class="td-hint">Гортайте вбік · спершу ті, де найменше треба купити</p>
+<p class="td-hint">Гортайте вбік · {{ opts|length }} {{ plural(opts|length, 'варіант', 'варіанти', 'варіантів') }} · спершу ті, де найменше треба купити</p>
+<script>
+(function () {   // після «Ще 3 страви» — плавно до першої нової
+  var first = document.querySelector('.td-dish.td-new'); if (!first) return;
+  setTimeout(function () { first.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }); }, 60);
+})();
+</script>
 {% endif %}
 {% endblock %}

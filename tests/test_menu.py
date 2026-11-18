@@ -1,4 +1,4 @@
-from productcart import catalog, menu
+from productcart import catalog, menu, planner
 from productcart.models import Offer, Profile
 from productcart.sources import demo
 
@@ -135,3 +135,26 @@ def test_recipe_catalog_is_consistent():
             assert not recipe_tags(r) & {"meat", "fish"}, r.id
         if "веганське" in r.likes:
             assert not recipe_tags(r) & {"meat", "fish", "dairy", "eggs"}, r.id
+
+
+def test_swap_goes_through_whole_pool_before_repeating():
+    offs = planner.merge_nearby(demo.load())
+    p = Profile(name="x")
+    cur = menu.plan(offs, p, dinners=5, max_minutes=p.max_minutes).ids
+    skip, seen = [], []
+    for _ in range(60):
+        new = menu.swap(offs, p, cur, 0, max_minutes=p.max_minutes, skip=skip)
+        skip = [cur[0], new[0]] + [x for x in skip if x not in (cur[0], new[0])]
+        cur = new
+        seen.append(cur[0])
+    assert len(set(seen)) == 60                                       # 60 замін — жодного повтору
+    prots = [next(r for r in menu.RECIPES if r.id == x).protein for x in seen[:10]]
+    assert all(a != b for a, b in zip(prots, prots[1:]))              # щоразу інший основний продукт
+
+
+def test_today_more_options():
+    offs = planner.merge_nearby(demo.load())
+    a = menu.today(offs, Profile(name="x"), ["eggs"], 40, n=3)
+    b = menu.today(offs, Profile(name="x"), ["eggs"], 40, n=9)
+    assert len(b) == 9 and [o.dish.recipe.id for o in b[:3]] == [o.dish.recipe.id for o in a]
+    assert len({o.dish.recipe.id for o in b}) == 9

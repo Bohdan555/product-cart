@@ -1079,7 +1079,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         new = menu.swap(offers, p, current, i, max_minutes=p.max_minutes, skip=p.menu_skip)
         if new is None:
             return go("/menu#d%d" % max(i, 0))
-        p.menu_skip = ([current[i]] + [x for x in p.menu_skip if x != current[i]])[:6]
+        # пам'ятаємо всі замінені й показані за тиждень (гостю — менше: усе живе в cookie)
+        seen = [current[i], new[i]] + [x for x in p.menu_skip if x not in (current[i], new[i])]
+        p.menu_skip = seen[:200 if u else 40]
         p.menu = new
         analytics.track(conn, u["id"] if u else None, "menu_swap", dish_from=current[i], dish_to=new[i], guest=not u)
         return menu_done(u, p, health, f"/menu?swapped={i}#d{i}")
@@ -1483,10 +1485,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         have, t, n = today_args(request)
         p, link, stores, is_demo, offers = await today_offers(request, u, n)
-        opts = menu.today(offers, p, have, max_minutes=t)
+        try:
+            more = max(0, min(10, int(request.query_params.get("more") or 0)))
+        except ValueError:
+            more = 0
+        want = 3 * (more + 1)                      # «Ще 3 страви» — щоразу на три більше
+        opts = menu.today(offers, p, have, max_minutes=t, n=want)
         analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
-                        options=len(opts), guest=not u)
+                        options=len(opts), guest=not u, more=more)
         return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
+                      more=more, can_more=len(opts) == want and more < 10,
                       is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
 
     @app.get("/today/dish/{rid}", response_class=HTMLResponse)
