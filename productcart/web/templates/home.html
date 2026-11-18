@@ -25,10 +25,5 @@
     <span class="go" aria-hidden="true">→</span>
   </a>
 
-  {% if st and st.saved > 0 %}
-  <div class="saved"><span>Ви зекономили за {{ st.month }}</span><b>−{{ st.saved }} ₴</b></div>
-  {% elif not user %}
-  <p class="note">Без реєстрації · ціни поки демонстраційні</p>
-  {% endif %}
 </section>
 {% endblock %}

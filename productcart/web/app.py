@@ -443,21 +443,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return render(request, "home.html", u, st=user_stats(u["id"]) if u else None, cooking=cooking_items(p)[:3])
 
     def user_stats(uid: int) -> dict:
-        """Для головної й профілю: зекономлено цього місяця (з кошиків), скільки страв приготовано."""
+        """Для профілю: скільки страв приготовано цього місяця."""
         today = date.today()
         since = f"{today.year:04d}-{today.month:02d}-01"
-        saved = cooked = 0
-        for r in conn.execute("SELECT event, meta FROM events WHERE user_id=? AND ts >= ? AND event IN "
-                              "('silpo_cart_built', 'today_cart', 'cooked')", (uid, since)).fetchall():
-            if r["event"] == "cooked":
-                cooked += 1
-            try:
-                saved += float(json.loads(r["meta"] or "{}").get("saving") or 0)
-            except (ValueError, TypeError):
-                pass
-        months = ["січень", "лютий", "березень", "квітень", "травень", "червень", "липень", "серпень", "вересень",
-                  "жовтень", "листопад", "грудень"]
-        return {"saved": round(saved), "cooked": cooked, "month": months[today.month - 1]}
+        cooked = conn.execute("SELECT COUNT(*) AS n FROM events WHERE user_id=? AND ts >= ? AND event='cooked'",
+                              (uid, since)).fetchone()["n"]
+        return {"cooked": cooked}
 
     @app.get("/me", response_class=HTMLResponse)
     def me_page(request: Request):

@@ -14,7 +14,6 @@
     <span>{% if link and link.store_id %}<i class="dot"></i>«Сільпо» · {{ link.store_title }}{% elif link %}<i class="dot"></i>«Сільпо» підключено{% else %}«Сільпо» не підключено{% endif %}</span></div>
 </section>
 <div class="pstats">
-  <div style="--c:var(--p-basil);--ic:var(--s-basil)">{{ ic("leaf", "mid") }}<small>Зекономлено</small><b>{% if st.saved %}−{{ st.saved }} ₴{% else %}—{% endif %}</b><em>за {{ st.month }}</em></div>
   <div style="--c:var(--p-citrus);--ic:var(--s-citrus)">{{ ic("pan", "mid") }}<small>Приготовано</small><b>{{ st.cooked }}</b><em>{{ plural(st.cooked, 'страва', 'страви', 'страв') }}</em></div>
   <a href="/fridge" style="--c:var(--p-sky);--ic:var(--s-sky)">{{ ic("fridge", "mid") }}<small>Є вдома</small><b>{{ fridge_n }}</b><em>{{ plural(fridge_n, 'продукт', 'продукти', 'продуктів') }}</em></a>
 </div>
