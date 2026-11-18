@@ -709,7 +709,7 @@ def test_me_profile_page(client):
     client.post("/today/cooked", data={"csrf": token, "id": "omelette"})
     client.post("/cook/done", data={"csrf": token, "id": "omelette"})
     me = client.get("/me").text
-    assert "Ваш профіль" in me and "Приготовано" in me and "<b>1</b>" in me and "«Сільпо» не підключено" in me
+    assert "Ваш профіль" in me and "Приготовано" not in me and "«Сільпо» не підключено" in me
     assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
 
 

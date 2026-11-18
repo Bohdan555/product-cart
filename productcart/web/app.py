@@ -441,15 +441,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         analytics.track(conn, u["id"] if u else None, "home_viewed", guest=not u)
         p = load_profile(u["id"])[0] if u else guest_profile(request)
-        return render(request, "home.html", u, st=user_stats(u["id"]) if u else None, cooking=cooking_items(p)[:3])
-
-    def user_stats(uid: int) -> dict:
-        """Для профілю: скільки страв приготовано цього місяця."""
-        today = date.today()
-        since = f"{today.year:04d}-{today.month:02d}-01"
-        cooked = conn.execute("SELECT COUNT(*) AS n FROM events WHERE user_id=? AND ts >= ? AND event='cooked'",
-                              (uid, since)).fetchone()["n"]
-        return {"cooked": cooked}
+        return render(request, "home.html", u, cooking=cooking_items(p)[:3])
 
     @app.get("/me", response_class=HTMLResponse)
     def me_page(request: Request):
@@ -458,7 +450,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p = load_profile(u["id"])[0] if u else guest_profile(request)
         mine = menu.user_recipes(p)
         days = day_labels(p)[:p.dinners]
-        ctx = dict(p=p, mine=mine, days=days, st=user_stats(u["id"]) if u else None,
+        ctx = dict(p=p, mine=mine, days=days,
                    link=silpo_link(u["id"]) if u else None, chat=tg_chat(u["id"]) if u else None,
                    push_n=len(push_subs(u["id"])) if u else 0,
                    likes=[TAG_LABELS.get(t, t) for t in p.likes][:4], hides=[TAG_LABELS.get(t, t) for t in p.dislikes][:3],
