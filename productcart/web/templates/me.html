@@ -25,7 +25,7 @@
 <div class="pgroup">
   {{ row("/cook", "pan", "Готую", (cook_n ~ " " ~ plural(cook_n, 'рецепт', 'рецепти', 'рецептів')) if cook_n else "збережені рецепти") }}
   {{ row("/menu/setup", "calendar", "Меню на тиждень", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей') ~ " · " ~ (days|join(', ')) ~ " · до " ~ p.max_minutes ~ " хв" ~ ((" · " ~ p.menu_budget|int ~ " ₴") if p.menu_budget else "")) }}
-  {{ row("/taste?next=/me", "taste", "Смаки", ((likes|join(', ')) if likes else "не вибрано") ~ ((" · без: " ~ hides|join(', ')) if hides else "")) }}
+  {{ row("/menu/setup?step=3", "taste", "Смаки", ((likes|join(', ')) if likes else "не вибрано") ~ ((" · без: " ~ hides|join(', ')) if hides else "")) }}
   {% if user %}
   {{ row("/dishes", "book", "Мої страви", (mine|length ~ " " ~ plural(mine|length, 'рецепт', 'рецепти', 'рецептів')) if mine else "запишіть свої") }}
   {{ row("/profile", "leaf", "Дієти й анкета", "обмеження, що купуєте щотижня") }}

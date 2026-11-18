@@ -47,7 +47,7 @@ GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 # Кнопка «←» на внутрішніх сторінках: куди повертатись (вкладки й сторінки зі своєю «←» тут не перелічені)
-BACK = {"/fridge": "/", "/taste": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
+BACK = {"/fridge": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
         "/silpo": "/me", "/privacy": "/me", "/photos": "/me", "/admin/stats": "/me", "/login": "/", "/register": "/"}
 cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None)   # прилади з поточного запиту
 MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "salad": "Салат"}
@@ -68,8 +68,6 @@ def taste_known(p: Profile) -> bool:
     return bool(p.taste_done or p.likes or p.dislikes or p.dish_likes)
 
 
-def safe_next(url: str, default: str = "/") -> str:
-    return url if url.startswith("/") and not url.startswith("//") and "\\" not in url else default
 
 
 def day_labels(p: Profile) -> list[str]:
@@ -484,10 +482,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     @app.get("/week")
     def week_start(request: Request):
         """План на тиждень починається з «що є вдома» (крок ①); далі меню (②) і покупки (③).
-        Хто ще не розповів про смаки — спершу анкета."""
-        u = user_of(request)
-        p = load_profile(u["id"])[0] if u else guest_profile(request)
-        return go("/fridge") if taste_known(p) else go("/taste?next=/fridge")
+        Смаки питаємо, коли вперше складаємо меню (конструктор /menu/setup)."""
+        return go("/fridge")
 
     @app.get("/register", response_class=HTMLResponse)
     def register_form(request: Request):
@@ -521,7 +517,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     def after_signup(uid: int) -> str:
         """Новий акаунт: спершу смаки (якщо гостем ще не розповів), потім «Сільпо»."""
-        return "/start" if taste_known(load_profile(uid)[0]) else "/taste?next=/start&welcome=1"
+        return "/start"
 
     def signed_in(uid: int, url: str):
         token, _ = security.new_session(conn, uid)
@@ -816,11 +812,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             log.warning("Сільпо: автоналаштування: %s", str(root_error(e))[:500])
         return title
 
-    # ---------- анкета смаків: перший крок основного сценарію ----------
+    # ---------- смаки в конструкторі меню ----------
     def taste_dishes(p: Profile) -> list:
         """12 страв-зразків з фото, по одній на основний продукт; уже вподобані — першими."""
         photos = menu_photos()
-        pool = [r for r in menu.RECIPES if "dinner" in r.meals and r.id not in p.dish_dislikes]
+        bad = p.excluded_tags()
+        pool = [r for r in menu.RECIPES if "dinner" in r.meals and r.id not in p.dish_dislikes and not (menu.recipe_tags(r) & bad)]
         out = [r for r in pool if r.id in p.dish_likes][:12]
         for prot in TASTE_PROTEINS:
             if len(out) >= 12:
@@ -836,49 +833,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 break
             if r not in out:
                 out.append(r)
-        return [(r, photos.get(r.id)) for r in out]
+        return [(r, photos.get(r.id), " ".join(sorted(menu.recipe_tags(r)))) for r in out]
 
-    def taste_gate(request: Request):
-        """Перший вхід у «Сьогодні» чи «Тиждень» без анкети смаків — спершу анкета (30 секунд)."""
-        u = user_of(request)
-        p = load_profile(u["id"])[0] if u else guest_profile(request)
-        if taste_known(p):
-            return None
-        nxt = request.url.path + ("?" + request.url.query if request.url.query else "")
-        return go("/taste?" + urlencode({"next": nxt}))
-
-    @app.get("/taste", response_class=HTMLResponse)
-    def taste_page(request: Request, next: str = "/", welcome: int = 0):
-        u = user_of(request)
-        p = load_profile(u["id"])[0] if u else guest_profile(request)
-        return render(request, "taste.html", u, p=p, tastes=SETUP_TASTES, hideable=SETUP_HIDE, dishes=taste_dishes(p),
-                      next=safe_next(next), welcome=welcome, first=not taste_known(p))
-
-    @app.post("/taste")
-    async def taste_save(request: Request):
-        form, u, p, health, bad = await menu_form(request)
-        if bad:
-            return bad
-        nxt = safe_next(str(form.get("next", "/")))
-        if not form.get("skip"):
-            tags = {t for t, _, _ in SETUP_TASTES}
-            likes = [t for t in form.getlist("likes") if t in tags]
-            hide = [t for t in form.getlist("hide") if t in SETUP_HIDE and t not in likes]
-            p.likes = [t for t in p.likes if t not in tags] + likes
-            p.dislikes = [t for t in p.dislikes if t not in SETUP_HIDE] + hide
-            shown = set(form.getlist("shown"))
-            picked = [x for x in form.getlist("dishes") if x in menu.RECIPE_BY_ID]
-            p.dish_likes = (picked + [x for x in p.dish_likes if x not in shown and x not in picked])[:30]
-            p.dish_dislikes = [x for x in p.dish_dislikes if x not in picked]
-            p.menu, p.menu_skip = [], []          # меню складемо наново — вже під смаки
-        p.taste_done = True
-        analytics.track(conn, u["id"] if u else None, "taste_skip" if form.get("skip") else "taste_saved",
-                        likes=len(p.likes), hides=len(p.dislikes), dishes=len(p.dish_likes), guest=not u)
-        resp = go(nxt)
-        if u:
-            save_profile(u["id"], p, health)
-            return resp
-        return keep_guest(resp, p)
+    @app.get("/taste")
+    def taste_page():
+        """Старе посилання: смаки тепер — кроки конструктора меню."""
+        return go("/menu/setup?step=3")
 
     @app.get("/start", response_class=HTMLResponse)
     def start_page(request: Request):
@@ -1171,6 +1131,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             hide = [t for t in str(form.get("hide", "")).split(",") if t in SETUP_HIDE]
             p.likes = [t for t in p.likes if t not in tags] + likes
             p.dislikes = [t for t in p.dislikes if t not in SETUP_HIDE] + hide
+        if "shown" in form:                       # «Улюблені страви»: позначені з показаних зразків
+            shown = set(str(form.get("shown", "")).split(","))
+            picked = [x for x in str(form.get("dishes", "")).split(",") if x in menu.RECIPE_BY_ID]
+            p.dish_likes = (picked + [x for x in p.dish_likes if x not in shown and x not in picked])[:30]
+            p.dish_dislikes = [x for x in p.dish_dislikes if x not in picked]
         return p
 
     def setup_offers(u) -> tuple[list[Offer], bool]:
@@ -1187,8 +1152,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         p = load_profile(u["id"])[0] if u else guest_profile(request)
         days = p.menu_days if len(p.menu_days) == p.dinners else list(range(p.dinners))
+        try:
+            step = max(0, min(5, int(request.query_params.get("step", 0))))
+        except ValueError:
+            step = 0
         return render(request, "setup.html", u, p=p, days=days, day_names=menu.DAYS, tastes=SETUP_TASTES,
-                      hideable=SETUP_HIDE, guest=not u)
+                      hideable=SETUP_HIDE, dishes=taste_dishes(p), step=step,
+                      first=bool(request.query_params.get("first")), guest=not u)
 
     @app.post("/menu/preview")
     async def menu_preview(request: Request):
@@ -1216,6 +1186,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         p = setup_apply(p, form)
         p.menu, p.menu_skip = [], []
+        p.taste_done = True
         analytics.track(conn, u["id"] if u else None, "menu_setup", people=p.household, dinners=p.dinners,
                         max_minutes=p.max_minutes, budget=p.menu_budget, likes=len(p.likes), guest=not u)
         return menu_done(u, p, health, "/menu?fresh=1")
@@ -1657,8 +1628,6 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     @app.get("/today", response_class=HTMLResponse)
     def today_page(request: Request):
-        if gate := taste_gate(request):
-            return gate
         u = user_of(request)
         have, t, n = today_args(request)
         if not request.query_params.get("have") and u:      # що вже є вдома з фото холодильника
@@ -1768,7 +1737,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p = load_profile(u["id"])[0] if u else None
         choices = sorted(((k, v[0]) for k, v in menu.INGREDIENTS.items()), key=lambda x: x[1])
         words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
-        return render(request, "fridge.html", u, p=p, choices=choices, names=dict(choices), words=words)
+        tp = p or guest_profile(request)
+        return render(request, "fridge.html", u, p=p, choices=choices, names=dict(choices), words=words,
+                      next_url="/menu" if taste_known(tp) else "/menu/setup?first=1")
 
     @app.post("/fridge/scan")
     async def fridge_scan(request: Request):
@@ -1817,6 +1788,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu, p.menu_skip = [], []        # меню перебудуємо під те, що є вдома
         save_profile(u["id"], p, health)
         analytics.track(conn, u["id"], "fridge_saved", have=len(p.fridge), other=len(p.fridge_other))
+        if not taste_known(p):       # перше меню складаємо разом: люди, час, смаки, улюблені страви
+            return go("/menu/setup?first=1")
         return go("/menu?fresh=1" if p.fridge else "/menu")
 
     @app.post("/fridge/remove")

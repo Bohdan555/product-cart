@@ -38,7 +38,8 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert items[0]["label"] == "Стегно куряче" and items[0]["emoji"] and seen[0][1:] == ("image/png", "oidc-1")
 
         r = c.post("/fridge/save", data={"csrf": token, "have": ["chicken_thigh", "potato", "bogus"], "other": ["Кетчуп"]})
-        assert r.headers["location"] == "/menu?fresh=1"
+        assert r.headers["location"] == "/menu/setup?first=1"        # перше меню — через конструктор зі смаками
+        assert c.post("/menu/setup", data={"csrf": token, "people": "2"}).headers["location"] == "/menu?fresh=1"
         m = c.get("/menu").text
         assert "✓ є вдома: стегно куряче, картопля" in m and "✓ Вже є вдома" in c.get("/buy").text
         assert "Курячі стегна з картоплею" in m        # страва, що доїдає стегна й картоплю, потрапила в меню

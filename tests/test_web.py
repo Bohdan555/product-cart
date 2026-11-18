@@ -56,7 +56,7 @@ def csrf(html: str) -> str:
 
 def register(c, email="a@b.ua"):
     r = c.post("/register", data={"email": email, "password": "password123", "agree": "1"})
-    assert r.status_code == 303 and r.headers["location"] in ("/taste?next=/start&welcome=1", "/start")
+    assert r.status_code == 303 and r.headers["location"] == "/start"
     return csrf(c.get("/profile").text)
 
 
@@ -211,10 +211,8 @@ def test_landing_and_guest_menu(client):
     r = client.get("/")
     assert r.status_code == 200 and 'href="/today"' in r.text and 'href="/week"' in r.text
     assert "прототип" not in r.text and 'href="/me"' in r.text
-    assert client.get("/week").headers["location"] == "/taste?next=/fridge"     # спершу анкета смаків
-    assert client.get("/today").headers["location"] == "/taste?next=%2Ftoday"
-    assert client.post("/taste", data={"skip": "1", "next": "/fridge"}).headers["location"] == "/fridge"
     assert client.get("/week").headers["location"] == "/fridge"
+    assert client.get("/today").status_code == 200
     # гість відкриває меню без реєстрації, на демо-цінах
     r = client.get("/menu")
     assert r.status_code == 200 and "демо-ціни" in r.text and "pc_guest" in client.cookies
@@ -275,7 +273,7 @@ def test_google_signup_login_and_guards(tmp_path):
         assert "Увійти через Google" in c.get("/login").text
         c.post("/menu/settings", data={"people": "4"})           # гість налаштував меню
         r = google_login(c)
-        assert r.status_code == 303 and r.headers["location"] == "/taste?next=/start&welcome=1"
+        assert r.status_code == 303 and r.headers["location"] == "/start"
         assert "4 людини" in c.get("/menu").text                  # налаштування гостя збереглись
         c.cookies.clear()
         assert google_login(c).headers["location"] == "/list"      # повторний вхід — той самий профіль
@@ -654,7 +652,6 @@ def test_menu_setup_wizard_guest_and_user(client):
 
 
 def test_today_flow_guest_and_user(client):
-    client.post("/taste", data={"skip": "1"})
     page = client.get("/today").text
     assert "Що є" in page and 'id="hvIn"' in page and 'id="hvMic"' in page and "Часто є вдома" not in page and 'href="/register"' in page
     r = client.get("/today/dishes", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2", "meal": "dinner"})
@@ -722,31 +719,30 @@ def test_me_profile_page(client):
     assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
 
 
-def test_taste_survey_first_and_drives_picks(client):
-    page = client.get("/taste?next=/today").text
-    assert "до смаку" in page and 'name="dishes"' in page and "Пропустити" in page and page.count('class="tq-dish"') == 12
-    r = client.post("/taste", data={"next": "//evil.example", "likes": ["fish", "vegetables"], "hide": ["pork"],
-                                    "dishes": ["omelette", "nope"], "shown": ["omelette", "flotski"]})
-    assert r.headers["location"] == "/"                                   # чужі адреси не приймаємо
-    assert client.get("/today").status_code == 200                       # анкету пройдено — далі без неї
-    page = client.get("/taste").text
-    assert "Пропустити" not in page and 'value="omelette" checked' in page and 'data-state="hide"' in page
-    token = register(client, "taste@b.ua")                               # смаки гостя переходять в акаунт
+def test_tastes_inside_menu_setup(client):
+    page = client.get("/menu/setup?first=1&step=3").text
+    assert "до смаку" in page and 'id="suDishes"' in page and page.count('class="tq-dish"') == 12 and "go(3)" in page
+    base = {"people": "2", "days": "0,1,2,3,4", "minutes": "60"}
+    plain = client.post("/menu/preview", data=base).json()
+    liked = client.post("/menu/preview", data={**base, "likes": "fish", "dishes": "flotski", "shown": "flotski,omelette"}).json()
+    assert "flotski" in [d["id"] for d in liked["dishes"]] and liked["dishes"] != plain["dishes"]   # смаки міняють меню наживо
+    r = client.post("/menu/setup", data={**base, "likes": "fish", "hide": "pork", "dishes": "omelette,nope", "shown": "flotski,omelette"})
+    assert r.headers["location"] == "/menu?fresh=1"
+    page = client.get("/menu/setup").text
+    assert 'value="omelette" checked' in page and "Борщ зі свининою" not in page      # «не їм» свинину — без свинячих страв
+    token = register(client, "taste@b.ua")                                # смаки гостя переходять в акаунт
+    r = client.post("/fridge/save", data={"csrf": token, "have": ["potato"]})
+    assert r.headers["location"] == "/menu?fresh=1"                       # смаки вже знаємо — одразу меню
     p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
-    assert '"taste_done": true' in p and '"omelette"' in p and '"pork"' in p
-    assert "риба" in client.get("/me").text
-    r = client.post("/taste", data={"csrf": token, "next": "/me", "likes": "meat"})
-    assert r.headers["location"] == "/me"
-    p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
-    assert '"likes": ["meat"]' in p and '"omelette"' in p                   # не показані страви лишились вподобаними
-    assert client.post("/taste", data={"csrf": "bad"}).status_code == 400
+    assert '"taste_done": true' in p and '"omelette"' in p and '"pork"' in p and '"fish"' in p
+    assert 'href="/menu/setup?step=3"' in client.get("/me").text
+    assert client.get("/taste").headers["location"] == "/menu/setup?step=3"
 
 
 def test_dock_marks_section(client):
     def on(path):
         import re as _re
         return _re.search(r'data-sect="(\w+)" class="on"', client.get(path).text).group(1)
-    client.post("/taste", data={"skip": "1"})
     assert on("/menu") == "cook" and on("/") == "cook" and on("/today") == "cook"
     assert on("/list") == "deals" and on("/me") == "me"
 
