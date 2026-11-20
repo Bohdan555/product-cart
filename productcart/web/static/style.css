@@ -1,10 +1,4 @@
-/* Шрифти з нашого сервера (Fontsource, ліцензія OFL) — без звернень до Google Fonts */
-@font-face{font-family:"Onest";font-style:normal;font-display:swap;font-weight:100 900;src:url(/static/fonts/onest-cyrillic-ext-wght-normal.woff2) format("woff2");unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
-@font-face{font-family:"Onest";font-style:normal;font-display:swap;font-weight:100 900;src:url(/static/fonts/onest-cyrillic-wght-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
-@font-face{font-family:"Onest";font-style:normal;font-display:swap;font-weight:100 900;src:url(/static/fonts/onest-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-@font-face{font-family:"Unbounded";font-style:normal;font-display:swap;font-weight:200 900;src:url(/static/fonts/unbounded-cyrillic-ext-wght-normal.woff2) format("woff2");unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
-@font-face{font-family:"Unbounded";font-style:normal;font-display:swap;font-weight:200 900;src:url(/static/fonts/unbounded-cyrillic-wght-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
-@font-face{font-family:"Unbounded";font-style:normal;font-display:swap;font-weight:200 900;src:url(/static/fonts/unbounded-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* Шрифти: системні — на iPhone, iPad і Mac це SF Pro (вбудовувати SF у сайт ліцензія Apple не дозволяє), на Android — Roboto */
 /* Кошик з акцій: спокійна «бакалійна» палітра — папір, зелень цінника, жовтий стікер знижки */
 :root{--r-xs:6px;--r-sm:12px;--r-md:16px;--r-lg:20px;--r-xl:28px;--sh-soft:0 6px 16px -10px var(--shadow);--sh-lift:0 14px 30px -18px var(--shadow);--bg:#fbfaf8;--card:#fff;--ink:#1d211f;--muted:#5a5f5b;--line:#e9e7e2;--accent:#2a7a52;--accent-ink:#fff;--soft:#d9eadf;
   --sticker:#f3d77a;--sticker-ink:#2b2410;--bad:#b3261e;--bad-soft:#fbe3df;--chip:#f1efeb;
@@ -13,7 +7,7 @@
   --shadow:rgba(25,30,28,.14);--heart:#d0466b;
   /* насичені пари до пастелей — пляма під контуром іконок */
   --s-tomato:#f2957a;--s-citrus:#f4c84a;--s-basil:#72c495;--s-plum:#a98ee0;--s-sky:#72aee0;--s-berry:#ec8db4;
-  --display:"Unbounded",system-ui,sans-serif;--body:"Onest",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  --display:-apple-system,"SF Pro Display",BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--body:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#141716;--card:#1b1f1d;--ink:#eef1ee;--muted:#9ba29d;--line:#262b28;--accent:#5cc48f;
   --accent-ink:#0d1f15;--soft:#21322a;--chip:#1d211f;--bad:#f2b8b5;--bad-soft:#3a1d1b;--sticker:#e2c660;
   --p-tomato:#3a2a25;--p-citrus:#38321f;--p-basil:#21322a;--p-plum:#2b2836;--p-berry:#36252b;--p-sky:#22303a;
@@ -1445,3 +1439,14 @@ header.top .hdots{margin-left:4px}
 .mlist .brow{background:var(--card);box-shadow:0 1px 0 var(--line)}
 .mlist .brow .ic{border-radius:var(--r-md)}
 .copy{background:var(--chip);color:var(--ink);border-radius:999px;min-height:44px;padding:10px 16px;font:600 14px/1.2 var(--body)}
+/* Картки акцій: ціна й стара ціна в одному рядку; колір категорії — лише на плитці з фото */
+#feed .pcard{background:var(--card);box-shadow:0 1px 0 var(--line)}
+#feed .pimg{background:var(--c)!important}
+#feed .pprice{flex-wrap:nowrap;gap:6px;white-space:nowrap}
+#feed .pprice b{font-size:22px}
+#feed .pprice s{font-size:13px}
+/* Рядки «Що купити»: праворуч два рядки — ціна, а під нею знижка й стара ціна */
+.mlist .brow .rprice .rsub{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.mlist .brow .rprice .rsub .disc{transform:none}
+/* «Ось що можна приготувати»: однакові білі картки замість кольорів по черзі */
+.td-dish{background:var(--card);box-shadow:0 1px 0 var(--line)}

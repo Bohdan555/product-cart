@@ -87,7 +87,7 @@
   {% if m.promo_lines %}
   <div class="group" data-copy="🏷 В акції"><div class="gh"><b>В акції</b></div>
   {% for l in m.promo_lines %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
-    {% call row(l, uah(l.cost)) %}<span class="rprice"><b>{{ uah(l.cost) }}{% if o.discount_pct %}<span class="disc">−{{ o.discount_pct|round|int }}%</span>{% endif %}</b>{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</span>
+    {% call row(l, uah(l.cost)) %}<span class="rprice"><b>{{ uah(l.cost) }}</b>{% if o.discount_pct or l.regular > l.cost %}<span class="rsub">{% if o.discount_pct %}<span class="disc">−{{ o.discount_pct|round|int }}%</span>{% endif %}{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</span>{% endif %}</span>
       {% if link_url %}<a class="bgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}{% endcall %}
   {% endfor %}</div>
   {% endif %}
