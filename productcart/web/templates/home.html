@@ -1,29 +1,64 @@
 {% extends "base.html" %}
 {% block title %}Кошик з акцій — що приготувати з того, що є, і з акцій «Сільпо»{% endblock %}
 {% block body %}
-<section class="home">
-  <h1 class="xh">Що <span class="hl">готуємо?</span></h1>
-  <p class="lead">Страви з того, що є вдома, і з акцій «Сільпо» поруч.</p>
-  {% with dismiss = "pc-install-hide" %}{% include "_install.html" %}{% endwith %}
-
-  {% if cooking %}
-  <a class="ck-card" href="/cook">
-    <span class="ck-thumbs" aria-hidden="true">{% for it in cooking %}<i>{{ it.recipe.emoji }}</i>{% endfor %}</span>
-    <span class="ck-t"><b>Готуєте: {{ cooking|map(attribute='recipe')|map(attribute='title')|join(', ')|truncate(48) }}</b><small>рецепти збережено →</small></span>
-  </a>
-  {% endif %}
-  <a class="door today" href="/today">
-    <span class="icotile lg">{{ ic("pan", "big") }}</span>
-    <b>Що приготувати сьогодні?</b>
-    <small>З того, що є під рукою · 30 хв</small>
-    <span class="go" aria-hidden="true">→</span>
-  </a>
-  <a class="door week" href="/week">
-    <span class="icotile lg">{{ ic("calendar", "big") }}</span>
-    <b>План на тиждень</b>
-    <small>Вечері з акцій і готовий кошик</small>
-    <span class="go" aria-hidden="true">→</span>
-  </a>
-
+<section class="hm-hero">
+  <div class="hm-loc">
+    <span class="hm-pin" aria-hidden="true">{{ ic("pin") }}</span>
+    {% if link and link.store_title %}<a href="/silpo"><b>{{ link.store_title }}</b><small>Акції цього магазину</small></a>
+    {% elif user %}<a href="/silpo"><b>Підключіть «Сільпо»</b><small>Зараз — демо-ціни</small></a>
+    {% else %}<a href="/register"><b>Демо-ціни</b><small>Увійдіть, щоб бачити свій магазин</small></a>{% endif %}
+    <a class="hm-me" href="/me" aria-label="Профіль">{{ ic("user") }}</a>
+  </div>
+  <h1 class="hm-h">Що готуємо сьогодні?</h1>
+  <a class="hm-search" href="/today"><span class="hm-sico" aria-hidden="true">{{ ic("search", "sm") }}</span><span>Курка, рис, яйця…</span><b aria-hidden="true">{{ ic("mic") }}</b></a>
 </section>
+
+<nav class="hm-cats" aria-label="Швидкі розділи">
+  {% for href, icon, label in [("/today", "pan", "Сьогодні"), ("/week", "calendar", "Тиждень"), ("/list", "tag", "Акції"),
+      ("/silpo/cart" if user else "/register", "cart", "Кошик"), ("/today/dishes?meal=breakfast&t=30&n=" ~ people, "sun", "Сніданки"),
+      ("/today/dishes?meal=salad&t=30&n=" ~ people, "leaf", "Салати"), ("/today/dishes?meal=dinner&t=30&n=" ~ people, "bolt", "До 30 хв"),
+      ("/dishes" if user else "/register", "book", "Мої страви")] %}
+  <a href="{{ href }}"><i>{{ ic(icon) }}</i>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if cooking %}
+<a class="ck-card" href="/cook">
+  <span class="ck-thumbs" aria-hidden="true">{% for it in cooking %}<i>{{ it.recipe.emoji }}</i>{% endfor %}</span>
+  <span class="ck-t"><b>Готуєте: {{ cooking|map(attribute='recipe')|map(attribute='title')|join(', ')|truncate(48) }}</b><small>рецепти збережено →</small></span>
+</a>
+{% endif %}
+
+<a class="hm-promo" href="/week">
+  <span><b>Меню на тиждень з акцій</b><small>Вечері з того, що зі знижкою, і готовий кошик за хвилину</small></span>
+  <i aria-hidden="true">{{ ic("cart", "big") }}</i>
+</a>
+
+{% with dismiss = "pc-install-hide" %}{% include "_install.html" %}{% endwith %}
+
+{% if deals %}
+<div class="hm-sec"><h2>Гарячі акції{% if not is_demo %} поруч{% endif %}</h2><a href="/list">Усі →</a></div>
+<div class="hm-row" role="list">
+  {% for o in deals %}{% set v = visual(o) %}
+  <a class="hm-deal" role="listitem" href="/list" style="--c:var(--{{ v.pastel }})">
+    <span class="hm-dim">{% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}<span class="hm-emo" aria-hidden="true">{{ v.emoji }}</span><s>−{{ o.discount_pct|round|int }}%</s></span>
+    <span class="hm-dn">{{ o.name }}</span>
+    <span class="hm-dp"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if ideas %}
+<div class="hm-sec"><h2>{{ "З того, що є вдома" if have else ("Швидкий сніданок" if meal == "breakfast" else "Швидко на вечерю") }}</h2><a href="/today">Ще →</a></div>
+<div class="hm-row" role="list">
+  {% for o in ideas %}{% set d = o.dish %}
+  <a class="hm-dish" role="listitem" href="/today/dish/{{ d.id }}?{{ ideas_qs }}&amp;meal={{ meal }}">
+    {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" loading="lazy">{% else %}<span class="hm-dem" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+    <span class="hm-di"><b>{{ d.title }}</b>
+      <span class="hm-tags">{% if not o.lines %}<em class="ok">✓ Є все</em>{% else %}<em>Докупити {{ o.lines|length }}</em>{% endif %}<em>{{ d.minutes }} хв · {{ uah(d.per_portion|round) }}</em></span></span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
 {% endblock %}
