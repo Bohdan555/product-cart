@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Що можна приготувати — Кошик з акцій{% endblock %}
+{% block hback %}<a class="td-back hback" href="/today?{{ qs }}" aria-label="Назад">←</a>{% endblock %}
+{% block htail %}<span class="td-dots hdots" aria-label="Крок 3 з 3"><i class="on"></i><i class="on"></i><i class="on"></i></span>{% endblock %}
 {% block body %}
 {% set PAL = ["p-citrus", "p-tomato", "p-basil", "p-plum", "p-sky", "p-berry"] %}
-<div class="td-top"><a class="td-back" href="/today?{{ qs }}" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 3 з 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
 <h1 class="xh">Ось що <span class="hl">можна приготувати</span></h1>
 <nav class="td-meals" aria-label="Що готуємо">
   {% for k, label in meals.items() %}<a href="/today/dishes?{{ qs }}&amp;meal={{ k }}" data-turbo-action="replace"{% if k == meal %} class="on" aria-current="true"{% endif %}>{{ ic({'breakfast': 'sun', 'dinner': 'pan', 'salad': 'leaf'}[k], 'sm') }} {{ label }}</a>{% endfor %}

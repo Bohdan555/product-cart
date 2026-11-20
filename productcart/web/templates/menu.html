@@ -14,12 +14,14 @@
 
 {% if m.dishes %}
 {% if view != 'buy' %}
-<p class="eat-sum">
-  <span>{{ m.dishes|length }} {{ plural(m.dishes|length, 'вечеря', 'вечері', 'вечерь') }} · {{ m.people }} {{ plural(m.people, 'людина', 'людини', 'людей') }}</span>
-  <span>≈ <b data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</b> ₴ порція</span>
-  {% if m.saving >= 1 %}<span class="sv">−<b data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</b> ₴</span>{% endif %}
-  {% if is_demo %}<a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо-ціни</a>{% endif %}
-</p>
+<section class="eat-save">
+  {% if m.saving >= 1 %}<div class="sv-big"><small>Економія з акцій</small><b><span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span> ₴</b>{% set pn = m.promo_lines|length %}{% if pn %}<small>{{ pn }} {{ plural(pn, 'товар', 'товари', 'товарів') }} зі знижкою</small>{% endif %}</div>{% endif %}
+  <p class="eat-sum">
+    <span>{{ m.dishes|length }} {{ plural(m.dishes|length, 'вечеря', 'вечері', 'вечерь') }} · {{ m.people }} {{ plural(m.people, 'людина', 'людини', 'людей') }}</span>
+    <span>≈ <b data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</b> ₴ порція</span>
+    {% if is_demo %}<a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо-ціни</a>{% endif %}
+  </p>
+</section>
 <ol class="eat-list">
 {% for d in m.dishes %}{% set i = loop.index0 %}
   <li class="eat-row{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}" data-dish="{{ d.id }}">

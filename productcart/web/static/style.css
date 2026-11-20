@@ -1430,3 +1430,14 @@ body:has(.tq) .dock{display:none}
 .npush .nrow input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .npush .nrow small{display:block;color:var(--muted);font-size:13px;font-weight:400}
 .hv-hint .ico.ii,.ndef .ico.ii{margin:0 1px}
+/* Ключові екрани: компактна шапка з «←» і блок економії в меню тижня */
+header.top .hback{flex:none;width:44px;height:44px;margin-right:-2px}
+header.top:has(.hback) .logo-t{display:none}
+header.top .hdots{margin-left:4px}
+.eat-save{display:flex;align-items:center;gap:14px;background:var(--card);border-radius:22px;padding:14px 16px;margin:4px 0 14px;box-shadow:0 1px 0 var(--line)}
+.sv-big{display:flex;flex-direction:column;gap:2px;flex:none}
+.sv-big small{color:var(--muted);font-size:13px;line-height:1.2}
+.sv-big b{align-self:flex-start;font:900 30px/1.1 var(--display);letter-spacing:-.03em;background:var(--sticker);color:var(--sticker-ink);border-radius:12px;padding:4px 10px;margin:4px 0 2px;transform:rotate(-2deg);font-variant-numeric:tabular-nums}
+.eat-save .eat-sum{flex-direction:column;align-items:flex-start;gap:4px;margin:0;flex:1;min-width:0}
+.eat-save .sv-big + .eat-sum{border-left:1px solid var(--line);padding-left:14px}
+#menuroot > .mlist:first-child{margin-top:0}
