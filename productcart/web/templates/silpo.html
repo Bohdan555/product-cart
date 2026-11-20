@@ -12,7 +12,7 @@
 <div class="ok">Підключено{% if link.store_title %} · {{ link.store_title }}{% endif %}</div>
 <h2>{{ 'Змінити магазин' if link.store_id else 'Оберіть магазин' }}</h2>
 <div class="row" style="margin-bottom:10px">
-  <button class="btn" type="button" id="near-btn">📍 Знайти магазини поруч</button>
+  <button class="btn" type="button" id="near-btn">{{ ic("pin", "ii") }}Знайти магазини поруч</button>
   <span class="hint" id="near-msg"></span>
 </div>
 <script>

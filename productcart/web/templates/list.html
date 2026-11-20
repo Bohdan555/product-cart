@@ -8,7 +8,7 @@
   <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="lat" id="loc-lat"><input type="hidden" name="lon" id="loc-lon">
   <b>Магазини поруч</b>
   <label class="consent"><input type="checkbox" name="consent" value="1" id="loc-consent" checked> <span>Зберегти моє приблизне місце</span></label>
-  <div class="row"><button class="btn" type="button" id="loc-btn">📍 Визначити моє місце</button><span class="hint" id="loc-msg"></span></div>
+  <div class="row"><button class="btn" type="button" id="loc-btn">{{ ic("pin", "ii") }}Визначити моє місце</button><span class="hint" id="loc-msg"></span></div>
   {% if not link.store_id %}<p class="hint" style="margin:0"><a href="/silpo">Вибрати магазин вручну</a></p>{% endif %}
 </form>
 <script>
@@ -54,7 +54,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% if cats|length > 1 %}
 <div class="filters" role="group" aria-label="Категорії">
   {% set CEMO = {"Молочне": "🥛", "Яйця": "🥚", "М'ясо": "🥩", "Риба й морепродукти": "🐟", "Овочі": "🥦", "Фрукти": "🍎", "Крупи": "🌾", "Хліб і макарони": "🍞", "Бакалія": "🫒", "Кава": "☕", "Чай": "🍵", "Солодке": "🍫", "Напої": "🥤", "Побут": "🧴"} %}
-  <button type="button" class="fchip{% if not cat %} on{% endif %}" data-cat=""><span aria-hidden="true">🔥</span>Усе</button>
+  <button type="button" class="fchip{% if not cat %} on{% endif %}" data-cat="">Усе</button>
   {% for c in cats %}<button type="button" class="fchip{% if cat == c %} on{% endif %}" data-cat="{{ c }}"><span aria-hidden="true">{{ CEMO.get(c, "🛒") }}</span>{{ c }}</button>{% endfor %}
 </div>
 {% endif %}

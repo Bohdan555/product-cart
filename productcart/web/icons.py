@@ -32,6 +32,10 @@ ICONS = {
     "airfryer": '<rect x="5" y="3" width="14" height="18" rx="5" class="f"/><rect x="5" y="3" width="14" height="18" rx="5"/><path d="M5 13.5h14M10 17h4"/><circle cx="12" cy="8.2" r="2.2"/>',
     "microwave": '<rect x="2.5" y="5" width="19" height="14" rx="3" class="f"/><rect x="2.5" y="5" width="19" height="14" rx="3"/><rect x="5.5" y="8" width="9" height="8" rx="1.5"/><path d="M18 9h.01M18 12h.01M17 16h2"/>',
     "blender": '<path d="M7 3.5h10l-1.6 10H8.6z" class="f"/><path d="M7 3.5h10l-1.6 10H8.6zM10 9.5l2 1.5 2-1.5"/><rect x="6.5" y="15" width="11" height="6" rx="2"/><path d="M12 13.5V15M11 18h2"/>',
+    "mic": '<rect x="8.5" y="3" width="7" height="11.5" rx="3.5" class="f"/><rect x="8.5" y="3" width="7" height="11.5" rx="3.5"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>',
+    "pin": '<path d="M12 21s6.5-5.6 6.5-11a6.5 6.5 0 0 0-13 0c0 5.4 6.5 11 6.5 11z" class="f"/><path d="M12 21s6.5-5.6 6.5-11a6.5 6.5 0 0 0-13 0c0 5.4 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    "phone": '<rect x="6.5" y="2.5" width="11" height="19" rx="3" class="f"/><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 18.5h3"/>',
+    "star": '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z" class="f"/><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z"/>',
     "lock": '<rect x="5" y="10.5" width="14" height="10" rx="3" class="f"/><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
 }
 

@@ -1096,7 +1096,6 @@ body:has(.su) footer{display:none}
 .eat-row{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:20px;box-shadow:0 1px 0 var(--line);padding:6px 6px 6px 8px}
 .eat-row.fresh{animation:su-pop .45s cubic-bezier(.3,1.4,.5,1) both}
 .eat-open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:none;padding:4px;text-align:left;color:var(--ink);font:inherit;cursor:pointer}
-.eat-day{width:28px;flex:none;font-weight:800;font-size:13px;color:var(--muted)}
 .eat-open img,.eat-em{width:88px;height:88px;border-radius:18px;object-fit:cover;flex:none}
 .eat-em{display:grid;place-items:center;background:var(--chip);font-size:42px}
 .eat-t{min-width:0}.eat-t b{display:block;font-size:16px;line-height:1.25}
@@ -1422,3 +1421,12 @@ body:has(.tq) .dock{display:none}
 .btn{padding-top:14px;padding-bottom:14px}
 .padd,.td-back,.eat-swap,.su-x,.su-dots button,.copy,.scart-alt{min-height:44px;min-width:44px}
 .switch{min-height:36px;padding-left:12px;padding-right:12px}
+/* Іконки в тексті замість емодзі; день страви в підписі замість окремого стовпчика */
+.ico.ii{width:18px;height:18px;vertical-align:-3px;margin-right:6px;--ic:transparent}
+.fr-cta .cam .ico.big{width:44px;height:44px;--ic:var(--s-sky)}
+.eat-dn{color:var(--accent);font-weight:700}
+.eat-t small b.eat-dn{display:inline;font-size:inherit;line-height:inherit}
+.npush .nrow{display:flex;gap:12px;cursor:pointer}
+.npush .nrow input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.npush .nrow small{display:block;color:var(--muted);font-size:13px;font-weight:400}
+.hv-hint .ico.ii,.ndef .ico.ii{margin:0 1px}

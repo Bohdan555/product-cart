@@ -640,7 +640,7 @@ def test_menu_setup_wizard_guest_and_user(client):
     r = client.post("/menu/setup", data={"people": "3", "days": "0,2,4", "minutes": "30", "likes": "fish", "hide": "pork", "budget": "0"})
     assert r.headers["location"] == "/menu?fresh=1"
     m = client.get("/menu?fresh=1").text
-    assert "fresh-in" in m and "celebrate" in m and '<span class="eat-day">Ср</span>' in m
+    assert "fresh-in" in m and "celebrate" in m and '<b class="eat-dn">Ср</b>' in m
     assert client.get("/menu/setup").text.count('aria-pressed="true"') >= 3      # вибрані дні збереглись у cookie гостя
     token = register(client)
     r = client.post("/menu/setup", data={"csrf": token, "people": "4", "days": "5,6", "minutes": "180", "budget": "1500"})
