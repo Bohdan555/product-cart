@@ -1,6 +1,7 @@
 """Повний шлях на сайті з підробленим «Сільпо»: реєстрація → профіль → підключення → магазин → список."""
 import contextlib
 import re
+import json
 from urllib.parse import parse_qs, unquote, urlparse
 
 import pytest
@@ -788,3 +789,16 @@ def test_cook_list_saves_recipes_for_guest_and_user(client):
     client.post("/today/cooked", data={"csrf": token, "id": "plov", "n": "2"})
     assert "Плов з куркою" in client.get("/cook").text and "1 рецепт" in client.get("/me").text
     assert "Як готувати" in client.get("/cook/borscht").text      # не з мого списку — теж відкривається
+
+
+def test_demo_deals_get_stock_photos(client):
+    """Демо-товари без фото беруть стокове фото того самого продукту з кешу Unsplash."""
+    from productcart.web import unsplash, db as wdb
+    conn = client.app.state.conn
+    unsplash._mem.clear()
+    wdb.set_setting(conn, unsplash.KEY, json.dumps({"p:c6": {"raw": "https://images.unsplash.com/photo-cucumber", "pid": "x1", "q": "cucumbers",
+                                                             "by": "Автор", "by_url": "https://unsplash.com/@a", "page": "https://unsplash.com/photos/x1"}}))
+    page = client.get("/list").text
+    assert "images.unsplash.com/photo-cucumber" in page
+    assert "Огірки 1 кг" in client.get("/photos").text
+    unsplash._mem.clear()

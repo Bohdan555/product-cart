@@ -220,13 +220,24 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             logs.set_user(u["id"])
         return u
 
+    def demo_photos(offers) -> None:
+        """Демо-товари без фото: стокове фото того самого виду продукту з Unsplash (квадрат для картки)."""
+        if not any(o.source == "demo" and not o.image for o in offers):
+            return
+        menu_photos()                                   # заодно дошукає відсутні у фоні
+        data = unsplash.load(conn)
+        for o in offers:
+            p = data.get("p:" + o.product_id) if o.source == "demo" and not o.image else None
+            if p and unsplash.usable("p:" + o.product_id, p):
+                o.image = unsplash.img_url(p["raw"], 360, 360)
+
     def menu_photos() -> dict[str, str]:
         """id страви → адреса фото: свої (Wikimedia) або з Unsplash. Відсутні дошукуються у фоні."""
         photos = local_photos()
         for d, p in unsplash.load(conn).items():
             if unsplash.usable(d, p):
                 photos.setdefault(d, unsplash.img_url(p["raw"]))
-        missing = [r.id for r in menu.RECIPES if r.id not in photos]
+        missing = [r.id for r in menu.RECIPES if r.id not in photos] + [k for k in PRODUCT_PHOTO_KEYS if k not in photos]
         if missing and (todo := unsplash.claim(conn, missing)):
             photo_job.set(todo)     # render() допише пошук фоновою задачею після відповіді
         return photos
@@ -993,12 +1004,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 "SELECT product_id, COUNT(*) AS n FROM events WHERE event='offer_click' AND ts >= ? "
                 "AND product_id IS NOT NULL GROUP BY product_id", (since,)).fetchall()}
             offers.sort(key=lambda o: (-clicks.get(o.product_id, 0), -(o.discount_pct or 0)))
+            demo_photos(offers)
             items = [(o, []) for o in offers]
             ctx = dict(p=p, sl=None, rejected=[], stale=False, is_demo=True, link=None, notice=None, stores=[],
                        need_location=False, guest=True)
         else:
             p, _ = load_profile(u["id"])
             link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
+            if is_demo:
+                demo_photos(offers)
             matches, rejected = matcher.rank(offers, p)
             items = [(m.offer, m.reasons) for m in matches]
             ctx = dict(p=p, sl=planner.build(matches, p) if page == 1 and not partial else None, rejected=rejected[:40],
@@ -1473,7 +1487,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       unsplash={d: dict(p, by_url=unsplash.with_utm(p["by_url"]), img=unsplash.img_url(p["raw"], 192, 144))
                                 for d, p in unsplash.load(conn).items() if d not in menu_credits() and unsplash.usable(d, p)},
                       unsplash_home=unsplash.with_utm("https://unsplash.com"),
-                      titles={r.id: r.title for r in menu.RECIPES})
+                      titles={**{r.id: r.title for r in menu.RECIPES}, **{"p:" + o.product_id: o.name for o in demo.load()}})
 
     @app.post("/location")
     def location_save(request: Request, csrf: str = Form(""), lat: float = Form(...), lon: float = Form(...),
@@ -2344,6 +2358,7 @@ def menu_credits() -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+PRODUCT_PHOTO_KEYS = ["p:" + k for k in unsplash.PRODUCT_QUERIES]
 photo_job: contextvars.ContextVar[list | None] = contextvars.ContextVar("photo_job", default=None)
 
 def local_photos() -> dict[str, str]:

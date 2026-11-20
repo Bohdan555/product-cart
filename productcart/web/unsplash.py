@@ -26,6 +26,16 @@ UTM = "utm_source=koshyk_z_aktsiy&utm_medium=referral"
 BATCH = 20            # демо-ключ: 50 запитів/год, на страву йде 2 (пошук + download)
 RETRY = timedelta(minutes=15)
 
+# Демо-товари (вигадані, мережі demo-*): стокове фото того самого виду продукту. Ключ — "p:" + product_id.
+PRODUCT_QUERIES = {
+    "a1": "milk bottle", "a2": "milk carton", "a3": "greek yogurt bowl", "a4": "gouda cheese", "a5": "eggs carton",
+    "a6": "raw chicken breast", "a7": "rye bread loaf", "a8": "coffee beans", "a9": "bananas bunch", "a10": "beer bottle",
+    "b1": "glass of milk", "b2": "buckwheat groats", "b3": "dry spaghetti pasta", "b4": "corn pasta", "b5": "smoked mackerel",
+    "b6": "raw pork neck", "b7": "yellow apples", "b8": "dark chocolate bar", "b9": "ground coffee", "b10": "dish soap bottle",
+    "c1": "oat milk", "c2": "cottage cheese", "c3": "oatmeal cookies", "c4": "long grain rice", "c5": "salmon fillet",
+    "c6": "cucumbers", "c7": "sunflower oil bottle", "c8": "black tea bags",
+}
+
 # Англійською Unsplash шукає значно краще.
 QUERIES = {
     "thighs": "roasted chicken thighs potatoes",
@@ -66,6 +76,7 @@ QUERIES = {
     "mushroom-soup": "mushroom cream soup",
     "eggs-sausage": "fried eggs sausages vegetables",
 }
+QUERIES.update({"p:" + k: v for k, v in PRODUCT_QUERIES.items()})
 
 from ..recipes_more import PHOTO_QUERIES as _MORE  # noqa: E402
 QUERIES.update(_MORE)
