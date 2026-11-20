@@ -31,7 +31,7 @@ PRODUCT_QUERIES = {
     "a1": "milk bottle", "a2": "milk carton", "a3": "greek yogurt bowl", "a4": "gouda cheese", "a5": "eggs carton",
     "a6": "raw chicken breast", "a7": "rye bread loaf", "a8": "coffee beans", "a9": "bananas bunch", "a10": "beer bottle",
     "b1": "glass of milk", "b2": "buckwheat groats", "b3": "dry spaghetti pasta", "b4": "corn pasta", "b5": "smoked mackerel",
-    "b6": "raw pork neck", "b7": "yellow apples", "b8": "dark chocolate bar", "b9": "ground coffee", "b10": "dish soap bottle",
+    "b6": "raw pork neck", "b7": "yellow apples", "b8": "dark chocolate bar", "b9": "ground coffee", "b10": "dishwashing liquid",
     "c1": "oat milk", "c2": "cottage cheese", "c3": "oatmeal cookies", "c4": "long grain rice", "c5": "salmon fillet",
     "c6": "cucumbers", "c7": "sunflower oil bottle", "c8": "black tea bags",
 }

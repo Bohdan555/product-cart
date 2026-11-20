@@ -1492,3 +1492,6 @@ body:has(.hm-hero) header.top{display:none}
 .hm-tags em{font-style:normal;font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--chip)}
 .hm-tags em.ok{background:#1d3b2f;color:#f0dcaa}
 @media (prefers-color-scheme:dark){.hm-hero{background:#1a3428}.hm-search{background:#0e0e0f;color:#a8a29a}.hm-search b{background:#d4b37a}.hm-search b .ico{stroke:#141210}.hm-tags em.ok{background:#d4b37a;color:#141210}}
+/* стокові фото (демо-товари) заповнюють плитку; упаковки «Сільпо» лишаються вписаними */
+.pimg img.stock,.hm-dim img.stock,#feed .pimg img.stock{inset:0;width:100%;height:100%;object-fit:cover;padding:0;background:none;border-radius:inherit}
+#feed .pimg img.stock{position:absolute}

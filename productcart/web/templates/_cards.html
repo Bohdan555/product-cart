@@ -3,7 +3,7 @@
   {% set up = o.unit_price() %}
   <article class="pcard" data-cat="{{ v.cat }}" style="--c:var(--{{ v.pastel }})">
     <div class="pimg" style="--h:{{ v.hue }}">
-      {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
+      {% if o.image %}<img src="{{ o.image }}" alt=""{% if "images.unsplash.com" in o.image %} class="stock"{% endif %} loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
       <span class="pemoji" aria-hidden="true">{{ v.emoji }}</span>
       <span class="pdisc">−{{ o.discount_pct|round|int }}%</span>
       {% if o.also_in %}<span class="palso">ще в {{ o.also_in }} поруч</span>{% endif %}
