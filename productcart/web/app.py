@@ -172,7 +172,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         "name": "Кошик з акцій", "short_name": "Кошик", "lang": "uk", "dir": "ltr",
         "description": "Що приготувати з того, що є, і кошик з акцій «Сільпо» поруч",
         "start_url": "/?source=pwa", "scope": "/", "id": "/", "display": "standalone",
-        "background_color": "#0e0e0f", "theme_color": "#0e0e0f", "orientation": "portrait",
+        "background_color": "#12271f", "theme_color": "#0e0e0f", "orientation": "portrait",
         "categories": ["food", "shopping", "lifestyle"],
         "icons": [{"src": f"/static/icons/icon-192.png?v={icon_v}", "sizes": "192x192", "type": "image/png"},
                   {"src": f"/static/icons/icon-512.png?v={icon_v}", "sizes": "512x512", "type": "image/png"},
