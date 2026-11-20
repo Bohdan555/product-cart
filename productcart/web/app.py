@@ -237,7 +237,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         for d, p in unsplash.load(conn).items():
             if unsplash.usable(d, p):
                 photos.setdefault(d, unsplash.img_url(p["raw"]))
-        missing = [r.id for r in menu.RECIPES if r.id not in photos] + [k for k in PRODUCT_PHOTO_KEYS if k not in photos]
+        missing = [k for k in PRODUCT_PHOTO_KEYS if k not in photos] + [r.id for r in menu.RECIPES if r.id not in photos]   # товари першими: їх мало, а безуспішні страви не мають їх блокувати
         if missing and (todo := unsplash.claim(conn, missing)):
             photo_job.set(todo)     # render() допише пошук фоновою задачею після відповіді
         return photos
