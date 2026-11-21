@@ -1529,3 +1529,4 @@ select{min-height:44px}
 .rv-down[aria-pressed=true]{background:var(--bad-soft);color:var(--bad)}.rv-down[aria-pressed=true] .ico{stroke:var(--bad)}
 .rv-n:empty{display:none}
 .rsheet .rvote{margin:12px 0 0}
+body:has(.admin-page) .dock{display:none}
