@@ -477,19 +477,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             offers = planner.merge_nearby(demo.load())
             demo_photos(offers)
         deals = sorted((o for o in offers if o.discount_pct), key=lambda o: -(o.discount_pct or 0))[:8]
-        have = [k for k in p.fridge if k in menu.INGREDIENTS]
         meal = default_meal()
-        try:
-            ideas = menu.today(offers, p, have, max_minutes=30, n=6, meal=meal)
-        except Exception as e:      # вітрина не має падати через підбір
-            log.warning("Головна: підбір страв: %s", str(e)[:200])
-            ideas = []
         ip = ip_place(request)
         near_ip = near_stores(ip[0], ip[1], n=1) if ip else []
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
                       near=near_ip[0] if near_ip else None,
-                      ideas=ideas, have=have, meal=meal, photos=menu_photos(), people=p.household or 2,
-                      ideas_qs=today_qs(have, 30, p.household or 2))
+                      meal=meal, people=p.household or 2)
 
     @app.get("/me", response_class=HTMLResponse)
     def me_page(request: Request):

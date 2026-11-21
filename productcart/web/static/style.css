@@ -1530,3 +1530,16 @@ select{min-height:44px}
 .rv-n:empty{display:none}
 .rsheet .rvote{margin:12px 0 0}
 body:has(.admin-page) .dock{display:none}
+/* Головна: дві головні дії + швидкі ідеї (без дублів нижнього меню) */
+.hm-main{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0 0}
+.hm-main a{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;min-height:150px;border-radius:var(--r-xl);background:var(--card);box-shadow:0 1px 0 var(--line);text-decoration:none;color:var(--ink);transition:transform .15s}
+.hm-main a:active{transform:scale(.97)}
+.hm-main i{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--chip);margin-bottom:6px}
+.hm-main .ico{width:26px;height:26px;--ic:var(--s-citrus)}
+.hm-main b{font-size:16px;line-height:1.2}
+.hm-main small{color:var(--muted);font-size:13px;line-height:1.3}
+.hm-q{margin:18px 0 8px;font:600 13px var(--body);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.hm-quick{display:flex;gap:8px;flex-wrap:wrap}
+.hm-quick a{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px 0 7px;border-radius:999px;background:var(--chip);color:var(--ink);text-decoration:none;font-weight:600;font-size:14px}
+.hm-quick i{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--card)}
+.hm-quick .ico{--ic:var(--s-citrus)}

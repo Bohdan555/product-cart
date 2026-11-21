@@ -20,12 +20,15 @@
   </div>
 </section>
 
-<nav class="hm-cats" aria-label="Швидкі розділи">
-  {% for href, icon, label in [("/today", "pan", "Сьогодні"), ("/week", "calendar", "Тиждень"), ("/list", "tag", "Акції"),
-      ("/silpo/cart" if user else "/register", "cart", "Кошик"), ("/today/dishes?meal=breakfast&t=30&n=" ~ people, "sun", "Сніданки"),
-      ("/today/dishes?meal=salad&t=30&n=" ~ people, "leaf", "Салати"), ("/today/dishes?meal=dinner&t=30&n=" ~ people, "bolt", "До 30 хв"),
-      ("/dishes" if user else "/register", "book", "Мої страви")] %}
-  <a href="{{ href }}"><i>{{ ic(icon) }}</i>{{ label }}</a>
+<nav class="hm-main" aria-label="Головне">
+  <a href="/today"><i>{{ ic("pan") }}</i><b>Що приготувати сьогодні</b><small>Скажіть, що є вдома — підберемо 3 страви</small></a>
+  <a href="/week"><i>{{ ic("calendar") }}</i><b>План на тиждень</b><small>Меню з акцій і готовий список покупок</small></a>
+</nav>
+<h2 class="hm-q">Швидкі ідеї</h2>
+<nav class="hm-quick" aria-label="Швидкі ідеї">
+  {% for href, icon, label in [("/today/dishes?meal=breakfast&t=30&n=" ~ people, "sun", "Сніданки"), ("/today/dishes?meal=salad&t=30&n=" ~ people, "leaf", "Салати"),
+      ("/today/dishes?meal=dinner&t=30&n=" ~ people, "bolt", "До 30 хв"), ("/dishes" if user else "/register", "book", "Мої страви")] %}
+  <a href="{{ href }}"><i>{{ ic(icon, "sm") }}</i>{{ label }}</a>
   {% endfor %}
 </nav>
 
@@ -35,12 +38,6 @@
   <span class="ck-t"><b>Готуєте: {{ cooking|map(attribute='recipe')|map(attribute='title')|join(', ')|truncate(48) }}</b><small>рецепти збережено →</small></span>
 </a>
 {% endif %}
-
-<a class="hm-promo" href="/week">
-  <span><b>Меню на тиждень з акцій</b><small>Вечері з того, що зі знижкою, і готовий кошик за хвилину</small></span>
-  <i aria-hidden="true">{{ ic("cart", "big") }}</i>
-</a>
-
 {% with dismiss = "pc-install-hide" %}{% include "_install.html" %}{% endwith %}
 
 {% if deals %}
@@ -56,18 +53,6 @@
 </div>
 {% endif %}
 
-{% if ideas %}
-<div class="hm-sec"><h2>{{ "З того, що є вдома" if have else ("Швидкий сніданок" if meal == "breakfast" else "Швидко на вечерю") }}</h2><a href="/today">Ще →</a></div>
-<div class="hm-row" role="list">
-  {% for o in ideas %}{% set d = o.dish %}
-  <a class="hm-dish" role="listitem" href="/today/dish/{{ d.id }}?{{ ideas_qs }}&amp;meal={{ meal }}">
-    {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" loading="lazy">{% else %}<span class="hm-dem" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
-    <span class="hm-di"><b>{{ d.title }}</b>
-      <span class="hm-tags">{% if not o.lines %}<em class="ok">✓ Є все</em>{% else %}<em>Докупити {{ o.lines|length }}</em>{% endif %}<em>{{ d.minutes }} хв · {{ uah(d.per_portion|round) }}</em></span></span>
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
 <script>
 /* Найближчий «Сільпо». Дозвіл на геолокацію просимо лише після пояснення й натискання «Знайти поруч»;
    якщо дозвіл уже є — визначаємо мовчки. Координати округлюємо (~100 м) і не зберігаємо. */
