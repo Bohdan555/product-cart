@@ -818,6 +818,8 @@ def test_near_stores_gps_and_ip(client):
     d = client.get("/near", headers=ip).json()
     assert d["src"] == "ip" and d["stores"][0]["id"] == "b3"
     assert client.get("/near").json() == {"stores": []}
+    far = client.get("/near", params={"lat": 41.26, "lon": -95.86}).json()      # закордон / VPN — не «поруч»
+    assert far["stores"] == []
     assert client.get("/near", params={"lat": 999, "lon": 0}).status_code == 400
     home = client.get("/", headers=ip).text
     assert "Сільпо, пл. Ринок, 1" in home and 'id="hmLoc"' in home and "увійдіть, щоб бачити його акції" in home

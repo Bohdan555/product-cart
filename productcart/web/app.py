@@ -1528,8 +1528,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return None
 
     def near_stores(lat: float, lon: float, n: int = 3) -> list[dict]:
+        # далі 50 км — це не «поруч» (закордон, VPN): нічого не показуємо
         return [{"id": b["id"], "title": b["title"], "address": b.get("address") or b["title"], "km": b["km"]}
-                for b in silpo.nearest(branches_cached(), lat, lon, n=n)]
+                for b in silpo.nearest(branches_cached(), lat, lon, n=n) if b["km"] <= NEAR_MAX_KM]
 
     @app.get("/near")
     def near(request: Request, lat: float | None = None, lon: float | None = None):
@@ -2419,6 +2420,7 @@ def menu_credits() -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+NEAR_MAX_KM = 50
 PRODUCT_PHOTO_KEYS = ["p:" + k for k in unsplash.PRODUCT_QUERIES]
 photo_job: contextvars.ContextVar[list | None] = contextvars.ContextVar("photo_job", default=None)
 
