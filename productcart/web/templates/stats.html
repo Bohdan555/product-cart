@@ -63,6 +63,15 @@
   {% endfor %}
 </div>
 
+<h2>Користувачі <span class="hint">({{ users|length }}{% if users|length >= 300 %}, останні 300{% endif %})</span></h2>
+{% if users %}
+<p class="hint">Пошта прихована — торкніться, щоб показати. Дієти й алергії тут не показуємо (дані про здоров'я). <a href="/admin/users.csv" data-turbo="false">Завантажити CSV</a></p>
+<div class="utab-w"><table class="utab"><thead><tr><th>#</th><th>Пошта</th><th>Вхід</th><th>З нами з</th><th>Остання дія</th><th>Дій за 30 дн.</th><th>«Сільпо»</th><th>Сповіщення</th><th>Людей</th><th>Меню</th><th>Готую</th><th>👍 страв</th><th>Оцінок</th><th>Вдома</th><th>Свої страви</th></tr></thead><tbody>
+{% for x in users %}<tr><td>{{ x.id }}</td><td><button type="button" class="umail" data-e="{{ x.email }}" onclick="this.textContent=this.dataset.e">{{ x.masked }}</button></td><td>{{ x.via }}</td><td>{{ x.since }}</td><td>{{ x.last or '—' }}</td><td>{{ x.n30 }}</td><td>{{ x.silpo or '—' }}</td><td>{{ x.notify or '—' }}</td><td>{{ x.people }}</td><td>{{ x.menu or '—' }}</td><td>{{ x.cooking or '—' }}</td><td>{{ x.likes or '—' }}</td><td>{{ x.votes or '—' }}</td><td>{{ x.fridge or '—' }}</td><td>{{ x.my_dishes or '—' }}</td></tr>{% endfor %}
+</tbody></table></div>
+<style>.utab-w{overflow-x:auto;margin:8px 0 24px;-webkit-overflow-scrolling:touch}.utab{border-collapse:collapse;font-size:13px;white-space:nowrap}.utab th,.utab td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line)}.utab th{color:var(--muted);font-weight:600}.umail{border:0;background:var(--chip);border-radius:8px;padding:4px 8px;font:inherit;cursor:pointer;color:var(--ink);min-height:32px}</style>
+{% else %}<p class="hint">Ще немає зареєстрованих користувачів.</p>{% endif %}
+
 <h2>Рецепти: оцінки</h2>
 {% if votes %}
 <p class="hint">👍 бачать усі, 👎 — лише ви тут. Гостей рахуємо за анонімною міткою браузера. Сортування — за кількістю оцінок.</p>

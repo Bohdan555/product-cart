@@ -1660,18 +1660,74 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         product_id=q["p"], category=q["k"] or None, discount=float(q["d"] or 0))
         return RedirectResponse(q["u"], status_code=302)
 
-    @app.get("/admin/stats", response_class=HTMLResponse)
-    def admin_stats(request: Request, days: int = 30):
+    def mask_email(e: str) -> str:
+        name, _, dom = e.partition("@")
+        return (name[:1] + "•••" + (name[-1:] if len(name) > 2 else "")) + "@" + dom
+
+    def admin_users(limit: int = 300) -> list[dict]:
+        """Користувачі для адмінки. Без даних про здоров'я (дієти) і без токенів."""
+        since = security.iso(security.now() - timedelta(days=30))
+        act = {r["user_id"]: (r["last"], int(r["n"] or 0)) for r in conn.execute(
+            "SELECT user_id, MAX(ts) AS last, SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) AS n FROM events "
+            "WHERE user_id IS NOT NULL GROUP BY user_id", (since,)).fetchall()}
+        silpo_ = {r["user_id"]: r["store_title"] or "підключено" for r in conn.execute("SELECT user_id, store_title FROM silpo_links").fetchall()}
+        push = {r["user_id"]: int(r["n"]) for r in conn.execute("SELECT user_id, COUNT(*) AS n FROM push_subs GROUP BY user_id").fetchall()}
+        tg = {r["user_id"] for r in conn.execute("SELECT user_id FROM tg_links").fetchall()}
+        votes = {r["voter"]: int(r["n"]) for r in conn.execute("SELECT voter, COUNT(*) AS n FROM recipe_votes GROUP BY voter").fetchall()}
+        out = []
+        for r in conn.execute("SELECT u.id, u.email, u.pw_hash, u.created_at, p.data FROM users u LEFT JOIN profiles p ON p.user_id = u.id "
+                              "ORDER BY u.id DESC LIMIT ?", (limit,)).fetchall():
+            try:
+                d = json.loads(r["data"]) if r["data"] else {}
+            except ValueError:
+                d = {}
+            last, n30 = act.get(r["id"], (None, 0))
+            out.append({"id": r["id"], "email": r["email"], "masked": mask_email(r["email"]),
+                        "via": "Google" if r["pw_hash"] == "google" else "Email", "since": (r["created_at"] or "")[:10],
+                        "last": (last or "")[:10], "n30": n30, "silpo": silpo_.get(r["id"], ""),
+                        "notify": ", ".join(x for x in (f"push×{push[r['id']]}" if r["id"] in push else "", "Telegram" if r["id"] in tg else "") if x),
+                        "people": d.get("household") or "", "menu": len(d.get("menu") or []), "cooking": len(d.get("cooking") or []),
+                        "likes": len(d.get("dish_likes") or []), "votes": votes.get(f"u:{r['id']}", 0),
+                        "fridge": len(d.get("fridge") or []), "my_dishes": len(d.get("my_dishes") or [])})
+        return out
+
+    def admin_only(request: Request):
+        """(user, None) для адміна; інакше (None, відповідь): вхід або відмова."""
         u = user_of(request)
-        if u is None:          # увійти — і одразу назад в адмінку
+        if u is None:
             resp = go("/login?admin=1")
-            resp.set_cookie(NEXT_COOKIE, "/admin/stats", max_age=900, httponly=True, samesite="lax", secure=secure)
-            return resp
+            resp.set_cookie(NEXT_COOKIE, request.url.path, max_age=900, httponly=True, samesite="lax", secure=secure)
+            return None, resp
         if u["email"].lower() not in admin_emails:
             logs.event(log, "admin.denied", logging.WARNING)
-            return render(request, "auth.html", mode="login", status=403,
-                          error="Адмінка доступна лише власнику сайту. Увійдіть під акаунтом адміністратора.")
-        return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))), votes=vote_stats())
+            return None, render(request, "auth.html", mode="login", status=403,
+                                error="Адмінка доступна лише власнику сайту. Увійдіть під акаунтом адміністратора.")
+        return u, None
+
+    @app.get("/admin/users.csv")
+    def admin_users_csv(request: Request):
+        u, bad = admin_only(request)
+        if bad:
+            return bad
+        import csv
+        import io
+        buf = io.StringIO()
+        rows = admin_users(limit=100000)
+        cols = ["id", "email", "via", "since", "last", "n30", "silpo", "notify", "people", "menu", "cooking", "likes", "votes", "fridge", "my_dishes"]
+        w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+        logs.event(log, "admin.export_users", rows=len(rows))
+        return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": "attachment; filename=users.csv", "Cache-Control": "no-store"})
+
+    @app.get("/admin/stats", response_class=HTMLResponse)
+    def admin_stats(request: Request, days: int = 30):
+        u, bad = admin_only(request)
+        if bad:
+            return bad
+        return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))), votes=vote_stats(),
+                      users=admin_users())
 
     # ---------- «Готую»: рецепти страв, які людина обрала (сьогодні або на тиждень) ----------
     COOK_TTL = timedelta(days=14)
