@@ -18,7 +18,7 @@ import os
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
-from urllib.parse import quote, unquote, urlencode
+from urllib.parse import quote, unquote, urlencode, urlparse
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -275,6 +275,27 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         nxt = request.cookies.get(NEXT_COOKIE) or ""
         return nxt if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt else default
 
+    # Сторінки входу й підключення: з них не повертаємо (інакше людина ходитиме по колу)
+    NO_RETURN = ("/register", "/login", "/silpo", "/start", "/logout", "/auth/")
+
+    def origin_of(request: Request) -> str | None:
+        """Внутрішня сторінка, з якої людина прийшла (Referer того самого сайту), крім сторінок входу."""
+        ref = urlparse(request.headers.get("referer") or "")
+        if ref.netloc and ref.netloc != request.url.netloc:
+            return None
+        path = ref.path or ""
+        if not path.startswith("/") or path.startswith("//") or "\\" in path:
+            return None
+        if path in NO_RETURN or path.startswith("/auth/"):
+            return None
+        return path + (f"?{ref.query}" if ref.query else "")
+
+    def remember_origin(request: Request, resp):
+        """Запам'ятати, куди повернути після входу й підключення «Сільпо» (на 30 хв)."""
+        if (o := origin_of(request)):
+            resp.set_cookie(NEXT_COOKIE, o, max_age=1800, httponly=True, samesite="lax", secure=secure)
+        return resp
+
     def need_user(request: Request, csrf: str | None = None):
         u = user_of(request)
         if u is None:
@@ -527,7 +548,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     @app.get("/register", response_class=HTMLResponse)
     def register_form(request: Request):
-        return render(request, "auth.html", mode="register")
+        return remember_origin(request, render(request, "auth.html", mode="register"))
 
     @app.post("/register")
     def register(request: Request, email: str = Form(...), password: str = Form(...), agree: str = Form("")):
@@ -614,7 +635,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):
-        return render(request, "auth.html", mode="login")
+        return remember_origin(request, render(request, "auth.html", mode="login"))
 
     @app.post("/login")
     def login(request: Request, email: str = Form(...), password: str = Form(...)):
@@ -770,8 +791,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                     err = f"«Сільпо» не відповіло: {str(e)[:120]}"
                 if not stores and not err:
                     err = "Магазинів не знайдено. Перевірте місто або частину адреси."
-        return render(request, "silpo.html", u, link=link, stores=stores, city=city or (p.city or ""), q=q, error=err,
-                      near_mode=near_mode, ip_city=ip_city)
+        return remember_origin(request, render(request, "silpo.html", u, link=link, stores=stores, city=city or (p.city or ""), q=q, error=err,
+                      near_mode=near_mode, ip_city=ip_city))
 
     @app.post("/silpo/connect")
     def silpo_connect(request: Request, csrf: str = Form("")):
@@ -785,7 +806,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         conn.execute("INSERT INTO oauth_pending (state, user_id, verifier, created_at) VALUES (?, ?, ?, ?)",
                      (state, u["id"], verifier, security.iso(security.now())))
         try:
-            return go(gw.authorize_url(state, challenge))
+            return remember_origin(request, go(gw.authorize_url(state, challenge)))
         except Exception as e:
             return go(f"/silpo?error=Не вдалося відкрити вхід «Сільпо»: {str(e)[:100]}")
 
@@ -860,6 +881,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                      (u["id"], box.seal(json.dumps(tokens)), security.iso(security.now())))
         analytics.track(conn, u["id"], "silpo_connected")
         store = await auto_setup(request, u["id"], tokens)
+        back = request.cookies.get(NEXT_COOKIE)
+        if back and store:                 # повертаємо туди, звідки людина пішла підключати «Сільпо»
+            resp = go(back_after_login(request, "/menu?ready=1"))
+            resp.delete_cookie(NEXT_COOKIE)
+            return resp
         return go("/menu?ready=1" if store else "/silpo")
 
     async def auto_setup(request: Request, user_id: int, tokens: dict) -> str | None:
@@ -946,7 +972,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         conn.execute("UPDATE silpo_links SET store_id=?, store_title=? WHERE user_id=?", (store_id, store_title[:120], u["id"]))
         analytics.track(conn, u["id"], "store_selected", chain="silpo", store_id=store_id)
-        return go("/list")
+        resp = go(back_after_login(request, "/list"))     # магазин обрано — туди, звідки йшли підключати
+        resp.delete_cookie(NEXT_COOKIE)
+        return resp
 
     @app.post("/silpo/disconnect")
     def silpo_disconnect(request: Request, csrf: str = Form("")):

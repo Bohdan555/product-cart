@@ -952,3 +952,26 @@ def test_admin_service_silpo_connection(tmp_path, monkeypatch):
         other = TestClient(app, follow_redirects=False)
         register(other, "x@y.ua")
         assert other.post("/admin/silpo/connect", data={"csrf": "x"}).status_code == 403
+
+
+def test_return_to_page_after_silpo_connect(client):
+    """Після підключення «Сільпо» (і вибору магазину) — назад на сторінку, з якої людина пішла."""
+    dish = "http://testserver/today/dish/omelette?have=eggs&t=30&n=2"
+    client.get("/register", headers={"referer": dish})                      # гість: «Увійти» з рецепта
+    token = register(client)                                                # → /start (онбординг)
+    r = client.post("/silpo/connect", data={"csrf": token}, headers={"referer": "http://testserver/start"})
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    r = client.get("/auth/silpo/callback", params={"code": "good-code", "state": state},
+                   headers={"x-vercel-ip-latitude": "50.44", "x-vercel-ip-longitude": "30.51"})
+    assert r.headers["location"] == "/today/dish/omelette?have=eggs&t=30&n=2"
+    assert not client.cookies.get("after_login")
+    # без автоматичного магазину: спершу вибір магазину, потім — назад
+    client.post("/silpo/disconnect", data={"csrf": token})
+    r = client.post("/silpo/connect", data={"csrf": token}, headers={"referer": "http://testserver/list"})
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    assert client.get("/auth/silpo/callback", params={"code": "good-code", "state": state}).headers["location"] == "/silpo"
+    assert client.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"}).headers["location"] == "/list"
+    # чужий сайт і сторінки входу не запам'ятовуємо
+    client.get("/login", headers={"referer": "https://evil.example/x"})
+    client.get("/login", headers={"referer": "http://testserver/register"})
+    assert not client.cookies.get("after_login")
