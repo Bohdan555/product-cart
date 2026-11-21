@@ -1543,3 +1543,5 @@ body:has(.admin-page) .dock{display:none}
 .hm-quick a{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px 0 7px;border-radius:999px;background:var(--chip);color:var(--ink);text-decoration:none;font-weight:600;font-size:14px}
 .hm-quick i{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--card)}
 .hm-quick .ico{--ic:var(--s-citrus)}
+.hm-main + .ck-card,.hm-main ~ .ck-card{margin:12px 0 0;border:0;box-shadow:0 1px 0 var(--line);border-radius:var(--r-xl);padding:14px 16px}
+.hm-main ~ .pwa-card{margin-top:12px}
