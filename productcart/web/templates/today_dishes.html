@@ -16,6 +16,7 @@
 {% macro card(o, i) %}{% set d = o.dish %}{% set total = d.recipe.ingredients|length %}{% set got = o.have|length %}
   <article class="td-dish" data-dish="{{ d.id }}" style="--c:var(--{{ PAL[i % 6] }})">
     <div class="td-ph">
+      <span class="td-rank" aria-hidden="true"></span>
       {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i %}loading="lazy"{% endif %}>{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
       <button type="button" class="td-swap" aria-label="Інша страва замість «{{ d.title }}»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>Інша</button>
     </div>
@@ -33,7 +34,6 @@
   </article>
 {% endmacro %}
 {% set nshow = opts[:3]|length %}
-<p class="td-how">{% if nshow > 1 %}Перебрали <b>{{ considered }} {{ plural(considered, 'рецепт', 'рецепти', 'рецептів') }}</b> і показуємо <b>{{ nshow }} найкращі</b>{% if have %} — де найменше докупити до того, що у вас є{% else %} — найпростіші й найдешевші{% endif %}. Перша — найвигідніша, решту гортайте вбік.{% endif %} Не те? «⇄ Інша» покаже наступну.</p>
 <div class="td-reel" id="tdReel">
   {% for o in opts[:3] %}{{ card(o, loop.index0) }}{% endfor %}
 </div>
@@ -50,6 +50,12 @@
     bs.forEach(function (b, i) { b.setAttribute('aria-selected', i === best); });
   }
   reel.addEventListener('scroll', function () { clearTimeout(reel._t); reel._t = setTimeout(sync, 60); }, { passive: true });
+  try {
+    if (!sessionStorage.getItem('td-nudge') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      sessionStorage.setItem('td-nudge', '1');
+      setTimeout(function () { reel.scrollTo({ left: 56, behavior: 'smooth' }); setTimeout(function () { reel.scrollTo({ left: 0, behavior: 'smooth' }); }, 650); }, 700);
+    }
+  } catch (e) {}
   bs.forEach(function (b, i) { b.onclick = function () { var c = cards()[i]; if (c) reel.scrollTo({ left: c.offsetLeft - reel.offsetLeft, behavior: 'smooth' }); }; });
 })();
 </script>{% endif %}
