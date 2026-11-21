@@ -483,16 +483,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         # вітрина: лише кеш акцій магазину (без запитів до «Сільпо»), інакше демо
         link = silpo_link(u["id"]) if u else None
         offers = cached_offers(link["store_id"], STALE_TTL) if link and link["store_id"] else None
-        if not offers:              # спільні ціни найближчого магазину (лише кеш — головна має бути швидкою)
-            _, offers, want = shared_offers(p)
-            if want:
-                want_store(want["id"])
-                warm_soon.set(want)
+        # «Гарячі акції» — лише з власного підключеного «Сільпо» (службове підключення — тільки для цін рецептів)
         is_demo = not offers
-        if is_demo:
-            offers = planner.merge_nearby(demo.load())
-            demo_photos(offers)
-        deals = sorted((o for o in offers if o.discount_pct), key=lambda o: -(o.discount_pct or 0))[:8]
+        deals = [] if is_demo else sorted((o for o in offers if o.discount_pct), key=lambda o: -(o.discount_pct or 0))[:8]
         meal = default_meal()
         ip = ip_place(request)
         near_ip = near_stores(ip[0], ip[1], n=1) if ip else []
@@ -796,6 +789,47 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         except Exception as e:
             return go(f"/silpo?error=Не вдалося відкрити вхід «Сільпо»: {str(e)[:100]}")
 
+    @app.post("/admin/silpo/connect")
+    def admin_silpo_connect(request: Request, csrf: str = Form("")):
+        """Службове підключення «Сільпо» (лише ціни інгредієнтів для рецептів) — з адмінки."""
+        u, bad = admin_only(request)
+        if bad:
+            return bad
+        if not secrets.compare_digest(csrf, u["csrf"]):
+            return HTMLResponse("Сторінка застаріла. Оновіть її й спробуйте ще раз.", status_code=400)
+        verifier, challenge = pkce_pair()
+        state = "d." + secrets.token_urlsafe(24)
+        conn.execute("DELETE FROM oauth_pending WHERE user_id=? OR created_at < ?",
+                     (u["id"], security.iso(security.now() - timedelta(hours=1))))
+        conn.execute("INSERT INTO oauth_pending (state, user_id, verifier, created_at) VALUES (?, ?, ?, ?)",
+                     (state, u["id"], verifier, security.iso(security.now())))
+        try:
+            return go(gw.authorize_url(state, challenge))
+        except Exception as e:
+            return go(f"/admin/stats?silpo_error=Не вдалося відкрити вхід «Сільпо»: {str(e)[:100]}#silpo")
+
+    @app.post("/admin/silpo/disconnect")
+    def admin_silpo_disconnect(request: Request, csrf: str = Form("")):
+        u, bad = admin_only(request)
+        if bad:
+            return bad
+        if not secrets.compare_digest(csrf, u["csrf"]):
+            return HTMLResponse("Сторінка застаріла. Оновіть її й спробуйте ще раз.", status_code=400)
+        db.set_setting(conn, "silpo_donor", "")
+        return go("/admin/stats#silpo")
+
+    def donor_status() -> dict:
+        d = donor_info()
+        rows = conn.execute("SELECT fetched_at FROM offers_cache WHERE chain='silpo'").fetchall()
+        fresh = security.iso(security.now() - OFFERS_TTL)
+        try:
+            demand = len(json.loads(db.get_setting(conn, "warm_demand") or "{}"))
+        except ValueError:
+            demand = 0
+        return {"on": bool(d), "at": (d or {}).get("at", "")[:16].replace("T", " "), "dead": bool(d and d.get("dead")),
+                "stores": len(rows), "fresh": sum(1 for r in rows if r["fetched_at"] >= fresh), "demand": demand,
+                "last": max((r["fetched_at"] for r in rows), default="")[:16].replace("T", " ")}
+
     @app.get("/auth/silpo/callback")
     async def silpo_callback(request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""):
         u, bad = need_user(request)
@@ -805,15 +839,22 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         conn.execute("DELETE FROM oauth_pending WHERE state=?", (state,))
         if error or not code:
             logs.event(log, "silpo.connect_failed", logging.WARNING, reason="cancelled", error=error or None)
+            if state.startswith("d."):
+                return go("/admin/stats?silpo_error=Вхід у «Сільпо» скасовано#silpo")
             return go(f"/silpo?error=Вхід у «Сільпо» скасовано: {error_description or error or 'немає коду'}")
         if not pending:
             logs.event(log, "silpo.connect_failed", logging.WARNING, reason="stale_state")
             return go("/silpo?error=Сесія входу застаріла. Натисніть «Підключити Сільпо» ще раз.")
+        donor = state.startswith("d.") and u["email"].lower() in admin_emails
         try:
             tokens = gw.exchange(code, pending["verifier"])
         except Exception as e:
             log.warning("Сільпо: обмін коду на токен: %s: %s", type(e).__name__, str(e)[:300])
-            return go(f"/silpo?error={str(e)[:150]}")
+            return go(f"/admin/stats?silpo_error={str(e)[:150]}#silpo" if donor else f"/silpo?error={str(e)[:150]}")
+        if donor:       # службове підключення: окремо від особистого «Сільпо» адміна
+            db.set_setting(conn, "silpo_donor", box.seal(json.dumps({"tokens": tokens, "at": security.iso(security.now())})))
+            logs.event(log, "silpo.donor_connected", logging.INFO)
+            return go("/admin/stats#silpo")
         conn.execute("""INSERT INTO silpo_links (user_id, tokens_enc, connected_at) VALUES (?, ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET tokens_enc=excluded.tokens_enc, connected_at=excluded.connected_at""",
                      (u["id"], box.seal(json.dumps(tokens)), security.iso(security.now())))
@@ -918,13 +959,31 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     # ---------- спільні ціни «Сільпо» (для гостей і тих, хто ще не підключив «Сільпо») ----------
     # «Сільпо» віддає ціни лише під входом. Кеш акцій магазину спільний; застарілий кеш популярних магазинів
     # оновлюємо через акаунт «донора» — першого адміністратора з підключеним «Сільпо».
-    def donor_id() -> int | None:
-        if not admin_emails:
+    def donor_info() -> dict | None:
+        """Службове підключення «Сільпо» з адмінки: {tokens, at, by}. Лише для цін інгредієнтів рецептів."""
+        raw = db.get_setting(conn, "silpo_donor")
+        data = json.loads(box.open(raw) or "null") if raw else None
+        return data if isinstance(data, dict) and data.get("tokens") else None
+
+    def donor_tokens() -> dict | None:
+        d = donor_info()
+        if not d:
             return None
-        marks = ",".join("?" * len(admin_emails))
-        r = conn.execute(f"SELECT u.id FROM users u JOIN silpo_links l ON l.user_id=u.id WHERE lower(u.email) IN ({marks}) "
-                         "ORDER BY u.id LIMIT 1", tuple(admin_emails)).fetchone()
-        return r["id"] if r else None
+        tokens = d["tokens"]
+        if expires_soon(tokens):
+            if not tokens.get("refresh_token"):
+                return None
+            try:
+                tokens = gw.refresh(tokens)
+            except Exception as e:
+                logs.event(log, "silpo.donor_refresh_failed", logging.WARNING, err=f"{type(e).__name__}: {str(e)[:200]}")
+                d["dead"] = security.iso(security.now())
+                db.set_setting(conn, "silpo_donor", box.seal(json.dumps(d)))
+                return None
+            d["tokens"] = tokens
+            d.pop("dead", None)
+            db.set_setting(conn, "silpo_donor", box.seal(json.dumps(d)))
+        return tokens
 
     def want_store(store_id: str) -> None:
         """Запам'ятовуємо, які магазини потрібні людям, — щоденне оновлення бере саме їх."""
@@ -962,8 +1021,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     async def warm_store(st: dict, timeout: float = 25) -> list[Offer] | None:
         """Свіжі акції магазину через акаунт донора; не частіше раз на 10 хв на магазин."""
-        uid = donor_id()
-        tokens = silpo_tokens(uid) if uid else None
+        tokens = donor_tokens()
         if not tokens:
             return None
         key = f"warm_at:{st['id']}"
@@ -1115,44 +1173,30 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         """Акції нескінченною стрічкою: перша сторінка — уся сторінка, далі (partial=1) лише картки."""
         sort = sort if sort in SORTS else "rank"
         u = user_of(request)
-        if u is None:   # гість: просто популярні акції — без персонального підбору
-            p = guest_profile(request)
-            g_stores, g_offers, g_demo = await guest_offers(p)
-            offers = [o for o in planner.merge_nearby(g_offers) if o.discount_pct]
-            since = security.iso(security.now() - timedelta(days=30))
-            clicks = {r["product_id"]: r["n"] for r in conn.execute(
-                "SELECT product_id, COUNT(*) AS n FROM events WHERE event='offer_click' AND ts >= ? "
-                "AND product_id IS NOT NULL GROUP BY product_id", (since,)).fetchall()}
-            offers.sort(key=lambda o: (-clicks.get(o.product_id, 0), -(o.discount_pct or 0)))
-            if g_demo:
-                demo_photos(offers)
-            items = [(o, []) for o in offers]
-            ctx = dict(p=p, sl=None, rejected=[], stale=False, is_demo=g_demo, link=None, notice=None, stores=g_stores,
-                       need_location=False, guest=True)
-        else:
-            p, _ = load_profile(u["id"])
-            link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
-            if is_demo:
-                demo_photos(offers)
-            matches, rejected = matcher.rank(offers, p)
-            items = [(m.offer, m.reasons) for m in matches]
-            ctx = dict(p=p, sl=planner.build(matches, p) if page == 1 and not partial else None, rejected=rejected[:40],
-                       stale=offers_stale.get(), is_demo=is_demo, link=link, notice=notice, stores=stores,
-                       need_location=bool(link and p.lat is None and not link["store_id"]), guest=False)
+        if u is None or not silpo_link(u["id"]):    # акції — лише з власним підключеним «Сільпо»
+            analytics.track(conn, u["id"] if u else None, "list_locked", guest=u is None)
+            if partial:
+                return HTMLResponse("")
+            return render(request, "list_locked.html", u, guest=u is None)
+        p, _ = load_profile(u["id"])
+        link, stores, offers, notice, is_demo = await current_offers(u["id"], p, bool(refresh))
+        if stores and stores[0].get("shared"):     # свій магазин ще не вибрано — службові ціни сюди не беремо
+            stores, offers = [], []
+        demo_photos(offers)
+        matches, rejected = matcher.rank(offers, p)
+        items = [(m.offer, m.reasons) for m in matches]
+        ctx = dict(p=p, sl=planner.build(matches, p) if page == 1 and not partial else None, rejected=rejected[:40],
+                   stale=offers_stale.get(), is_demo=False, link=link, notice=notice, stores=stores,
+                   need_location=bool(link and p.lat is None and not link["store_id"]), guest=False)
         cats, chunk, more = feed_page(items, sort, cat, page)
         q = {"sort": sort, "cat": cat}
         next_url = f"/list?{urlencode(dict(q, page=page + 1, partial=1))}" if more else None
         if partial:
             return render(request, "_cards.html", u, items=chunk, next_url=next_url, **ctx)
-        if u is None:
-            analytics.track(conn, None, "list_viewed", source="demo" if ctx["is_demo"] else "silpo-shared", guest=True,
-                            items=len(items))
-        else:
-            analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
-                            chain=None if ctx["is_demo"] else "silpo",
-                            store_id=",".join(st["id"] for st in ctx["stores"])[:200] or None,
-                            source="demo" if ctx["is_demo"] else "silpo", stores=len(ctx["stores"]), offers=len(items),
-                            items=len(items), error=bool(ctx["notice"]), located=p.lat is not None)
+        analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed", chain="silpo",
+                        store_id=",".join(st["id"] for st in ctx["stores"])[:200] or None,
+                        source="silpo", stores=len(ctx["stores"]), offers=len(items),
+                        items=len(items), error=bool(ctx["notice"]), located=p.lat is not None)
         return render(request, "list.html", u, items=chunk, next_url=next_url, cats=cats, sort=sort, cat=cat,
                       total=len(items) if not cat else None, offers_total=len(items), **ctx)
 
@@ -1821,7 +1865,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return bad
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))), votes=vote_stats(),
-                      users=admin_users())
+                      users=admin_users(), donor=donor_status(), silpo_error=request.query_params.get("silpo_error", "")[:200])
 
     # ---------- «Готую»: рецепти страв, які людина обрала (сьогодні або на тиждень) ----------
     COOK_TTL = timedelta(days=14)

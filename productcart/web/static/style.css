@@ -1563,3 +1563,4 @@ body:has(.admin-page) .dock{display:none}
 #tdReel .td-dish:nth-child(3) .td-rank{background:radial-gradient(circle at 35% 30%,#ffe6d2,#d6a47d 50%,#9a6340)}
 #tdReel .td-dish:nth-child(1){box-shadow:inset 0 0 0 2px var(--sticker),0 1px 0 var(--line)}
 #tdReel .td-dish:nth-child(n+4) .td-rank{display:none}
+.lock-card{align-items:flex-start}.lock-card .lock-ic{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;border-radius:var(--r-sm);background:var(--chip)}.lock-card .btn{min-height:44px}

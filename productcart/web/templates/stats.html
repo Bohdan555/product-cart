@@ -31,6 +31,20 @@
   <div><b>{{ st.stores_chosen }} / {{ st.silpo_linked }}</b><span>обрали магазин / підключили «Сільпо»</span></div>
 </div>
 
+<h2 id="silpo">«Сільпо» для цін рецептів</h2>
+<div class="card stack" style="margin-bottom:14px">
+  <p style="margin:0">Службове підключення: з нього беруться ціни <b>інгредієнтів для страв</b> (сьогодні й меню на тиждень) для тих, хто не підключив свій «Сільпо». Сторінка «Акції» й «Гарячі акції» без власного підключення недоступні.</p>
+  {% if silpo_error %}<div class="err">{{ silpo_error }}</div>{% endif %}
+  {% if donor.on and not donor.dead %}<p style="margin:0">✓ Підключено {{ donor.at }} UTC</p>
+  {% elif donor.dead %}<p class="err" style="margin:0">Вхід застарів — підключіть ще раз.</p>
+  {% else %}<p style="margin:0"><b>Не підключено</b> — гості бачать демо-ціни там, де немає кешу.</p>{% endif %}
+  <p class="hint" style="margin:0">Магазинів у кеші: {{ donor.stores }} (свіжих {{ donor.fresh }}) · просили за тиждень: {{ donor.demand }}{% if donor.last %} · останнє оновлення {{ donor.last }} UTC{% endif %}</p>
+  <div class="row">
+    <form method="post" action="/admin/silpo/connect" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn small" type="submit">{{ "Перепідключити" if donor.on else "Підключити «Сільпо»" }}</button></form>
+    {% if donor.on %}<form method="post" action="/admin/silpo/disconnect"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt small" type="submit">Відключити</button></form>{% endif %}
+  </div>
+</div>
+
 <h2>Воронка</h2>
 <div class="card">
   {% for f in st.funnel %}

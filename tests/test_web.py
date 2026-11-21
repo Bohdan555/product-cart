@@ -51,6 +51,19 @@ def client(tmp_path, request):
         yield c
 
 
+def link_silpo(c, token, offers=None):
+    """Підключає «Сільпо» (фейковий шлюз), обирає магазин b1 і кладе в його кеш акції (за замовчуванням — демо-набір)."""
+    from productcart.sources import demo as _demo
+    from productcart.web import security as _sec
+    r = c.post("/silpo/connect", data={"csrf": token})
+    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+    c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
+    c.app.state.conn.execute("""INSERT INTO offers_cache (chain, store_id, fetched_at, data) VALUES ('silpo', 'b1', ?, ?)
+                                ON CONFLICT(chain, store_id) DO UPDATE SET fetched_at=excluded.fetched_at, data=excluded.data""",
+                             (_sec.iso(_sec.now()), json.dumps([o.to_dict() for o in (offers or _demo.load())], ensure_ascii=False)))
+
+
 def csrf(html: str) -> str:
     return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
@@ -85,8 +98,10 @@ def test_health_consent_and_csrf(client):
     assert client.post("/profile", data=dict(data, csrf="forged")).status_code == 400
     r = client.post("/profile", data=dict(data, health_consent="1"))
     assert r.status_code == 303 and r.headers["location"] == "/me?saved=1"
-    page, rejected = client.get("/list").text.split("<details")
-    assert "Демо-ціни" in page and "Молоко 2,5% 900 г" not in page and "безлактозне" in page
+    assert "Акції видно після підключення" in client.get("/list").text
+    link_silpo(client, token)
+    page, rejected = client.get("/list").text.split('<details style="margin-top:20px">')
+    assert "Молоко 2,5% 900 г" not in page and "безлактозне" in page
     assert "Молоко 2,5% 900 г — без лактози" in rejected
 
 
@@ -518,10 +533,15 @@ def test_turbo_and_fonts_cached(client):
     assert "app;dur=" in client.get("/login").headers["server-timing"]
 
 
-def test_guest_sees_demo_deals(client):
+def test_deals_need_own_silpo(client):
+    """Акції — лише з власним підключеним «Сільпо»: гостю й непідключеному — запрошення, без товарів і демо."""
     r = client.get("/list")
-    assert r.status_code == 200 and "Популярні <span class=\"hl\">акції</span>" in r.text and 'href="/register">Увійти' in r.text
-    assert r.text.count('class="pcard"') >= 10 and "hero-sum" not in r.text and "Не підійшли" not in r.text
+    assert r.status_code == 200 and "Акції видно після підключення" in r.text and 'href="/register">Увійти' in r.text
+    assert 'class="pcard"' not in r.text and client.get("/list?page=2&partial=1").text == ""
+    assert "Гарячі акції" not in client.get("/").text
+    token = register(client)
+    page = client.get("/list").text
+    assert 'action="/silpo/connect"' in page and 'class="pcard"' not in page
 
 
 def test_onboarding_start_and_auto_store(client):
@@ -568,7 +588,7 @@ def test_add_deal_to_silpo_cart(tmp_path):
         assert c.post("/silpo/cart/add", data={"pid": "p1"}).json()["go"] == "/register"
         token = register(c)
         assert c.post("/silpo/cart/add", data={"csrf": token, "pid": "p1"}).json()["go"] == "/silpo"
-        assert 'href="/silpo">+ У кошик' in c.get("/list").text                  # демо: веде підключати «Сільпо»
+        assert "Акції видно після підключення" in c.get("/list").text           # без «Сільпо» акцій немає
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
         c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
@@ -593,6 +613,7 @@ def test_add_deal_to_silpo_cart(tmp_path):
 
 def test_deals_infinite_feed(client):
     import re as _re
+    link_silpo(client, register(client))
     page = client.get("/list").text
     assert page.count('class="pcard"') == 20 and "feed-more" in page
     nxt = _re.search(r'data-next="([^"]+)"', page).group(1).replace("&amp;", "&")
@@ -812,6 +833,7 @@ def test_demo_deals_get_stock_photos(client):
     unsplash._mem.clear()
     wdb.set_setting(conn, unsplash.KEY, json.dumps({"p:c6": {"raw": "https://images.unsplash.com/photo-cucumber", "pid": "x1", "q": "cucumbers",
                                                              "by": "Автор", "by_url": "https://unsplash.com/@a", "page": "https://unsplash.com/photos/x1"}}))
+    link_silpo(client, register(client))
     page = client.get("/list").text
     assert "images.unsplash.com/photo-cucumber" in page
     assert "Огірки 1 кг" in client.get("/photos").text
@@ -896,6 +918,31 @@ def test_guest_gets_shared_silpo_prices(client):
     page = client.get("/today/dishes", params=q, headers=kyiv).text        # поруч кешу немає — беремо найсвіжіший
     assert "Демо-ціни" not in page and "пл. Ринок, 1" in page
     assert "b1" in json.loads(wdb.get_setting(conn, "warm_demand"))          # Київ — у черзі на оновлення
-    assert "Демо-ціни" not in client.get("/list").text
-    assert "Гарячі акції" in client.get("/", headers=lviv).text
+    assert "Акції видно після підключення" in client.get("/list").text     # службові ціни — лише для рецептів
+    assert "Гарячі акції" not in client.get("/", headers=lviv).text
     assert client.get("/cron/warm").status_code == 403
+
+
+def test_admin_service_silpo_connection(tmp_path, monkeypatch):
+    """Службове «Сільпо» підключається з адмінки, окремо від особистого, і лише воно оновлює кеш для рецептів."""
+    monkeypatch.setenv("ADMIN_EMAILS", "owner@test.ua")
+    app = create_app(db_path=str(tmp_path / "d.db"), app_secret="x" * 32, base_url="http://test", gateway=FakeGateway())
+    with TestClient(app, follow_redirects=False) as c:
+        token = register(c, "owner@test.ua")
+        page = c.get("/admin/stats").text
+        assert 'id="silpo"' in page and "Не підключено" in page
+        assert c.post("/admin/silpo/connect", data={"csrf": "bad"}).status_code == 400
+        r = c.post("/admin/silpo/connect", data={"csrf": token})
+        state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+        assert state.startswith("d.")
+        r = c.get("/auth/silpo/callback", params={"code": "good-code", "state": state})
+        assert r.headers["location"] == "/admin/stats#silpo"
+        conn = app.state.conn
+        assert conn.execute("SELECT COUNT(*) AS n FROM silpo_links").fetchone()["n"] == 0   # особисте не чіпаємо
+        assert "✓ Підключено" in c.get("/admin/stats").text
+        assert "AT-secret" not in (conn.execute("SELECT value FROM settings WHERE key='silpo_donor'").fetchone() or {"value": ""})["value"]
+        c.post("/admin/silpo/disconnect", data={"csrf": token})
+        assert "Не підключено" in c.get("/admin/stats").text
+        other = TestClient(app, follow_redirects=False)
+        register(other, "x@y.ua")
+        assert other.post("/admin/silpo/connect", data={"csrf": "x"}).status_code == 403
