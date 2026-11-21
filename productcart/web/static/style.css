@@ -1509,3 +1509,14 @@ select{min-height:44px}
 .emo-pick label span{min-width:44px;min-height:44px;display:grid;place-items:center}
 .plogout button{min-height:44px}
 .nrm{min-width:44px;min-height:44px}
+/* М'яке питання про геолокацію (до системного вікна браузера) */
+.hm-geo{margin-top:14px;background:rgba(246,243,238,.1);border:1px solid rgba(246,243,238,.18);border-radius:var(--r-lg);padding:14px;color:#f6f3ee;animation:hm-geo-in .35s ease both}
+.hm-geo[hidden]{display:none}
+.hm-geo-t b{display:block;font-size:15px}.hm-geo-t small{display:block;font-size:13px;opacity:.8;margin-top:3px;line-height:1.35}
+.hm-geo-b{display:flex;gap:8px;margin-top:12px}.hm-geo-b[hidden]{display:none}
+.hm-geo-go{flex:1;min-height:44px;border:0;border-radius:999px;background:#f0dcaa;color:#151413;font:700 15px var(--body);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.hm-geo-go .ico{stroke:#151413}
+.hm-geo-go:disabled{opacity:.7}
+.hm-geo-no{min-height:44px;border:0;background:none;color:#f6f3ee;opacity:.8;font:600 15px var(--body);padding:0 12px;cursor:pointer}
+@keyframes hm-geo-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.hm-geo{animation:none}}
