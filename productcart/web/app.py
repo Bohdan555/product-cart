@@ -1865,7 +1865,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if bad:
             return bad
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))), votes=vote_stats(),
-                      users=admin_users(), donor=donor_status(), silpo_error=request.query_params.get("silpo_error", "")[:200])
+                      users=admin_users(), feats=analytics.features(conn), donor=donor_status(), silpo_error=request.query_params.get("silpo_error", "")[:200])
 
     # ---------- «Готую»: рецепти страв, які людина обрала (сьогодні або на тиждень) ----------
     COOK_TTL = timedelta(days=14)

@@ -174,13 +174,19 @@ def test_analytics_clicks_and_admin_stats(tmp_path, monkeypatch, backend):
         c.post("/recipe/vote", data={"csrf": token, "id": "flotski", "vote": "down"})
         page = c.get("/admin/stats").text
         assert "Рецепти: оцінки" in page and "Макарони по-флотськи" in page and "<td>-1</td>" in page
-        assert "Статистика" in page and "Перейшли на товар" in page and "Користувачі" in page
+        assert "Статистика" in page and "Перейшли на товар" in page and "Користувачі" in page and "Використання функцій" in page and "Шлях «Сьогодні»" in page
         assert "u•••r@test.ua" in page and "Завантажити CSV" in page                   # пошта прихована, поки не торкнешся
         csvt = c.get("/admin/users.csv").text
         assert "user@test.ua" in csvt and "owner@test.ua" in csvt and "diets" not in csvt
         st = __import__("productcart.web.analytics", fromlist=["stats"]).stats(app.state.conn)
         assert st["users_total"] == 2 and st["clicks_30"] == 1 and st["silpo_linked"] == 1
         assert [f["users"] for f in st["funnel"]] == [2, 1, 1, 1, 1, 1]
+        c.get("/today/dishes", params={"have": "eggs", "t": "30", "n": "2"})
+        c.cookies.clear(); c.get("/today/dishes", params={"have": "eggs", "t": "30", "n": "2"})     # гість
+        ft = __import__("productcart.web.analytics", fromlist=["features"]).features(app.state.conn)
+        today = next(f for f in ft["items"] if f["key"] == "today")
+        assert today["n30"] == 2 and today["n7"] == 2 and today["users"] == 1 and today["guest_pct"] == 50
+        assert ft["flows"][0]["steps"][0]["events"] == 2
 
 
 

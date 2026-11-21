@@ -150,3 +150,63 @@ def stats(conn, days: int = 30) -> dict:
                                                     "AND discount >= ? AND discount < ?", (since(30), lo, hi))}
                         for lo, hi, lbl in buckets]
     return out
+
+
+# ---------- використання основних функцій ----------
+# (ключ, назва, події). Гості не мають user_id — їх рахуємо подіями, людей — лише зареєстрованих.
+FEATURES = [
+    ("home", "Головна", ("home_viewed",)),
+    ("today", "Що приготувати сьогодні", ("today_dishes",)),
+    ("cook", "«Готую це» (рецепт обрано)", ("cook_started",)),
+    ("cooked", "Позначили «приготував»", ("cooked",)),
+    ("week", "Меню на тиждень", ("menu_viewed",)),
+    ("setup", "Конструктор меню", ("menu_setup", "menu_settings")),
+    ("swap", "Заміна страви в меню", ("menu_swap",)),
+    ("fridge", "Фото холодильника", ("fridge_scan",)),
+    ("deals", "Акції (з підключенням)", ("list_viewed", "list_refreshed")),
+    ("locked", "Акції — спроба без підключення", ("list_locked",)),
+    ("cart", "Кошик «Сільпо» зібрано", ("silpo_cart_built", "today_cart", "deal_added")),
+    ("votes", "Оцінки рецептів 👍/👎", ("dish_vote",)),
+    ("likes", "Улюблені страви", ("dish_like",)),
+    ("mine", "Мої страви / імпорт рецепта", ("my_dish_saved", "recipe_import")),
+    ("near", "Пошук найближчого «Сільпо»", ("near_lookup",)),
+    ("notify", "Підписка на сповіщення", ("push_subscribed", "tg_linked")),
+]
+FLOWS = [
+    ("Сьогодні", [("today_dishes", "Побачили 3 страви"), ("cook_started", "Обрали рецепт"), ("today_cart", "Докупили в «Сільпо»")]),
+    ("Тиждень", [("menu_setup", "Пройшли конструктор"), ("menu_viewed", "Відкрили меню"), ("silpo_cart_built", "Зібрали кошик")]),
+]
+
+
+def features(conn) -> dict:
+    """Використання функцій за 7 і 30 днів: події, люди (зареєстровані), частка гостей; і дві воронки (людей за 30 днів)."""
+    now = security.now()
+    d7, d30 = security.iso(now - timedelta(days=7)), security.iso(now - timedelta(days=30))
+    rows = {r["event"]: r for r in conn.execute(
+        "SELECT event, COUNT(*) AS n30, SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) AS n7, "
+        "SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS g30 FROM events WHERE ts >= ? GROUP BY event", (d7, d30)).fetchall()}
+    out = []
+    for key, label, evs in FEATURES:
+        marks = ",".join("?" * len(evs))
+        users = _count(conn, f"SELECT COUNT(DISTINCT user_id) FROM events WHERE event IN ({marks}) AND ts >= ? "
+                             "AND user_id IS NOT NULL", (*evs, d30))
+        n30 = sum(int(rows[e]["n30"] or 0) for e in evs if e in rows)
+        n7 = sum(int(rows[e]["n7"] or 0) for e in evs if e in rows)
+        g30 = sum(int(rows[e]["g30"] or 0) for e in evs if e in rows)
+        out.append({"key": key, "label": label, "n7": n7, "n30": n30, "users": users,
+                    "guest_pct": round(g30 / n30 * 100) if n30 else 0})
+    top = max((f["n30"] for f in out), default=0) or 1
+    for f in out:
+        f["pct"] = round(f["n30"] / top * 100)
+    flows = []
+    for name, steps in FLOWS:
+        st = []
+        for ev, label in steps:
+            st.append({"label": label, "events": int(rows[ev]["n30"]) if ev in rows else 0,
+                       "users": _count(conn, "SELECT COUNT(DISTINCT user_id) FROM events WHERE event=? AND ts >= ? "
+                                             "AND user_id IS NOT NULL", (ev, d30))})
+        first = st[0]["events"] or 1
+        for s in st:
+            s["pct"] = round(s["events"] / first * 100)
+        flows.append({"name": name, "steps": st})
+    return {"items": sorted(out, key=lambda f: -f["n30"]), "flows": flows}

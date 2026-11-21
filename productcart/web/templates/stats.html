@@ -17,6 +17,11 @@
 .legend{display:flex;gap:14px;font-size:13px;color:var(--muted);margin:6px 0 10px}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:currentColor}
 .legend .v{color:var(--accent)}.legend .c{color:#c9a400}.legend .s{color:var(--muted)}
+.ftable{display:grid;gap:2px;font-size:14px;font-variant-numeric:tabular-nums}
+.fhead,.frow{display:grid;grid-template-columns:minmax(0,1fr) 44px 48px 52px 48px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.fhead{color:var(--muted);font-size:13px}.fhead span:not(:first-child),.frow>span:not(.fl){text-align:right}
+.fl{display:grid;gap:4px;min-width:0}.fl b{font-weight:600;overflow-wrap:anywhere}.fl i{display:block;height:6px;border-radius:3px;background:var(--accent);min-width:2px}
+.frow.zero{color:var(--muted)}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 </style>
 <h1>Статистика</h1>
@@ -29,6 +34,22 @@
   <div><b>{{ st.clicks_30 }}</b><span>переходів на товари за 30 днів ({{ st.clickers_30 }} людей)</span></div>
   <div><b>{{ st.ctr }}%</b><span>переходів на перегляд списку</span></div>
   <div><b>{{ st.stores_chosen }} / {{ st.silpo_linked }}</b><span>обрали магазин / підключили «Сільпо»</span></div>
+</div>
+
+<h2 id="features">Використання функцій <span class="hint">(30 днів)</span></h2>
+<p class="hint" style="margin-top:0">Використання — скільки разів відкрили чи зробили; люди — зареєстровані (гості анонімні, їх видно лише у частці використань).</p>
+<div class="ftable">
+  <div class="fhead"><span>Функція</span><span>7 дн</span><span>30 дн</span><span>Людей</span><span>Гості</span></div>
+  {% for f in feats["items"] %}<div class="frow{% if not f.n30 %} zero{% endif %}">
+    <span class="fl"><b>{{ f.label }}</b><i style="width:{{ f.pct }}%"></i></span>
+    <span>{{ f.n7 }}</span><span>{{ f.n30 }}</span><span>{{ f.users }}</span><span>{{ f.guest_pct }}%</span>
+  </div>{% endfor %}
+</div>
+<div class="cols" style="margin:14px 0 20px">
+  {% for fl in feats.flows %}<div><h3 style="margin:0 0 6px">Шлях «{{ fl.name }}»</h3>
+    {% for s in fl.steps %}<div class="bar"><span>{{ s.label }}</span><i style="width:{{ s.pct }}%"></i><span class="n">{{ s.events }}{% if not loop.first %} · {{ s.pct }}%{% endif %}</span></div>{% endfor %}
+    <p class="hint" style="margin:4px 0 0">Людей (зареєстрованих): {% for s in fl.steps %}{{ s.users }}{% if not loop.last %} → {% endif %}{% endfor %}</p>
+  </div>{% endfor %}
 </div>
 
 <h2 id="silpo">«Сільпо» для цін рецептів</h2>
