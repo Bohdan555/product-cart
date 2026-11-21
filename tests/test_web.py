@@ -871,3 +871,31 @@ def test_static_js_syntax():
             src = src.replace(k, "1")
         r = subprocess.run([node, "--check", "-"], input=src, capture_output=True, text=True)
         assert r.returncode == 0, f"{f.name}: {r.stderr[:300]}"
+
+
+def test_guest_gets_shared_silpo_prices(client):
+    """Без підключеного «Сільпо» — ціни з кешу найближчого магазину, інакше найсвіжішого; демо — лише коли кешу немає."""
+    from productcart.web import db as wdb
+    from productcart.sources import demo as d
+    conn = client.app.state.conn
+    branches = [{"id": "b1", "city": "Київ", "address": "вул. Хрещатик, 1", "title": "Київ, вул. Хрещатик, 1", "lat": 50.447, "lon": 30.522},
+                {"id": "b3", "city": "Львів", "address": "пл. Ринок, 1", "title": "Львів, пл. Ринок, 1", "lat": 49.842, "lon": 24.031}]
+    wdb.set_setting(conn, "silpo_branches", json.dumps({"at": "2000-01-01T00:00:00+00:00", "items": branches}))
+    q = {"have": "eggs,pasta", "t": "60", "n": "2", "meal": "dinner"}
+    assert "Демо-ціни" in client.get("/today/dishes", params=q).text          # кешу ще немає
+    offers = [o for o in d.load()]
+    for o in offers:
+        o.source, o.chain = "silpo", "silpo"
+    from productcart.web.app import security
+    conn.execute("INSERT INTO offers_cache (chain, store_id, fetched_at, data) VALUES ('silpo', 'b3', ?, ?)",
+                 (security.iso(security.now()), json.dumps([o.to_dict() for o in offers], ensure_ascii=False)))
+    lviv = {"x-vercel-ip-latitude": "49.84", "x-vercel-ip-longitude": "24.03"}
+    page = client.get("/today/dishes", params=q, headers=lviv).text
+    assert "Демо-ціни" not in page and "Ціни «Сільпо» · пл. Ринок, 1" in page and "Докупити" in page
+    kyiv = {"x-vercel-ip-latitude": "50.45", "x-vercel-ip-longitude": "30.52"}
+    page = client.get("/today/dishes", params=q, headers=kyiv).text        # поруч кешу немає — беремо найсвіжіший
+    assert "Демо-ціни" not in page and "пл. Ринок, 1" in page
+    assert "b1" in json.loads(wdb.get_setting(conn, "warm_demand"))          # Київ — у черзі на оновлення
+    assert "Демо-ціни" not in client.get("/list").text
+    assert "Гарячі акції" in client.get("/", headers=lviv).text
+    assert client.get("/cron/warm").status_code == 403

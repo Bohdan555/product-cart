@@ -18,6 +18,10 @@
     {
       "path": "/cron/notify",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/cron/warm",
+      "schedule": "30 4 * * *"
     }
   ]
 }

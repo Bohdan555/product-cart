@@ -31,7 +31,7 @@ from ..catalog import TAG_LABELS, enrich, first_word
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
-from starlette.background import BackgroundTask
+from starlette.background import BackgroundTask, BackgroundTasks
 
 from . import analytics, db, fridge, icons, logs, recipe_import, security, silpo_identity, unsplash, webpush
 from .analytics import verify_click
@@ -50,6 +50,8 @@ GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (бе�
 BACK = {"/fridge": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
         "/silpo": "/me", "/privacy": "/me", "/photos": "/me", "/admin/stats": "/me", "/login": "/", "/register": "/"}
 cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None)   # прилади з поточного запиту
+warm_soon: contextvars.ContextVar = contextvars.ContextVar("warm_soon", default=None)  # магазин, який варто оновити
+cur_ip: contextvars.ContextVar = contextvars.ContextVar("cur_ip", default=None)     # (lat, lon) за мережею, з заголовків Vercel
 MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "salad": "Салат"}
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
               "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking", "kitchen", "taste_done")
@@ -124,6 +126,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         token = db.db_stats.set(stats)
         purpose = (request.headers.get("x-sec-purpose") or request.headers.get("sec-purpose") or "").lower()
         analytics.prefetching.set("prefetch" in purpose)
+        try:
+            cur_ip.set((float(request.headers["x-vercel-ip-latitude"]), float(request.headers["x-vercel-ip-longitude"])))
+        except (KeyError, ValueError):
+            cur_ip.set(None)
+        warm_soon.set(None)
         t = time.perf_counter()
         try:
             resp = await call_next(request)
@@ -245,10 +252,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def render(request: Request, name: str, user=None, status: int = 200, **ctx):
         is_admin = bool(user) and user["email"].lower() in admin_emails
         n = request.cookies.get(CART_COOKIE, "")
-        todo, bg = photo_job.get(), None
+        todo, bg = photo_job.get(), BackgroundTasks()
         if todo:
             photo_job.set(None)
-            bg = BackgroundTask(unsplash.run, conn, todo)
+            bg.add_task(unsplash.run, conn, todo)
+        if (st := warm_soon.get()):         # показали акції іншого/старого магазину — оновлюємо найближчий після відповіді
+            warm_soon.set(None)
+            bg.add_task(warm_store, st)
+        bg = bg if bg.tasks else None
         ctx.setdefault("back_url", BACK.get(request.url.path))
         return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled,
                                                         cart_n=int(n) if n.isdigit() else None), status_code=status,
@@ -472,6 +483,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         # вітрина: лише кеш акцій магазину (без запитів до «Сільпо»), інакше демо
         link = silpo_link(u["id"]) if u else None
         offers = cached_offers(link["store_id"], STALE_TTL) if link and link["store_id"] else None
+        if not offers:              # спільні ціни найближчого магазину (лише кеш — головна має бути швидкою)
+            _, offers, want = shared_offers(p)
+            if want:
+                want_store(want["id"])
+                warm_soon.set(want)
         is_demo = not offers
         if is_demo:
             offers = planner.merge_nearby(demo.load())
@@ -899,16 +915,97 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         conn.execute("DELETE FROM silpo_links WHERE user_id=?", (u["id"],))
         return go("/silpo")
 
+    # ---------- спільні ціни «Сільпо» (для гостей і тих, хто ще не підключив «Сільпо») ----------
+    # «Сільпо» віддає ціни лише під входом. Кеш акцій магазину спільний; застарілий кеш популярних магазинів
+    # оновлюємо через акаунт «донора» — першого адміністратора з підключеним «Сільпо».
+    def donor_id() -> int | None:
+        if not admin_emails:
+            return None
+        marks = ",".join("?" * len(admin_emails))
+        r = conn.execute(f"SELECT u.id FROM users u JOIN silpo_links l ON l.user_id=u.id WHERE lower(u.email) IN ({marks}) "
+                         "ORDER BY u.id LIMIT 1", tuple(admin_emails)).fetchone()
+        return r["id"] if r else None
+
+    def want_store(store_id: str) -> None:
+        """Запам'ятовуємо, які магазини потрібні людям, — щоденне оновлення бере саме їх."""
+        try:
+            d = json.loads(db.get_setting(conn, "warm_demand") or "{}")
+        except ValueError:
+            d = {}
+        now = security.iso(security.now())
+        if d.get(store_id, "") >= security.iso(security.now() - timedelta(hours=6)):
+            return
+        d[store_id] = now
+        old = security.iso(security.now() - timedelta(days=7))
+        db.set_setting(conn, "warm_demand", json.dumps({k: v for k, v in d.items() if v >= old}))
+
+    def shared_offers(p: Profile | None):
+        """(магазин, акції, чи треба оновити) з кешу: найближчий з кешем ≤ доби, інакше найсвіжіший будь-який.
+        Місце — з профілю, інакше за мережею. None — кешу немає зовсім."""
+        names = {b["id"]: b for b in branches_cached()}
+        place = (p.lat, p.lon) if p and p.lat is not None and p.lon is not None else cur_ip.get()
+        near = near_stores(place[0], place[1], n=5) if place else []
+        want = near[0] if near else None
+        for st in near:
+            hit = cached_offers(st["id"], STALE_TTL)
+            if hit:
+                fresh = cached_offers(st["id"]) is not None
+                return dict(st, shared=True), hit, (want if (st is not want or not fresh) else None)
+        r = conn.execute("SELECT store_id FROM offers_cache WHERE chain='silpo' AND fetched_at >= ? "
+                         "ORDER BY fetched_at DESC LIMIT 1", (security.iso(security.now() - STALE_TTL),)).fetchone()
+        if r and (hit := cached_offers(r["store_id"], STALE_TTL)):
+            b = names.get(r["store_id"], {})
+            st = {"id": r["store_id"], "title": b.get("title") or "Сільпо", "address": b.get("address") or b.get("title"),
+                  "shared": True, "far": bool(place)}
+            return st, hit, want
+        return None, None, want
+
+    async def warm_store(st: dict, timeout: float = 25) -> list[Offer] | None:
+        """Свіжі акції магазину через акаунт донора; не частіше раз на 10 хв на магазин."""
+        uid = donor_id()
+        tokens = silpo_tokens(uid) if uid else None
+        if not tokens:
+            return None
+        key = f"warm_at:{st['id']}"
+        if (db.get_setting(conn, key) or "") >= security.iso(security.now() - timedelta(minutes=10)):
+            return None
+        db.set_setting(conn, key, security.iso(security.now()))
+        try:
+            async with lazy_silpo(tokens["access_token"]) as get_call:
+                got = await asyncio.wait_for(silpo.fetch_offers(await get_call(), st), timeout)
+        except Exception as e:
+            e = root_error(e)
+            logs.event(log, "silpo.warm_failed", logging.WARNING, store=st["id"], err=f"{type(e).__name__}: {str(e)[:200]}")
+            return None
+        save_offers_cache(st["id"], got)
+        return got
+
+    async def guest_offers(p: Profile | None):
+        """Акції для того, хто не підключив «Сільпо»: спільний кеш, за потреби — свіжі через донора, інакше демо.
+        Повертає (stores, offers, is_demo)."""
+        st, offers, want = shared_offers(p)
+        if want:
+            want_store(want["id"])
+        if offers is None and want:        # кешу немає взагалі — один раз чекаємо на «Сільпо»
+            got = await warm_store(want)
+            if got:
+                st, offers, want = dict(want, shared=True), got, None
+        if offers is None:
+            return [], demo.load(), True
+        if want:
+            warm_soon.set(want)
+        return [st], [dict_store(o, st) for o in offers], False
+
     async def current_offers(user_id: int, p: Profile, refresh: bool):
         """Акції магазинів поруч (або демо, якщо «Сільпо» не підключено).
         Те, чого (за свіжою перевіркою) немає в магазині кошика людини, не показуємо."""
         link = silpo_link(user_id)
         stores, offers, notice = await silpo_list_input(user_id, p, force=refresh) if link else ([], [], None)
-        is_demo = not offers and not notice
-        if is_demo:
-            offers = demo.load()
+        is_demo = False
+        if not offers and not notice:
+            stores, offers, is_demo = await guest_offers(p)
         merged = planner.merge_nearby(offers)
-        if not is_demo:
+        if offers and not is_demo and not stores[0].get("shared"):
             merged = drop_out_of_stock(user_id, link, merged)
         return link, stores, merged, notice, is_demo
 
@@ -1020,15 +1117,17 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         u = user_of(request)
         if u is None:   # гість: просто популярні акції — без персонального підбору
             p = guest_profile(request)
-            offers = [o for o in planner.merge_nearby(demo.load()) if o.discount_pct]
+            g_stores, g_offers, g_demo = await guest_offers(p)
+            offers = [o for o in planner.merge_nearby(g_offers) if o.discount_pct]
             since = security.iso(security.now() - timedelta(days=30))
             clicks = {r["product_id"]: r["n"] for r in conn.execute(
                 "SELECT product_id, COUNT(*) AS n FROM events WHERE event='offer_click' AND ts >= ? "
                 "AND product_id IS NOT NULL GROUP BY product_id", (since,)).fetchall()}
             offers.sort(key=lambda o: (-clicks.get(o.product_id, 0), -(o.discount_pct or 0)))
-            demo_photos(offers)
+            if g_demo:
+                demo_photos(offers)
             items = [(o, []) for o in offers]
-            ctx = dict(p=p, sl=None, rejected=[], stale=False, is_demo=True, link=None, notice=None, stores=[],
+            ctx = dict(p=p, sl=None, rejected=[], stale=False, is_demo=g_demo, link=None, notice=None, stores=g_stores,
                        need_location=False, guest=True)
         else:
             p, _ = load_profile(u["id"])
@@ -1046,7 +1145,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if partial:
             return render(request, "_cards.html", u, items=chunk, next_url=next_url, **ctx)
         if u is None:
-            analytics.track(conn, None, "list_viewed", source="demo", guest=True, items=len(items))
+            analytics.track(conn, None, "list_viewed", source="demo" if ctx["is_demo"] else "silpo-shared", guest=True,
+                            items=len(items))
         else:
             analytics.track(conn, u["id"], "list_refreshed" if refresh else "list_viewed",
                             chain=None if ctx["is_demo"] else "silpo",
@@ -1061,7 +1161,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     async def menu_offers(u, p: Profile, refresh: bool = False):
         if u:
             return await current_offers(u["id"], p, refresh)
-        return None, [], planner.merge_nearby(demo.load()), None, True
+        stores, offers, is_demo = await guest_offers(p)
+        return None, stores, planner.merge_nearby(offers), None, is_demo
 
     def menu_done(u, p: Profile, health: bool, url: str):
         if u:
@@ -1853,7 +1954,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         options=len(opts), guest=not u, meal=meal)
         return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
                       meal=meal, meals=MEALS, kit=p.kitchen, cook_hint=menu.cook_hint,
-                      is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
+                      is_demo=is_demo, store=(stores[0].get("address") or stores[0]["title"]) if stores else None,
+                      shared=bool(stores and stores[0].get("shared")), photos=menu_photos())
 
     @app.get("/today/dish/{rid}", response_class=HTMLResponse)
     async def today_dish(request: Request, rid: str):
@@ -2321,6 +2423,30 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                                           "/menu", "menu"):
                 mark([wk])
                 st["menus"] += 1
+
+    @app.get("/cron/warm")
+    async def cron_warm(request: Request):
+        """Раз на день (Vercel Cron): свіжі акції магазинів, які люди відкривали за тиждень, — через донора."""
+        secret = os.environ.get("CRON_SECRET")
+        allowed = (request.headers.get("authorization") == f"Bearer {secret}" if secret
+                   else request.headers.get("user-agent", "").startswith("vercel-cron"))
+        if not allowed:
+            return JSONResponse({"ok": False}, status_code=403)
+        try:
+            d = json.loads(db.get_setting(conn, "warm_demand") or "{}")
+        except ValueError:
+            d = {}
+        names = {b["id"]: b for b in branches_cached()}
+        todo = [names[k] for k, _ in sorted(d.items(), key=lambda kv: kv[1], reverse=True)
+                if k in names and cached_offers(k) is None][:8]
+        sem = asyncio.Semaphore(3)
+
+        async def one(b):
+            async with sem:
+                return await warm_store({"id": b["id"], "title": b["title"], "address": b.get("address")}, timeout=20)
+
+        res = await asyncio.wait_for(asyncio.gather(*(one(b) for b in todo), return_exceptions=True), 55)
+        return {"ok": True, "stores": len(todo), "warmed": sum(1 for r in res if isinstance(r, list) and r)}
 
     @app.get("/cron/notify")
     async def cron_notify(request: Request):

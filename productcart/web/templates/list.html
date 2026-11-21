@@ -32,7 +32,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
 {% else %}<div class="note" style="margin-bottom:14px">Демо-ціни{% if not link %} · <a href="/silpo">Підключити «Сільпо»</a>{% endif %}</div>{% endif %}
 {% elif stores %}
 <details class="stores-sum">
-  <summary>{{ stores|length }} {{ plural(stores|length, 'магазин', 'магазини', 'магазинів') }} «Сільпо» · <a href="/list?refresh=1">оновити</a></summary>
+  <summary>{{ stores|length }} {{ plural(stores|length, 'магазин', 'магазини', 'магазинів') }} «Сільпо»{% if not stores[0].shared %} · <a href="/list?refresh=1">оновити</a>{% endif %}</summary>
   {% for st in stores %}<div class="meta">{{ st.title }}{% if st.km is defined %} · {{ st.km }} км{% endif %}</div>{% endfor %}
   {% if p.lat is not none %}<form method="post" action="/location/clear" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ user.csrf }}"><button class="btn alt small" type="submit">Видалити збережене місце</button></form>{% endif %}
 </details>

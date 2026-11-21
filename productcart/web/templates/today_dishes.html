@@ -8,7 +8,7 @@
 <nav class="td-meals" aria-label="Що готуємо">
   {% for k, label in meals.items() %}<a href="/today/dishes?{{ qs }}&amp;meal={{ k }}" data-turbo-action="replace"{% if k == meal %} class="on" aria-current="true"{% endif %}>{{ ic({'breakfast': 'sun', 'dinner': 'pan', 'salad': 'leaf'}[k], 'sm') }} {{ label }}</a>{% endfor %}
 </nav>
-{% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни вашого «Сільпо» · {{ store }}</span>{% endif %}
+{% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни {% if not shared %}вашого {% endif %}«Сільпо» · {{ store }}</span>{% endif %}
 
 {% if not opts %}
 <div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
@@ -22,7 +22,7 @@
     </div>
     <b class="t">{{ d.title }}</b>
     <div class="td-meta">
-      <span class="td-pill{% if not o.lines %} ok{% endif %}">{% if not o.lines %}✓ Є все{% elif got %}Є {{ got }} з {{ total }}{% else %}Усе купити{% endif %}</span>
+      {% set nb = o.lines|length %}<span class="td-pill td-buy{% if not nb %} ok{% endif %}">{% if not nb %}✓ Є все{% else %}{{ ic("cart", "sm") }} Докупити {{ nb }}{% if got %} · є {{ got }}{% endif %}{% endif %}</span>
       <span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв</span>
       {% set hint = cook_hint(d.recipe, kit) %}{% if hint %}<span class="td-pill">{{ hint }}</span>{% endif %}
       {% if o.lines and not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}
