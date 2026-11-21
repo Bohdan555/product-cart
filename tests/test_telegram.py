@@ -54,9 +54,11 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         assert c.post("/notify/watch", data={"csrf": token, "word": "Молоко"}).json() == {"ok": True, "word": "молоко", "min": 0, "linked": True}
 
         assert c.get("/cron/notify").status_code == 403                       # не Vercel Cron
+        monkeypatch.setenv("CRON_SECRET", "test-cron")
+        assert c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"}).status_code == 403   # лише секрет, не User-Agent
         monkeypatch.setattr(tgm, "is_menu_day", lambda: True)
         tg.sent.clear()
-        st = c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"}).json()
+        st = c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()
         assert st["deals"] == 1 and st["menus"] == 1
         deals = tg.sent[0][1]
         assert "Молоко" in deals and "обране: молоко" in deals and "Кава зернова" in deals and "ви купуєте" in deals
@@ -65,7 +67,7 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         # наступного дня — без повторів
         c.app.state.conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
         tg.sent.clear()
-        assert c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"}).json()["deals"] == 0 and not tg.sent
+        assert c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()["deals"] == 0 and not tg.sent
 
         # налаштування і /stop
         c.post("/notify", data={"csrf": token, "w": ["кава", "сир"], "wmin": ["20", "0"], "tg_weekly": "1",

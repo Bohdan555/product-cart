@@ -2472,8 +2472,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     async def cron_warm(request: Request):
         """Раз на день (Vercel Cron): свіжі акції магазинів, які люди відкривали за тиждень, — через донора."""
         secret = os.environ.get("CRON_SECRET")
-        allowed = (request.headers.get("authorization") == f"Bearer {secret}" if secret
-                   else request.headers.get("user-agent", "").startswith("vercel-cron"))
+        allowed = bool(secret) and secrets.compare_digest(request.headers.get("authorization", ""), f"Bearer {secret}")
         if not allowed:
             return JSONResponse({"ok": False}, status_code=403)
         try:
@@ -2496,8 +2495,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     async def cron_notify(request: Request):
         """Раз на день (Vercel Cron): цікаві акції, а щопонеділка — меню на тиждень."""
         secret = os.environ.get("CRON_SECRET")
-        allowed = (request.headers.get("authorization") == f"Bearer {secret}" if secret
-                   else request.headers.get("user-agent", "").startswith("vercel-cron"))
+        allowed = bool(secret) and secrets.compare_digest(request.headers.get("authorization", ""), f"Bearer {secret}")
         if not allowed:
             return JSONResponse({"ok": False}, status_code=403)
         last = db.get_setting(conn, "tg_cron_at")

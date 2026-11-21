@@ -109,7 +109,8 @@ def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
         c.post("/silpo/store", data={"csrf": token, "store_id": "b1", "store_title": "Франка"})
         monkeypatch.setattr(tgm, "is_menu_day", lambda: True)
         push.sent.clear()
-        st = c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"}).json()
+        monkeypatch.setenv("CRON_SECRET", "test-cron")
+        st = c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()
         assert st["deals"] == 1 and st["menus"] == 1
         assert [m["tag"] for _, m in push.sent] == ["deals", "menu"] and "−" in push.sent[0][1]["body"]
 
@@ -117,7 +118,7 @@ def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
         push.gone.add(FCM)
         c.app.state.conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
         c.app.state.conn.execute("DELETE FROM tg_sent")
-        c.get("/cron/notify", headers={"user-agent": "vercel-cron/1.0"})
+        c.get("/cron/notify", headers={"authorization": "Bearer test-cron"})
         assert not c.app.state.conn.execute("SELECT 1 FROM push_subs").fetchall()
 
         c.post("/push/subscribe", json=sub, headers={"x-csrf": token})   # знову (у FakePush ще «gone» — одразу прибереться)
