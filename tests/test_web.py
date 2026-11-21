@@ -843,3 +843,19 @@ def test_recipe_votes_and_admin(client):
     assert client.post("/recipe/vote", data={"csrf": "bad", "id": "flotski", "vote": "up"}).status_code == 400
     p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
     assert '"flotski"' in p
+
+
+def test_static_js_syntax():
+    """Синтаксис наших скриптів (одна помилка вимикає весь ui.js). Без node — пропускаємо."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("немає node")
+    for f in (Path(__file__).parents[1] / "productcart" / "web" / "static").glob("*.js"):
+        src = f.read_text(encoding="utf-8")
+        for k in ("__VERSION__", "__CSS_V__", "__JS_V__", "__ICON_V__"):
+            src = src.replace(k, "1")
+        r = subprocess.run([node, "--check", "-"], input=src, capture_output=True, text=True)
+        assert r.returncode == 0, f"{f.name}: {r.stderr[:300]}"
