@@ -1025,6 +1025,8 @@ def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n:
             break
     if len(out) < n:        # «ще варіанти»: різні основні продукти вичерпались — добираємо за рейтингом
         out += [o for o in opts if o not in out][:n - len(out)]
+    # видимі три (медалі 1/2/3) — за тим, скільки докуповувати: менше покупок → вище місце
+    out[:3] = sorted(out[:3], key=lambda o: (len(o.lines), -len(o.have), o.buy_cost))
     return out
 
 

@@ -195,3 +195,13 @@ def test_kcal_per_portion():
     assert all(menu.kcal_per_portion(r) for r in menu.RECIPES)
     assert 200 <= menu.kcal_per_portion(by["omelette"]) <= 350            # 2 яйця, перець, сир на порцію
     assert menu.kcal_per_portion(by["s-vitamin"]) < menu.kcal_per_portion(by["plov"])
+
+
+def test_today_top3_ordered_by_what_to_buy():
+    """Медаль 1 — страва, для якої докуповувати найменше (яйця + макарони: оладки вище за пасту)."""
+    from productcart.sources import demo
+    offers = planner.merge_nearby(demo.load())
+    for have in (["eggs", "pasta"], ["eggs", "rice"], ["chicken_fillet", "cheese"]):
+        top = menu.today(offers, Profile(), have, n=30, meal="dinner")[:3]
+        buys = [len(o.lines) for o in top]
+        assert buys == sorted(buys), (have, buys)
