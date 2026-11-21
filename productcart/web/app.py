@@ -1246,6 +1246,66 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         analytics.track(conn, u["id"] if u else None, "menu_swap", dish_from=current[i], dish_to=new[i], guest=not u)
         return menu_done(u, p, health, f"/menu?swapped={i}#d{i}")
 
+    # ---------- оцінки рецептів: 👍 / 👎 (дизлайки бачить лише адмінка) ----------
+    VOTER_COOKIE = "vid"
+
+    def apply_vote(p: Profile, rid: str, vote: int) -> None:
+        """Голос → профіль: 👍 частіше в підборі, 👎 більше не пропонуємо, 0 — нейтрально."""
+        p.dish_likes = [x for x in p.dish_likes if x != rid]
+        p.dish_dislikes = [x for x in p.dish_dislikes if x != rid]
+        if vote > 0:
+            p.dish_likes = ([rid] + p.dish_likes)[:30]
+        elif vote < 0:
+            p.dish_dislikes = ([rid] + p.dish_dislikes)[:30]
+
+    def record_vote(voter: str, rid: str, vote: int) -> None:
+        conn.execute("DELETE FROM recipe_votes WHERE voter=? AND recipe_id=?", (voter, rid))
+        if vote:
+            conn.execute("INSERT INTO recipe_votes (voter, recipe_id, vote, at) VALUES (?, ?, ?, ?)",
+                         (voter, rid, 1 if vote > 0 else -1, security.iso(security.now())))
+
+    def likes_of(rid: str) -> int:
+        r = conn.execute("SELECT COUNT(*) AS n FROM recipe_votes WHERE recipe_id=? AND vote=1", (rid,)).fetchone()
+        return int(r["n"] or 0)
+
+    def vote_stats() -> list[dict]:
+        rows = conn.execute("SELECT recipe_id, SUM(CASE WHEN vote=1 THEN 1 ELSE 0 END) AS up, "
+                            "SUM(CASE WHEN vote=-1 THEN 1 ELSE 0 END) AS down, MAX(at) AS last "
+                            "FROM recipe_votes GROUP BY recipe_id").fetchall()
+        out = [{"id": r["recipe_id"], "title": (menu.RECIPE_BY_ID[r["recipe_id"]].title if r["recipe_id"] in menu.RECIPE_BY_ID else r["recipe_id"]),
+                "up": int(r["up"] or 0), "down": int(r["down"] or 0), "last": (r["last"] or "")[:10]} for r in rows]
+        for x in out:
+            x["score"] = x["up"] - x["down"]
+        return sorted(out, key=lambda x: (-(x["up"] + x["down"]), -x["score"]))
+
+    tpl.env.globals.update(likes_of=likes_of, recipe_ids=set(menu.RECIPE_BY_ID))
+
+    @app.post("/recipe/vote")
+    async def recipe_vote(request: Request):
+        """👍 / 👎 рецепту (повторне натискання знімає голос). JSON, без перезавантаження."""
+        form, u, p, health, bad = await menu_form(request)
+        if bad:
+            return JSONResponse({"error": "Оновіть сторінку"}, status_code=400)
+        rid = str(form.get("id", ""))
+        if rid not in menu.RECIPE_BY_ID:
+            return JSONResponse({"error": "Невідома страва"}, status_code=400)
+        vote = {"up": 1, "down": -1}.get(str(form.get("vote", "")), 0)
+        vid = request.cookies.get(VOTER_COOKIE) or ""
+        new_vid = None
+        if not u and not re.fullmatch(r"[A-Za-z0-9_-]{16,40}", vid):
+            vid = new_vid = secrets.token_urlsafe(16)
+        voter = f"u:{u['id']}" if u else f"g:{vid}"
+        apply_vote(p, rid, vote)
+        record_vote(voter, rid, vote)
+        analytics.track(conn, u["id"] if u else None, "dish_vote", dish=rid, vote=vote, guest=not u)
+        resp = JSONResponse({"vote": {1: "up", -1: "down"}.get(vote, ""), "likes": likes_of(rid)})
+        if new_vid:
+            resp.set_cookie(VOTER_COOKIE, new_vid, max_age=365 * 86400, httponly=True, samesite="lax", secure=secure)
+        if u:
+            save_profile(u["id"], p, health)
+            return resp
+        return keep_guest(resp, p)
+
     @app.post("/menu/like")
     async def menu_like(request: Request):
         """♡ страві: вподобані частіше потрапляють у меню. Відповідь — JSON, сторінка не перезавантажується."""
@@ -1260,6 +1320,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if liked:
             p.dish_dislikes = [x for x in p.dish_dislikes if x != rid]
         analytics.track(conn, u["id"] if u else None, "dish_like" if liked else "dish_unlike", dish=rid, guest=not u)
+        if u and rid in menu.RECIPE_BY_ID:
+            record_vote(f"u:{u['id']}", rid, 1 if liked else 0)
         resp = JSONResponse({"liked": liked, "count": len(p.dish_likes)})
         if u:
             save_profile(u["id"], p, health)
@@ -1596,7 +1658,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         if u["email"].lower() not in admin_emails:
             return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
-        return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))))
+        return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))), votes=vote_stats())
 
     # ---------- «Готую»: рецепти страв, які людина обрала (сьогодні або на тиждень) ----------
     COOK_TTL = timedelta(days=14)
@@ -1642,7 +1704,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             if not r:
                 return go("/cook")
             it = {"c": {"id": rid, "n": p.household or 2}, "recipe": r, "dish": menu.Dish(r, p.household or 2)}
-        return render(request, "cook_recipe.html", u, it=it, photos=menu_photos(), ingredients=menu.INGREDIENTS,
+        return render(request, "cook_recipe.html", u, it=it, p=p, photos=menu_photos(), ingredients=menu.INGREDIENTS,
                       fmt_qty=menu.fmt_qty, saved=any(c.get("id") == rid for c in p.cooking),
                       src=next((d.get("src") for d in p.my_dishes if d.get("id") == rid and d.get("src")), None))
 
@@ -1743,7 +1805,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         # посилання «Немає» / «Є» для запасів, що «мабуть, є»: перемикаємо продукт у need
         toggle = {k: f"/today/dish/{rid}?" + today_qs(have, t, n, [x for x in need if x != k] if k in need else need + [k])
                   for k in opts[0].dish.recipe.ingredients if k in menu.ASSUMED}
-        return render(request, "today_dish.html", u, o=opts[0], qs=today_qs(have, t, n), is_demo=is_demo,
+        return render(request, "today_dish.html", u, o=opts[0], p=p, qs=today_qs(have, t, n), is_demo=is_demo,
                       link=link, photos=menu_photos(), ingredients=menu.INGREDIENTS, fmt_qty=menu.fmt_qty,
                       t=t, n=n, have=have, need=need, toggle=toggle,
                       meal=request.query_params.get("meal") if request.query_params.get("meal") in MEALS else None)

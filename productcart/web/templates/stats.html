@@ -62,4 +62,14 @@
   </div>
   {% endfor %}
 </div>
+
+<h2>Рецепти: оцінки</h2>
+{% if votes %}
+<p class="hint">👍 бачать усі, 👎 — лише ви тут. Гостей рахуємо за анонімною міткою браузера. Сортування — за кількістю оцінок.</p>
+<div class="kpis"><div><b>{{ votes|sum(attribute='up') }}</b><span>👍 усього</span></div><div><b>{{ votes|sum(attribute='down') }}</b><span>👎 усього</span></div><div><b>{{ votes|length }}</b><span>рецептів з оцінками</span></div></div>
+<table class="vtab"><thead><tr><th>Рецепт</th><th>👍</th><th>👎</th><th>Баланс</th><th>Остання</th></tr></thead><tbody>
+{% for v in votes %}<tr{% if v.score < 0 %} class="neg"{% endif %}><td>{{ v.title }}</td><td>{{ v.up }}</td><td>{{ v.down }}</td><td>{{ '%+d'|format(v.score) }}</td><td>{{ v.last }}</td></tr>{% endfor %}
+</tbody></table>
+<style>.vtab{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 24px}.vtab th,.vtab td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}.vtab td:nth-child(n+2),.vtab th:nth-child(n+2){text-align:right;font-variant-numeric:tabular-nums}.vtab tr.neg td{color:var(--bad)}</style>
+{% else %}<p class="hint">Ще немає оцінок рецептів.</p>{% endif %}
 {% endblock %}

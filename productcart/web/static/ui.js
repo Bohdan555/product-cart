@@ -180,3 +180,25 @@
   document.addEventListener('turbo:load', init);
   if (document.readyState !== 'loading') init(); else document.addEventListener('DOMContentLoaded', init);
 })();
+
+/* 👍 / 👎 рецепту: одразу перемикаємо, запит у фоні; повторне натискання знімає голос */
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.rvote .rv-b'); if (!b) return;
+  e.preventDefault();
+  var box = b.closest('.rvote'), prev = box.dataset.my, v = b.dataset.v, next = prev === v ? '' : v;
+  var n = box.querySelector('.rv-n'), cnt = parseInt(n.textContent || '0', 10) || 0;
+  function paint(my, likes) {
+    box.dataset.my = my;
+    box.querySelectorAll('.rv-b').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.v === my); });
+    n.textContent = likes > 0 ? likes : '';
+  }
+  var guess = cnt + (next === 'up' ? 1 : 0) - (prev === 'up' ? 1 : 0);
+  paint(next, guess); if (window.bump) bump(b); if (window.haptic) haptic(next ? 15 : 8);
+  var fd = new FormData(); fd.append('id', box.dataset.vote); fd.append('vote', next || 'none');
+  if (box.dataset.csrf) fd.append('csrf', box.dataset.csrf);
+  fetch('/recipe/vote', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.error) throw new Error(d.error);
+    paint(d.vote, d.likes);
+    if (window.toast) window.toast(d.vote === 'up' ? 'Дякуємо! Частіше пропонуватимемо схожі' : d.vote === 'down' ? 'Зрозуміли — більше не пропонуватимемо' : 'Оцінку знято');
+  }).catch(function () { paint(prev, cnt); if (window.toast) window.toast('Не вдалося зберегти'); });
+});

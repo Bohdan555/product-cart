@@ -1520,3 +1520,12 @@ select{min-height:44px}
 .hm-geo-no{min-height:44px;border:0;background:none;color:#f6f3ee;opacity:.8;font:600 15px var(--body);padding:0 12px;cursor:pointer}
 @keyframes hm-geo-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.hm-geo{animation:none}}
+/* 👍 / 👎 рецепту */
+.rvote{display:flex;align-items:center;gap:8px;margin:18px 0 6px;padding:10px 12px 10px 16px;background:var(--card);border-radius:var(--r-lg);box-shadow:0 1px 0 var(--line)}
+.rv-q{flex:1;font-weight:600;font-size:15px}
+.rv-b{min-width:48px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:700 15px var(--body);cursor:pointer;padding:0 14px}
+.rv-b .ico{--ic:transparent;width:22px;height:22px}
+.rv-up[aria-pressed=true]{background:var(--ink);color:var(--bg)}.rv-up[aria-pressed=true] .ico{--ic:var(--sticker);stroke:var(--bg)}
+.rv-down[aria-pressed=true]{background:var(--bad-soft);color:var(--bad)}.rv-down[aria-pressed=true] .ico{stroke:var(--bad)}
+.rv-n:empty{display:none}
+.rsheet .rvote{margin:12px 0 0}

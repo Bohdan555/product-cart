@@ -40,6 +40,7 @@
 <ol class="td-steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>
 {% endif %}
 
+{% from "_vote.html" import vote with context %}{{ vote(d.id, p, user) }}
 <form method="post" action="/today/cooked" class="td-done-form">
   {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}
   <input type="hidden" name="id" value="{{ d.id }}"><input type="hidden" name="n" value="{{ n }}">

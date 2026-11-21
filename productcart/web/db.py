@@ -67,6 +67,14 @@ CREATE TABLE IF NOT EXISTS push_subs (
   auth TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+-- Оцінки рецептів: 1 — подобається, -1 — не подобається. voter = "u:<id>" або "g:<анонімна мітка гостя>"
+CREATE TABLE IF NOT EXISTS recipe_votes (
+  voter TEXT NOT NULL,
+  recipe_id TEXT NOT NULL,
+  vote INTEGER NOT NULL,
+  at TEXT NOT NULL,
+  PRIMARY KEY (voter, recipe_id)
+);
 CREATE TABLE IF NOT EXISTS tg_sent (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   key TEXT NOT NULL,

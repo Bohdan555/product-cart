@@ -1,0 +1,8 @@
+{# 👍 / 👎 рецепту. Лайки видно всім, дизлайки — лише власний стан (і в адмінці). #}
+{% macro vote(rid, p, user=None) %}{% set my = 'up' if rid in p.dish_likes else ('down' if rid in p.dish_dislikes else '') %}{% set n = likes_of(rid) %}
+<div class="rvote" data-vote="{{ rid }}" data-my="{{ my }}" data-csrf="{{ user.csrf if user else '' }}">
+  <span class="rv-q">Як вам рецепт?</span>
+  <button type="button" class="rv-b rv-up" data-v="up" aria-pressed="{{ 'true' if my == 'up' else 'false' }}" aria-label="Подобається">{{ ic("up") }}<b class="rv-n">{{ n if n else '' }}</b></button>
+  <button type="button" class="rv-b rv-down" data-v="down" aria-pressed="{{ 'true' if my == 'down' else 'false' }}" aria-label="Не подобається — не пропонувати">{{ ic("down") }}</button>
+</div>
+{% endmacro %}

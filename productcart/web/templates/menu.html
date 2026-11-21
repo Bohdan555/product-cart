@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Меню з акцій — Кошик з акцій{% endblock %}
-{% block body %}
+{% block body %}{% from "_vote.html" import vote with context %}
 {% include "_stale.html" %}
 <div id="menuroot"{% if fresh %} class="fresh-in"{% endif %}>
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
@@ -50,8 +50,8 @@
     {% if d.recipe.steps %}<h4>Як готувати</h4>
     <ol class="steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>{% endif %}
     {% if d.recipe.mine %}<p><a href="/dishes?edit={{ d.id }}" data-turbo="false">Змінити мою страву →</a></p>{% endif %}
+    {% if d.id in recipe_ids %}{{ vote(d.id, p, user) }}{% endif %}
     <div class="ract">
-      <button type="button" class="like{% if d.id in p.dish_likes %} on{% endif %}" data-like="{{ d.id }}" aria-pressed="{{ 'true' if d.id in p.dish_likes else 'false' }}" aria-label="Подобається: {{ d.title }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
       <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}"><button type="submit">Інша страва</button></form>
       <button type="button" class="primary" data-close>Готово</button>
     </div>

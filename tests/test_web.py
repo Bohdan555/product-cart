@@ -146,8 +146,10 @@ def test_analytics_clicks_and_admin_stats(tmp_path, monkeypatch, backend):
         # звичайний користувач статистику не бачить
         assert c.get("/admin/stats").status_code == 403
         c.cookies.clear()
-        register(c, "owner@test.ua")
+        token = register(c, "owner@test.ua")
+        c.post("/recipe/vote", data={"csrf": token, "id": "flotski", "vote": "down"})
         page = c.get("/admin/stats").text
+        assert "Рецепти: оцінки" in page and "Макарони по-флотськи" in page and "<td>-1</td>" in page
         assert "Статистика" in page and "Перейшли на товар" in page and "user@test.ua" not in page
         st = __import__("productcart.web.analytics", fromlist=["stats"]).stats(app.state.conn)
         assert st["users_total"] == 2 and st["clicks_30"] == 1 and st["silpo_linked"] == 1
@@ -824,3 +826,20 @@ def test_near_stores_gps_and_ip(client):
     home = client.get("/", headers=ip).text
     assert "Сільпо, пл. Ринок, 1" in home and 'id="hmLoc"' in home and "увійдіть, щоб бачити його акції" in home
 
+
+
+def test_recipe_votes_and_admin(client):
+    """👍/👎 рецепту: лайки видно, дизлайк лише змінює підбір; адмінка показує обидва."""
+    page = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2"}).text
+    assert 'class="rvote"' in page and 'data-vote="omelette"' in page
+    d = client.post("/recipe/vote", data={"id": "omelette", "vote": "up"}).json()
+    assert d == {"vote": "up", "likes": 1} and client.cookies.get("vid")
+    assert '<b class="rv-n">1</b>' in client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2"}).text
+    d = client.post("/recipe/vote", data={"id": "omelette", "vote": "down"}).json()
+    assert d == {"vote": "down", "likes": 0}                          # дизлайк не показуємо як число
+    assert client.post("/recipe/vote", data={"id": "nope", "vote": "up"}).status_code == 400
+    token = register(client, "admin@example.com")
+    client.post("/recipe/vote", data={"csrf": token, "id": "flotski", "vote": "up"})
+    assert client.post("/recipe/vote", data={"csrf": "bad", "id": "flotski", "vote": "up"}).status_code == 400
+    p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
+    assert '"flotski"' in p
