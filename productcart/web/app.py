@@ -1849,9 +1849,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if meal not in MEALS:
             meal = default_meal()
         opts = menu.today(offers, p, have, max_minutes=t, n=30, meal=meal)   # 3 видно, решта — для «↻ Інша»
+        considered = sum(1 for r in menu.RECIPES + menu.user_recipes(p) if meal in r.meals and menu.allowed(r, p, t))
         analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
                         options=len(opts), guest=not u, meal=meal)
-        return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
+        return render(request, "today_dishes.html", u, opts=opts, considered=considered, qs=today_qs(have, t, n), have=have, t=t, n=n,
                       meal=meal, meals=MEALS, kit=p.kitchen, cook_hint=menu.cook_hint,
                       is_demo=is_demo, store=stores[0]["title"] if stores else None, photos=menu_photos())
 

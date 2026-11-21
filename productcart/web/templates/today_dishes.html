@@ -32,9 +32,27 @@
     <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}">Готую це</a>
   </article>
 {% endmacro %}
+{% set nshow = opts[:3]|length %}
+<p class="td-how">{% if nshow > 1 %}Перебрали <b>{{ considered }} {{ plural(considered, 'рецепт', 'рецепти', 'рецептів') }}</b> і показуємо <b>{{ nshow }} найкращі</b>{% if have %} — де найменше докупити до того, що у вас є{% else %} — найпростіші й найдешевші{% endif %}. Перша — найвигідніша, решту гортайте вбік.{% endif %} Не те? «⇄ Інша» покаже наступну.</p>
 <div class="td-reel" id="tdReel">
   {% for o in opts[:3] %}{{ card(o, loop.index0) }}{% endfor %}
 </div>
+{% if nshow > 1 %}<div class="td-dots-nav" id="tdDots" role="tablist" aria-label="Страви">{% for o in opts[:3] %}<button type="button" role="tab" aria-label="Страва {{ loop.index }} з {{ nshow }}"{% if loop.first %} aria-selected="true"{% endif %}></button>{% endfor %}</div>
+<script>
+(function () {
+  var reel = document.getElementById('tdReel'), dots = document.getElementById('tdDots'); if (!reel || !dots) return;
+  var bs = dots.querySelectorAll('button');
+  function cards() { return reel.querySelectorAll('.td-dish'); }
+  function sync() {
+    var cs = cards(), x = reel.scrollLeft, best = 0, d = 1e9;
+    cs.forEach(function (c, i) { var dd = Math.abs(c.offsetLeft - reel.offsetLeft - x); if (dd < d) { d = dd; best = i; } });
+    if (reel.scrollLeft + reel.clientWidth >= reel.scrollWidth - 4) best = cs.length - 1;
+    bs.forEach(function (b, i) { b.setAttribute('aria-selected', i === best); });
+  }
+  reel.addEventListener('scroll', function () { clearTimeout(reel._t); reel._t = setTimeout(sync, 60); }, { passive: true });
+  bs.forEach(function (b, i) { b.onclick = function () { var c = cards()[i]; if (c) reel.scrollTo({ left: c.offsetLeft - reel.offsetLeft, behavior: 'smooth' }); }; });
+})();
+</script>{% endif %}
 {# решта варіантів — одразу на сторінці: «Інша» підміняє картку миттєво, без запиту #}
 <template id="tdPool">{% for o in opts[3:] %}{{ card(o, loop.index0 + 3) }}{% endfor %}</template>
 <script>
