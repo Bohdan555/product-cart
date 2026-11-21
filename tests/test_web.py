@@ -813,7 +813,7 @@ def test_near_stores_gps_and_ip(client):
                 {"id": "b3", "city": "Львів", "address": "пл. Ринок, 1", "title": "Львів, пл. Ринок, 1", "lat": 49.842, "lon": 24.031}]
     wdb.set_setting(conn, "silpo_branches", json.dumps({"at": "2000-01-01T00:00:00+00:00", "items": branches}))
     d = client.get("/near", params={"lat": 50.4501, "lon": 30.5234}).json()
-    assert d["src"] == "gps" and [s["id"] for s in d["stores"]] == ["b1", "b2", "b3"] and d["stores"][0]["km"] < 1 and d["lat"] == 50.45
+    assert d["src"] == "gps" and [s["id"] for s in d["stores"]] == ["b1", "b2"] and d["stores"][0]["km"] < 1 and d["lat"] == 50.45
     ip = {"x-vercel-ip-latitude": "49.84", "x-vercel-ip-longitude": "24.03", "x-vercel-ip-city": "Lviv"}
     d = client.get("/near", headers=ip).json()
     assert d["src"] == "ip" and d["stores"][0]["id"] == "b3"
