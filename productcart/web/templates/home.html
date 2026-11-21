@@ -2,11 +2,14 @@
 {% block title %}Кошик з акцій — що приготувати з того, що є, і з акцій «Сільпо»{% endblock %}
 {% block body %}
 <section class="hm-hero">
-  <div class="hm-loc">
+{% set mode = "store" if (link and link.store_id) else ("pick" if link else ("nolink" if user else "guest")) %}
+  <div class="hm-loc" id="hmLoc" data-mode="{{ mode }}" data-store="{{ link.store_id if link and link.store_id else '' }}">
     <span class="hm-pin" aria-hidden="true">{{ ic("pin") }}</span>
-    {% if link and link.store_title %}<a href="/silpo"><b>{{ link.store_title }}</b><small>Акції цього магазину</small></a>
-    {% elif user %}<a href="/silpo"><b>Підключіть «Сільпо»</b><small>Зараз — демо-ціни</small></a>
-    {% else %}<a href="/register"><b>Демо-ціни</b><small>Увійдіть, щоб бачити свій магазин</small></a>{% endif %}
+    {% if mode == "store" %}<a href="/silpo" id="hmLocA"><b id="hmLocT">{{ link.store_title }}</b><small id="hmLocS">Акції цього магазину</small></a>
+    {% elif near %}<a href="{{ '/register' if mode == 'guest' else '/silpo' }}" id="hmLocA"><b id="hmLocT">Сільпо, {{ near.address }}</b><small id="hmLocS">≈ {{ near.km }} км · {{ {"guest": "увійдіть, щоб бачити його акції", "nolink": "підключіть, щоб бачити його акції", "pick": "обрати цей магазин"}[mode] }}</small></a>
+    {% elif mode == "pick" %}<a href="/silpo" id="hmLocA"><b id="hmLocT">Оберіть свій магазин</b><small id="hmLocS">Шукаємо найближчі…</small></a>
+    {% elif mode == "nolink" %}<a href="/silpo" id="hmLocA"><b id="hmLocT">Підключіть «Сільпо»</b><small id="hmLocS">Зараз — демо-ціни</small></a>
+    {% else %}<a href="/register" id="hmLocA"><b id="hmLocT">Демо-ціни</b><small id="hmLocS">Увійдіть, щоб бачити свій магазин</small></a>{% endif %}
     <a class="hm-me" href="/me" aria-label="Профіль">{{ ic("user") }}</a>
   </div>
   <h1 class="hm-h">Що готуємо сьогодні?</h1>
@@ -61,4 +64,42 @@
   {% endfor %}
 </div>
 {% endif %}
+<script>
+/* Найближчий «Сільпо»: уточнюємо за геолокацією телефона. Координати округлюємо (~100 м) і не зберігаємо. */
+(function () {
+  var box = document.getElementById('hmLoc'); if (!box || !navigator.geolocation || !window.fetch) return;
+  var T = document.getElementById('hmLocT'), S = document.getElementById('hmLocS'), A = document.getElementById('hmLocA');
+  var mode = box.dataset.mode, mine = box.dataset.store, KEY = 'near-v1', NO = 'geo-no';
+  var tail = { guest: 'увійдіть, щоб бачити його акції', nolink: 'підключіть, щоб бачити його акції', pick: 'обрати цей магазин' };
+  function km(x) { return String(x).replace('.', ','); }
+  function render(d) {
+    var s = d && d.stores && d.stores[0]; if (!s) return;
+    var pick = '/silpo?lat=' + d.lat + '&lon=' + d.lon;
+    if (mode === 'store') {
+      if (s.id === mine) { S.textContent = 'Акції цього магазину · ' + km(s.km) + ' км від вас'; return; }
+      S.innerHTML = ''; S.append('Поруч ближчий: ' + s.address + ' · ' + km(s.km) + ' км'); A.href = pick; return;
+    }
+    T.textContent = 'Сільпо, ' + s.address;
+    S.textContent = km(s.km) + ' км від вас · ' + tail[mode];
+    A.href = mode === 'guest' ? '/register' : pick;
+  }
+  try { var c = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (c) { render(c); return; } } catch (e) {}
+  function locate() {
+    navigator.geolocation.getCurrentPosition(function (p) {
+      fetch('/near?lat=' + p.coords.latitude.toFixed(3) + '&lon=' + p.coords.longitude.toFixed(3), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
+          render(d);
+        }).catch(function () {});
+    }, function (e) { if (e && e.code === 1) try { localStorage.setItem(NO, '1'); } catch (x) {} },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+  }
+  var refused = false; try { refused = !!localStorage.getItem(NO); } catch (e) {}
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
+      if (st.state === 'granted' || (st.state === 'prompt' && !refused)) locate();
+    }).catch(function () { if (!refused) locate(); });
+  } else if (!refused) locate();
+})();
+</script>
 {% endblock %}

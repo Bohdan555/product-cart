@@ -477,7 +477,10 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         except Exception as e:      # вітрина не має падати через підбір
             log.warning("Головна: підбір страв: %s", str(e)[:200])
             ideas = []
+        ip = ip_place(request)
+        near_ip = near_stores(ip[0], ip[1], n=1) if ip else []
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
+                      near=near_ip[0] if near_ip else None,
                       ideas=ideas, have=have, meal=meal, photos=menu_photos(), people=p.household or 2,
                       ideas_qs=today_qs(have, 30, p.household or 2))
 
@@ -1505,6 +1508,47 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                                 for d, p in unsplash.load(conn).items() if d not in menu_credits() and unsplash.usable(d, p)},
                       unsplash_home=unsplash.with_utm("https://unsplash.com"),
                       titles={**{r.id: r.title for r in menu.RECIPES}, **{"p:" + o.product_id: o.name for o in demo.load()}})
+
+    def branches_cached() -> list[dict]:
+        """Магазини «Сільпо» з кешу (будь-якої давності — адреси змінюються рідко). Без запитів до «Сільпо»."""
+        if branches_mem:
+            return branches_mem[0]["items"]
+        raw = db.get_setting(conn, "silpo_branches")
+        try:
+            return json.loads(raw)["items"] if raw else []
+        except (ValueError, KeyError):
+            return []
+
+    def ip_place(request: Request):
+        """Приблизне місце за мережею (заголовки Vercel): (lat, lon, місто) або None."""
+        try:
+            return (float(request.headers["x-vercel-ip-latitude"]), float(request.headers["x-vercel-ip-longitude"]),
+                    unquote(request.headers.get("x-vercel-ip-city", "")) or None)
+        except (KeyError, ValueError):
+            return None
+
+    def near_stores(lat: float, lon: float, n: int = 3) -> list[dict]:
+        return [{"id": b["id"], "title": b["title"], "address": b.get("address") or b["title"], "km": b["km"]}
+                for b in silpo.nearest(branches_cached(), lat, lon, n=n)]
+
+    @app.get("/near")
+    def near(request: Request, lat: float | None = None, lon: float | None = None):
+        """Найближчі магазини «Сільпо» до точки (з телефона) або за мережею. Координати не зберігаємо."""
+        src, city = "gps", None
+        if lat is None or lon is None:
+            ip = ip_place(request)
+            if not ip:
+                return JSONResponse({"stores": []}, headers={"Cache-Control": "no-store"})
+            lat, lon, city = ip
+            src = "ip"
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return JSONResponse({"error": "bad coords"}, status_code=400)
+        lat, lon = round(lat, 3), round(lon, 3)
+        stores = near_stores(lat, lon)
+        u = user_of(request)
+        analytics.track(conn, u["id"] if u else None, "near_lookup", src=src, found=len(stores), guest=not u)
+        return JSONResponse({"src": src, "city": city, "lat": lat, "lon": lon, "stores": stores},
+                            headers={"Cache-Control": "no-store"})
 
     @app.post("/location")
     def location_save(request: Request, csrf: str = Form(""), lat: float = Form(...), lon: float = Form(...),

@@ -802,3 +802,23 @@ def test_demo_deals_get_stock_photos(client):
     assert "images.unsplash.com/photo-cucumber" in page
     assert "Огірки 1 кг" in client.get("/photos").text
     unsplash._mem.clear()
+
+
+def test_near_stores_gps_and_ip(client):
+    """Найближчі «Сільпо»: з кешу магазинів, за координатами з телефона або за мережею; координати не зберігаємо."""
+    from productcart.web import db as wdb
+    conn = client.app.state.conn
+    branches = [{"id": "b1", "city": "Київ", "address": "вул. Хрещатик, 1", "title": "Київ, вул. Хрещатик, 1", "lat": 50.447, "lon": 30.522},
+                {"id": "b2", "city": "Київ", "address": "просп. Перемоги, 20", "title": "Київ, просп. Перемоги, 20", "lat": 50.455, "lon": 30.46},
+                {"id": "b3", "city": "Львів", "address": "пл. Ринок, 1", "title": "Львів, пл. Ринок, 1", "lat": 49.842, "lon": 24.031}]
+    wdb.set_setting(conn, "silpo_branches", json.dumps({"at": "2000-01-01T00:00:00+00:00", "items": branches}))
+    d = client.get("/near", params={"lat": 50.4501, "lon": 30.5234}).json()
+    assert d["src"] == "gps" and [s["id"] for s in d["stores"]] == ["b1", "b2", "b3"] and d["stores"][0]["km"] < 1 and d["lat"] == 50.45
+    ip = {"x-vercel-ip-latitude": "49.84", "x-vercel-ip-longitude": "24.03", "x-vercel-ip-city": "Lviv"}
+    d = client.get("/near", headers=ip).json()
+    assert d["src"] == "ip" and d["stores"][0]["id"] == "b3"
+    assert client.get("/near").json() == {"stores": []}
+    assert client.get("/near", params={"lat": 999, "lon": 0}).status_code == 400
+    home = client.get("/", headers=ip).text
+    assert "Сільпо, пл. Ринок, 1" in home and 'id="hmLoc"' in home and "увійдіть, щоб бачити його акції" in home
+
