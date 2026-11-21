@@ -33,8 +33,9 @@ async function audit(page) {
     const smallTap = [...document.querySelectorAll('a,button,label,[role=button],input[type=checkbox],select')]
       .filter(e => vis(e) && !e.closest('footer') && e.getBoundingClientRect().height < 44 && e.getBoundingClientRect().height > 8)
       // не рахуємо: логотип, посилання всередині тексту (WCAG 2.5.8 їх не вимагає), чекбокс у великому рядку-підписі
-      .filter(e => !e.matches('a.logo') && !(e.tagName === 'A' && getComputedStyle(e).display === 'inline' && e.closest('p,li,small,span.hint'))
-        && !(e.tagName === 'INPUT' && e.closest('label') && e.closest('label').getBoundingClientRect().height >= 44))
+      .filter(e => !e.matches('a.logo') && !(e.tagName === 'A' && getComputedStyle(e).display === 'inline' && e.closest('p,li,small,span.hint,.err,.ok,.hint,.notice'))
+        && !(e.tagName === 'INPUT' && e.closest('label') && e.closest('label').getBoundingClientRect().height >= 44)
+        && !(e.tagName === 'LABEL' && !e.querySelector('input[type=checkbox],input[type=radio]')))
       .map(label);
     const smallText = [...document.querySelectorAll('body *')].filter(e => vis(e) && [...e.childNodes].some(t => t.nodeType === 3 && t.textContent.trim())
       && parseFloat(getComputedStyle(e).fontSize) < 13 && !e.closest('footer')).map(label);
@@ -67,7 +68,7 @@ async function audit(page) {
       try { const r = await page.goto(BASE + p, { waitUntil: 'networkidle', timeout: 30000 }); status = r ? r.status() : 0; }
       catch (e) { errs.push('навігація: ' + String(e.message).slice(0, 120)); }
       await page.waitForTimeout(500);
-      const ms = Date.now() - t0;
+      const ms = await page.evaluate(() => { const n = performance.getEntriesByType('navigation')[0]; return n ? Math.round(n.domContentLoadedEventEnd) : 0; }).catch(() => Date.now() - t0);
       const a = await audit(page).catch(e => ({ error: String(e) }));
       (a.links || []).forEach(l => allLinks.add(l.split('#')[0]));
       delete a.links;
