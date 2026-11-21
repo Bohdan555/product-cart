@@ -24,14 +24,6 @@
   <a href="/today"><i>{{ ic("pan") }}</i><b>Що приготувати сьогодні</b><small>Скажіть, що є вдома — підберемо 3 страви</small></a>
   <a href="/week"><i>{{ ic("calendar") }}</i><b>План на тиждень</b><small>Меню з акцій і готовий список покупок</small></a>
 </nav>
-<h2 class="hm-q">Швидкі ідеї</h2>
-<nav class="hm-quick" aria-label="Швидкі ідеї">
-  {% for href, icon, label in [("/today/dishes?meal=breakfast&t=30&n=" ~ people, "sun", "Сніданки"), ("/today/dishes?meal=salad&t=30&n=" ~ people, "leaf", "Салати"),
-      ("/today/dishes?meal=dinner&t=30&n=" ~ people, "bolt", "До 30 хв"), ("/dishes" if user else "/register", "book", "Мої страви")] %}
-  <a href="{{ href }}"><i>{{ ic(icon, "sm") }}</i>{{ label }}</a>
-  {% endfor %}
-</nav>
-
 {% if cooking %}
 <a class="ck-card" href="/cook">
   <span class="ck-thumbs" aria-hidden="true">{% for it in cooking %}<i>{{ it.recipe.emoji }}</i>{% endfor %}</span>
