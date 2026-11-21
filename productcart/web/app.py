@@ -257,6 +257,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def go(url: str) -> RedirectResponse:
         return RedirectResponse(url, status_code=303)
 
+    NEXT_COOKIE = "after_login"
+
+    def back_after_login(request: Request, default: str):
+        """Куди повернути після входу (лише внутрішня адреса з cookie, яку ставить захищена сторінка)."""
+        nxt = request.cookies.get(NEXT_COOKIE) or ""
+        return nxt if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt else default
+
     def need_user(request: Request, csrf: str | None = None):
         u = user_of(request)
         if u is None:
@@ -595,7 +602,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         r = conn.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
         if r:
             analytics.track(conn, r["id"], "login", method="google")
-            resp = signed_in(r["id"], "/list")
+            resp = signed_in(r["id"], back_after_login(request, "/list"))
+            resp.delete_cookie(NEXT_COOKIE)
         else:
             uid = new_user(request, email, "google", "google")
             resp = signed_in(uid, after_signup(uid))
@@ -617,7 +625,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return render(request, "auth.html", mode="login", error="Неправильний email або пароль.", email=email, status=400)
         token, _ = security.new_session(conn, r["id"])
         analytics.track(conn, r["id"], "login")
-        resp = go("/list")
+        resp = go(back_after_login(request, "/list"))
+        resp.delete_cookie(NEXT_COOKIE)
         resp.set_cookie(COOKIE, token, max_age=security.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
 
@@ -1653,11 +1662,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
     @app.get("/admin/stats", response_class=HTMLResponse)
     def admin_stats(request: Request, days: int = 30):
-        u, bad = need_user(request)
-        if bad:
-            return bad
+        u = user_of(request)
+        if u is None:          # увійти — і одразу назад в адмінку
+            resp = go("/login?admin=1")
+            resp.set_cookie(NEXT_COOKIE, "/admin/stats", max_age=900, httponly=True, samesite="lax", secure=secure)
+            return resp
         if u["email"].lower() not in admin_emails:
-            return HTMLResponse("Сторінка доступна лише власнику сайту.", status_code=403)
+            logs.event(log, "admin.denied", logging.WARNING)
+            return render(request, "auth.html", mode="login", status=403,
+                          error="Адмінка доступна лише власнику сайту. Увійдіть під акаунтом адміністратора.")
         return render(request, "stats.html", u, st=analytics.stats(conn, days=max(7, min(90, days))), votes=vote_stats())
 
     # ---------- «Готую»: рецепти страв, які людина обрала (сьогодні або на тиждень) ----------

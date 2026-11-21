@@ -146,7 +146,16 @@ def test_analytics_clicks_and_admin_stats(tmp_path, monkeypatch, backend):
         # звичайний користувач статистику не бачить
         assert c.get("/admin/stats").status_code == 403
         c.cookies.clear()
+        r = c.get("/admin/stats")                                   # без входу — на вхід, а після входу назад
+        assert r.status_code == 303 and r.headers["location"] == "/login?admin=1" and c.cookies.get("after_login")
+        assert "Вхід в адмінку" in c.get("/login?admin=1").text
+        c.cookies.clear()
         token = register(c, "owner@test.ua")
+        c.post("/logout", data={"csrf": token})
+        c.get("/admin/stats")
+        r = c.post("/login", data={"email": "owner@test.ua", "password": "password123"})
+        assert r.headers["location"] == "/admin/stats"
+        token = csrf(c.get("/profile").text)
         c.post("/recipe/vote", data={"csrf": token, "id": "flotski", "vote": "down"})
         page = c.get("/admin/stats").text
         assert "Рецепти: оцінки" in page and "Макарони по-флотськи" in page and "<td>-1</td>" in page

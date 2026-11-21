@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Реєстрація' if mode == 'register' else 'Вхід' }} — Кошик з акцій{% endblock %}
 {% block body %}
-<h1>{{ 'Створити профіль' if mode == 'register' else 'Увійти' }}</h1>
+<h1>{{ 'Створити профіль' if mode == 'register' else ('Вхід в адмінку' if request.query_params.get('admin') else 'Увійти') }}</h1>
 <form class="card stack" method="post" action="/{{ mode }}">
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
   {% if google_on %}
