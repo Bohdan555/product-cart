@@ -199,6 +199,6 @@ document.addEventListener('click', function (e) {
   fetch('/recipe/vote', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
     if (d.error) throw new Error(d.error);
     paint(d.vote, d.likes);
-    if (window.toast) window.toast(d.vote === 'up' ? 'Дякуємо! Частіше пропонуватимемо схожі' : d.vote === 'down' ? 'Зрозуміли — більше не пропонуватимемо' : 'Добре, поки без оцінки 🤷';
+    if (window.toast) window.toast(d.vote === 'up' ? 'Дякуємо! Частіше пропонуватимемо схожі' : d.vote === 'down' ? 'Смаки різні — підберемо інше 💛' : 'Фух, рецепт видихнув 😮‍💨';
   }).catch(function () { paint(prev, cnt); if (window.toast) window.toast('Не вдалося зберегти'); });
 });
