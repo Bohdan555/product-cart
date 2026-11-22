@@ -25,8 +25,9 @@
   <form method="post" action="/today/cart" data-turbo="false">
     <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="id" value="{{ d.id }}">
     <input type="hidden" name="have" value="{{ have|join(',') }}"><input type="hidden" name="n" value="{{ n }}"><input type="hidden" name="need" value="{{ need|join(',') }}">
-    <button type="submit" class="btn td-cart">{{ ic("cart", "mid") }} Додати {{ o.lines|length }} в кошик «Сільпо» · {{ uah(o.buy_cost|round) }}</button>
+    <button type="submit" class="btn td-cart">{{ ic("cart", "mid") }}<span>Додати {{ o.lines|length }} в кошик «Сільпо» · {{ uah(o.buy_cost|round) }}</span></button>
   </form>
+  <p class="fee-note">Ціни без сервісного збору «Сільпо» — його додає магазин під час оформлення.</p>
   {% else %}
   <a class="td-gate" href="{{ '/silpo' if user else '/register' }}">
     <span class="icotile">{{ ic("tag", "mid") }}</span>

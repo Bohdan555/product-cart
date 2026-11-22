@@ -68,6 +68,7 @@
     <div class="buyprog-h"><b id="progressTxt">Торкайтесь товарів, які вже купили</b><span id="progressLeft"></span></div>
     <div class="progress"><i id="bar"></i></div>
   </div>
+  {% if not is_demo %}<p class="fee-note" style="margin:-4px 0 12px">Ціни без сервісного збору «Сільпо» — його додає магазин під час оформлення.</p>{% endif %}
   {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
   {% elif link and not is_demo %}
   <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
@@ -195,7 +196,7 @@
           else { lines.push('☐ ' + em + name + price); left += +r.dataset.cost || 0; }
         });
       });
-      if (left >= 1) lines.push('', '💰 Разом до покупки ≈ ' + Math.round(left) + ' ₴');
+      if (left >= 1) lines.push('', '💰 Разом до покупки ≈ ' + Math.round(left) + ' ₴ (без сервісного збору магазину)');
       lines.push('', '— Кошик з акцій · ' + location.origin);
       var text = lines.join('\n').trim();
       try { navigator.clipboard.writeText(text).then(function () { toast('Список скопійовано'); }, function () { toast('Не вдалося скопіювати'); }); }

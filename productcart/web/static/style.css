@@ -1013,7 +1013,7 @@ body:has(.su) footer{display:none}
 .td-li:last-child{border-bottom:0}.td-li small{color:var(--muted)}
 .td-home{color:var(--accent);font-weight:700;font-size:14px;white-space:nowrap}.td-home.soft{color:var(--muted);font-weight:600}
 .td-cost{font-weight:800;white-space:nowrap}.td-cost s{color:var(--muted);font-weight:500;margin-left:6px}
-.td-cart{margin-top:14px;width:100%}.td-cart .ico{--ic:color-mix(in srgb,var(--accent-ink) 30%,transparent)}
+.td-cart{margin-top:14px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;line-height:1.25;text-align:center;min-height:52px}.td-cart .ico{flex:none}.td-cart span{min-width:0}.td-cart .ico{--ic:color-mix(in srgb,var(--accent-ink) 30%,transparent)}
 .td-gate{display:flex;gap:12px;align-items:center;text-decoration:none;color:var(--ink);background:var(--p-plum);border-radius:var(--r-lg);padding:14px 16px;margin-top:14px}
 .td-gate .icotile{background:var(--card)}.td-gate .ico{--ic:var(--s-plum)}
 .td-gate b{display:block}.td-gate small{color:color-mix(in srgb,var(--ink) 70%,transparent)}
@@ -1564,3 +1564,5 @@ body:has(.admin-page) .dock{display:none}
 #tdReel .td-dish:nth-child(1){box-shadow:inset 0 0 0 2px var(--sticker),0 1px 0 var(--line)}
 #tdReel .td-dish:nth-child(n+4) .td-rank{display:none}
 .lock-card{align-items:flex-start}.lock-card .lock-ic{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;border-radius:var(--r-sm);background:var(--chip)}.lock-card .btn{min-height:44px}.lock-card a.hint{display:inline-flex;align-items:center;min-height:44px}
+
+.fee-note{font-size:13px;color:var(--muted);margin:8px 0 0}

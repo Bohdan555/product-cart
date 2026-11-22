@@ -10,6 +10,7 @@
 </nav>
 {% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни {% if not shared %}вашого {% endif %}«Сільпо» · {{ store }}</span>{% endif %}
 
+{% if opts and not is_demo %}<p class="fee-note">Ціни без сервісного збору «Сільпо».</p>{% endif %}
 {% if not opts %}
 <div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
 {% else %}
