@@ -777,7 +777,7 @@ def test_tastes_inside_menu_setup(client):
     assert r.headers["location"] == "/menu?fresh=1"                       # смаки вже знаємо — одразу меню
     p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
     assert '"taste_done": true' in p and '"omelette"' in p and '"pork"' in p and '"fish"' in p
-    assert 'href="/menu/setup?step=3"' in client.get("/me").text
+    assert 'href="/profile"' in client.get("/me").text and "Смаки й харчування" in client.get("/me").text
     assert client.get("/taste").headers["location"] == "/menu/setup?step=3"
 
 
@@ -975,3 +975,19 @@ def test_return_to_page_after_silpo_connect(client):
     client.get("/login", headers={"referer": "https://evil.example/x"})
     client.get("/login", headers={"referer": "http://testserver/register"})
     assert not client.cookies.get("after_login")
+
+
+def test_tastes_diets_one_page(client):
+    """Смаки, дієти, щотижневі покупки й знижки — одна сторінка «Смаки й харчування»."""
+    token = register(client)
+    page = client.get("/profile").text
+    assert "Смаки й" in page and 'id="prTastes"' in page and 'name="diets"' in page and 'id="regulars"' in page
+    me = client.get("/me").text
+    assert "Смаки й харчування" in me and "Дієти й анкета" not in me
+    r = client.post("/profile", data={"csrf": token, "_f": ["likes", "dislikes", "diets", "regulars", "min_discount"],
+                                      "likes": ["fish", "eggs"], "dislikes": ["pork"], "regulars": "кава", "min_discount": "15"})
+    assert r.status_code == 303
+    page = client.get("/profile").text
+    assert 'data-tag="fish" data-hide="1"' in page and 'data-state="like"' in page and 'data-state="hide"' in page
+    client.post("/profile", data={"csrf": token, "_f": ["likes", "dislikes"]})          # усе скинули
+    assert 'data-state="like"' not in client.get("/profile").text

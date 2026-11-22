@@ -678,6 +678,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         dishes = sorted(menu.RECIPES, key=lambda r: (r.id not in photos, r.minutes))   # спершу ті, що з фото
         return render(request, "profile.html", u, p=p, consent=consent, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS, taste_groups=TASTE_GROUPS,
                       diets=list(DIETS), silpo=silpo_link(u["id"]), status=status, photos=photos,
+                      tastes=SETUP_TASTES, hideable=SETUP_HIDE,
                       dishes=[{"id": r.id, "title": r.title, "emoji": r.emoji, "minutes": r.minutes} for r in dishes[:12]],
                       **extra)
 
