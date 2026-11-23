@@ -71,8 +71,18 @@ document.addEventListener('turbo:load', markTab);
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });
   document.addEventListener('submit', function (e) {
-    if (e.target.action && /\/logout$/.test(e.target.action) && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('logout');
+    if (e.target.action && /\/(logout|login|register)$/.test(e.target.action) && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('logout');
   }, true);
+  // екран відкрився миттєво з копії, а свіжа версія інша — тихо оновлюємо (якщо людина ще нічого не вводить)
+  var openedAt = Date.now();
+  navigator.serviceWorker.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (d.type !== 'fresh' || d.path !== location.pathname || Date.now() - openedAt > 15000) return;
+    var a = document.activeElement;
+    if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+    if (document.querySelector('dialog[open]')) return;
+    if (window.Turbo) Turbo.visit(location.href, { action: 'replace' }); else location.reload();
+  });
 }
 window.isStandalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 if (window.isStandalone) document.documentElement.classList.add('pwa');

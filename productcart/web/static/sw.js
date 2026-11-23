@@ -4,11 +4,20 @@
    - push: показуємо сповіщення, тап відкриває потрібну сторінку.
    Нічого, що ходить у «Сільпо», платить чи змінює дані, не кешуємо. */
 var VERSION = '__VERSION__';
-var STATIC = 'static-' + VERSION, PAGES = 'pages-v1';
+var STATIC = 'static-' + VERSION, PAGES = 'pages-v2';
 var PRECACHE = ['/offline', '/static/style.css?v=__CSS_V__', '/static/ui.js?v=__JS_V__', '/static/vendor/turbo-8.0.12.js',
                 '/static/icons/icon-192.png?v=__ICON_V__'];
 var NO_CACHE = /^\/(silpo|auth|go|cron|tg|push|client-log|logout|login|register|admin|offers|fridge\/scan|photos)/;
 var MAX_PAGES = 40;
+var FAST = /^\/(|me|pantry|menu|buy|cook|today|list|profile|notify)$/;   // екрани, що відкриваються миттєво з копії
+function strip(t) { return t.replace(/<meta name="csrf"[^>]*>/, '').replace(/data-rid="[^"]*"/g, ''); }
+function tell(id, path) {
+  self.clients.get(id).then(function (cl) {
+    if (cl) cl.postMessage({ type: 'fresh', path: path });
+    else self.clients.matchAll({ type: 'window' }).then(function (list) { list.forEach(function (w) { w.postMessage({ type: 'fresh', path: path }); }); });
+  });
+}
+
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(STATIC).then(function (c) { return c.addAll(PRECACHE); }).then(function () { return self.skipWaiting(); }));
@@ -16,7 +25,7 @@ self.addEventListener('install', function (e) {
 
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k.indexOf('static-') === 0 && k !== STATIC; })
+    return Promise.all(keys.filter(function (k) { return (k.indexOf('static-') === 0 && k !== STATIC) || k === 'pages-v1'; })
       .map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
@@ -41,6 +50,29 @@ self.addEventListener('fetch', function (e) {
   }
   var html = req.mode === 'navigate' || (req.headers.get('accept') || '').indexOf('text/html') >= 0;
   if (!html || NO_CACHE.test(url.pathname) || url.searchParams.has('partial')) return;
+  // Відкриття застосунку (повне завантаження головних екранів): одразу збережена копія, свіжа — у фоні.
+  // Якщо свіжа інша — кажемо сторінці тихо оновитися (Turbo). Переходи всередині (Turbo) — як і раніше, з мережі.
+  if (req.mode === 'navigate' && FAST.test(url.pathname) && !url.search) {
+    var key = url.pathname, client = e.resultingClientId || e.clientId;
+    e.respondWith(caches.open(PAGES).then(function (c) {
+      return c.match(key).then(function (hit) {
+        var fresh = fetch(req).then(function (res) {
+          if (res.ok && res.type === 'basic' && !res.redirected) {
+            var copy = res.clone();
+            if (hit) Promise.all([hit.clone().text(), res.clone().text()]).then(function (t) {
+              if (strip(t[0]) !== strip(t[1])) setTimeout(function () { tell(client, key); }, 300);
+            });
+            c.put(key, copy).then(function () { trim(c); });
+          }
+          return res;
+        });
+        if (!hit) return fresh.catch(function () { return caches.match('/offline'); });
+        e.waitUntil(fresh.catch(function () {}));
+        return hit;
+      });
+    }));
+    return;
+  }
   e.respondWith(fetch(req).then(function (res) {
     if (res.ok && res.type === 'basic' && !res.redirected) {
       var copy = res.clone();

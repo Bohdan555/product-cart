@@ -146,3 +146,12 @@ def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
         c.post("/push/subscribe", json=sub, headers={"x-csrf": token})
         assert c.post("/push/unsubscribe", json={"endpoint": FCM}, headers={"x-csrf": token}).json() == {"ok": True}
         assert not c.app.state.conn.execute("SELECT 1 FROM push_subs").fetchall()
+
+
+def test_healthz_and_fast_open_sw(tmp_path):
+    app = create_app(db_path=str(tmp_path / "h.db"), app_secret=SECRET, base_url="http://test", gateway=FakeGateway())
+    with TestClient(app) as c:
+        r = c.get("/healthz")
+        assert r.json() == {"ok": True} and r.headers["cache-control"] == "no-store"
+        sw = c.get("/sw.js").text
+        assert "FAST" in sw and "'fresh'" in sw and "pages-v2" in sw

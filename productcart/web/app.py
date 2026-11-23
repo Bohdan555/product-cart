@@ -2679,6 +2679,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 mark([wk])
                 st["menus"] += 1
 
+    @app.get("/healthz")
+    def healthz():
+        """Для зовнішнього «будильника» (напр. cron-job.org раз на 5 хв): будить функцію й базу, щоб перше відкриття було швидким."""
+        conn.execute("SELECT 1").fetchone()
+        return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
+
     @app.get("/cron/warm")
     async def cron_warm(request: Request):
         """Раз на день (Vercel Cron): свіжі акції магазинів, які люди відкривали за тиждень, — через донора."""
