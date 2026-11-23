@@ -205,3 +205,17 @@ def test_today_top3_ordered_by_what_to_buy():
         top = menu.today(offers, Profile(), have, n=30, meal="dinner")[:3]
         buys = [len(o.lines) for o in top]
         assert buys == sorted(buys), (have, buys)
+
+
+def test_expiring_and_today_prefers_it():
+    """Термін: фарш (1 день) зі вчорашньої покупки — сьогодні; сир (14) — ще ні. Страва з фаршем підіймається."""
+    from datetime import date, timedelta
+    today = date(2026, 11, 23)
+    y = (today - timedelta(days=1)).isoformat()
+    since = {"minced": y, "cheese": y, "potato": y, "kefir": (today - timedelta(days=4)).isoformat()}
+    assert menu.expiring(since, ["minced", "cheese", "potato", "kefir"], today) == [("minced", 0), ("kefir", 1)]
+    assert menu.when_label(0) == "сьогодні" and menu.when_label(1) == "завтра"
+    offers = planner.merge_nearby(demo.load())
+    have = ["minced", "eggs", "milk", "pasta", "kefir"]
+    with_soon = menu.today(offers, Profile(), have, n=3, meal="dinner", soon=["minced"])
+    assert any("minced" in o.dish.recipe.ingredients for o in with_soon)

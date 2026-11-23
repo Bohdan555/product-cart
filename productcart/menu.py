@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from datetime import date
+from datetime import date, timedelta
 import re
 from dataclasses import dataclass, field, replace
 
@@ -974,6 +974,40 @@ def word_to_key(text: str) -> str | None:
     return None
 
 
+# ---------- термін придатності: скільки зазвичай зберігається в холодильнику після покупки (днів) ----------
+# Орієнтовні типові строки для відкритого/свіжого продукту; точну дату людина бачить на упаковці.
+SHELF_DAYS = {
+    "minced": 1, "liver": 1, "fish": 1, "chicken_fillet": 2, "chicken_thigh": 2, "turkey": 2, "pork": 3, "beef": 3,
+    "mushrooms": 4, "greens": 4, "lettuce": 4, "avocado": 4, "bread": 4, "cottage": 4,
+    "milk": 5, "kefir": 5, "cream": 5, "ham": 5, "sausages": 5, "crab_sticks": 5, "broccoli": 5, "tomato": 5,
+    "cucumber": 5, "banana": 5, "lavash": 5,
+    "sour_cream": 7, "yogurt": 7, "pepper": 7, "zucchini": 7, "eggplant": 7, "cauliflower": 7, "radish": 7,
+    "brynza": 10, "cheese": 14, "eggs": 21, "butter": 21,
+}
+
+
+def expiring(since: dict[str, str], have, today: date | None = None, within: int = 1) -> list[tuple[str, int]]:
+    """Продукти з холодильника, які варто використати за `within` днів: [(ключ, днів лишилось)], найтерміновіші першими.
+    0 — сьогодні (або вже прострочено), 1 — завтра."""
+    today = today or date.today()
+    out = []
+    for k in have:
+        days, d0 = SHELF_DAYS.get(k), since.get(k)
+        if not days or not d0:
+            continue
+        try:
+            left = (date.fromisoformat(d0[:10]) + timedelta(days=days) - today).days
+        except ValueError:
+            continue
+        if left <= within:
+            out.append((k, max(0, left)))
+    return sorted(out, key=lambda x: (x[1], INGREDIENTS[x[0]][0]))
+
+
+def when_label(left: int) -> str:
+    return "сьогодні" if left <= 0 else "завтра" if left == 1 else f"за {left} дн."
+
+
 # ---------- «Що приготувати сьогодні»: одна страва з того, що є ----------
 ASSUMED = {"oil", "flour", "tomato_paste", "garlic"}   # олія, борошно, томатна паста, часник — майже завжди є вдома
 
@@ -995,7 +1029,7 @@ class Option:
 
 
 def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n: int = 3, need=(),
-          meal: str | None = "dinner") -> list[Option]:
+          meal: str | None = "dinner", soon=()) -> list[Option]:
     """Три страви, для яких найменше докуповувати: спершу кількість бракуючого, далі — скільки свого
     використовуємо, далі — ціна докупки. Вподобання й «не їм» з профілю діють як завжди.
     `need` — з «мабуть, є» (олія, борошно, томатна паста) людина сказала «немає»: їх докуповуємо."""
@@ -1013,7 +1047,10 @@ def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n:
     # що докупити мінус що вже є: страва, яка бере обидва ваші продукти й просить 3 нових, краща за ту,
     # що бере один і просить 2 (інакше з великим вибором страв те, що є вдома, губиться)
     # смаки з анкети важать як один продукт докупки: улюблену страву покажемо, навіть якщо треба докупити ще щось
-    opts.sort(key=lambda o: (len(o.lines) - len(o.have) - min(1.5, 0.5 * ctx.taste(o.dish.recipe)), -len(o.have),
+    # `soon` — те, що скоро зіпсується: страва, яка його використовує, важить як на 1,5 продукту докупки менше
+    soon = set(soon) & have
+    opts.sort(key=lambda o: (len(o.lines) - len(o.have) - min(1.5, 0.5 * ctx.taste(o.dish.recipe))
+                             - 1.5 * len(soon & set(o.dish.recipe.ingredients)), -len(o.have),
                              -ctx.score(o.dish.recipe, []) * 0.05 + o.buy_cost / 100))
     out, proteins = [], set()
     for o in opts:          # різноманітність: не три страви з курки

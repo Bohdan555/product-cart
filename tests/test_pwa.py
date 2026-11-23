@@ -114,6 +114,26 @@ def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
         assert st["deals"] == 1 and st["menus"] == 1
         assert [m["tag"] for _, m in push.sent] == ["deals", "menu"] and "−" in push.sent[0][1]["body"]
 
+        # «скоро зіпсується»: фарш позавчора — вранці push зі стравами; удруге того ж дня не шлемо
+        import json as _json
+        from datetime import date as _d, timedelta as _td
+        conn = c.app.state.conn
+        row = conn.execute("SELECT user_id, data FROM profiles").fetchone()
+        data = _json.loads(row["data"])
+        data.update(fridge=["minced", "pasta"], fridge_at=__import__("productcart.web.security", fromlist=["iso"]).iso(
+            __import__("productcart.web.security", fromlist=["now"]).now()),
+            fridge_since={"minced": (_d.today() - _td(days=2)).isoformat(), "pasta": _d.today().isoformat()})
+        conn.execute("UPDATE profiles SET data=? WHERE user_id=?", (_json.dumps(data), row["user_id"]))
+        conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
+        push.sent.clear()
+        st = c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()
+        xp = [m for _, m in push.sent if m["tag"] == "expiry"]
+        assert st.get("expiry") == 1 and xp and "фарш — сьогодні" in xp[0]["body"] and xp[0]["url"].startswith("/today/dishes?")
+        conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
+        push.sent.clear()
+        c.get("/cron/notify", headers={"authorization": "Bearer test-cron"})
+        assert not [m for _, m in push.sent if m["tag"] == "expiry"]
+
         # браузер відписався — сервіс каже 410 — підписку прибираємо
         push.gone.add(FCM)
         c.app.state.conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")

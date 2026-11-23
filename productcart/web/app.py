@@ -522,7 +522,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         meal = default_meal()
         ip = ip_place(request)
         near_ip = near_stores(ip[0], ip[1], n=1) if ip else []
+        soon = menu.expiring(p.fridge_since, p.fridge, within=1) if u else []
+        soon_url = (f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}" if soon else None)
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
+                      soon=[(k, menu.INGREDIENTS[k][0], menu.PANTRY_WORDS.get(k, ("", "🥫"))[1], menu.when_label(d))
+                            for k, d in soon], soon_url=soon_url,
                       near=near_ip[0] if near_ip else None,
                       meal=meal, people=p.household or 2)
 
@@ -1269,7 +1273,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
         new_week = roll_week(p)
         if p.fridge and (not p.fridge_at or p.fridge_at < security.iso(security.now() - FRIDGE_TTL)):
-            p.fridge, p.fridge_other, p.fridge_at = [], [], None    # фото тижневої давнини — вже неправда
+            p.fridge, p.fridge_other, p.fridge_at, p.fridge_since = [], [], None, {}    # фото тижневої давнини — вже неправда
             new_week = True
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
@@ -1964,6 +1968,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         rid = str(form.get("id", ""))
         p.cooking = [c for c in p.cooking if c.get("id") != rid]
+        r = menu.RECIPE_BY_ID.get(rid)
+        if r and p.fridge:       # приготували — швидкопсувне з цього рецепта вже не чекає в холодильнику
+            used = {k for k in r.ingredients if k in menu.SHELF_DAYS}
+            p.fridge = [k for k in p.fridge if k not in used]
+            p.fridge_since = {k: v for k, v in p.fridge_since.items() if k not in used}
         analytics.track(conn, u["id"] if u else None, "cooked", dish=rid, guest=not u)
         return save_any(request, u, p, health, go("/cook?done=1"))
 
@@ -2034,7 +2043,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         meal = request.query_params.get("meal")
         if meal not in MEALS:
             meal = default_meal()
-        opts = menu.today(offers, p, have, max_minutes=t, n=30, meal=meal)   # 3 видно, решта — для «↻ Інша»
+        soon = [k for k, _ in menu.expiring(p.fridge_since, p.fridge, within=2)] if u else []
+        opts = menu.today(offers, p, have, max_minutes=t, n=30, meal=meal, soon=soon)   # 3 видно, решта — для «↻ Інша»
         analytics.track(conn, u["id"] if u else None, "today_dishes", have=len(have), minutes=t, people=n,
                         options=len(opts), guest=not u, meal=meal)
         return render(request, "today_dishes.html", u, opts=opts, qs=today_qs(have, t, n), have=have, t=t, n=n,
@@ -2170,6 +2180,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return bad
         p, health = load_profile(u["id"])
         p.fridge = sorted({k for k in form.getlist("have") if k in menu.INGREDIENTS})
+        today_s = date.today().isoformat()      # нове вдома — з сьогодні; те, що вже було, зберігає свою дату
+        p.fridge_since = {k: p.fridge_since.get(k, today_s) for k in p.fridge}
         p.fridge_other = [str(x).strip()[:60] for x in form.getlist("other") if str(x).strip()][:40]
         p.fridge_at = security.iso(security.now()) if (p.fridge or p.fridge_other) else None
         p.menu, p.menu_skip = [], []        # меню перебудуємо під те, що є вдома
@@ -2189,6 +2201,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p, health = load_profile(u["id"])
         key = str(form.get("key", ""))
         p.fridge = [k for k in p.fridge if k != key]
+        p.fridge_since.pop(key, None)
         if not p.fridge and not p.fridge_other:
             p.fridge_at = None
         save_profile(u["id"], p, health)
@@ -2395,6 +2408,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             conn.execute("DELETE FROM tg_links WHERE user_id=?", (u["id"],))
             return go("/notify")
         p.tg_deals, p.tg_weekly = bool(form.get("tg_deals")), bool(form.get("tg_weekly"))
+        p.tg_expiry = bool(form.get("tg_expiry"))
         p.watch_default = pct(form.get("watch_default"))
         p.watch, p.watch_min = [], {}
         for w, m in zip(form.getlist("w"), form.getlist("wmin")):
@@ -2477,6 +2491,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return ok
 
         p, health = load_profile(uid)
+        soon = menu.expiring(p.fridge_since, p.fridge, within=1) if p.tg_expiry and p.fridge else []
+        xk = "x:" + date.today().isoformat()
+        if soon and not conn.execute("SELECT 1 FROM tg_sent WHERE user_id=? AND key=?", (uid, xk)).fetchone():
+            names = ", ".join(f"{menu.INGREDIENTS[k][0].lower()} — {menu.when_label(d)}" for k, d in soon)
+            url = f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}"
+            if await deliver(f"⏳ Варто використати: {names}.\nПідібрали страви з того, що є вдома.",
+                             ("Що приготувати", base_url + url), "⏳ Скоро зіпсується", names, url, "expiry"):
+                conn.execute("INSERT INTO tg_sent (user_id, key, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+                             (uid, xk, security.iso(security.now())))
+                st["expiry"] = st.get("expiry", 0) + 1
         if not silpo_link(uid) or not (p.tg_deals or (p.tg_weekly and menu_day)):
             return
         _, offers, _ = await silpo_list_input(uid, p, allow_stale=False)

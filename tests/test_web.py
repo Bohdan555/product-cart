@@ -1018,3 +1018,24 @@ def test_posthog_server_events_and_consent(tmp_path, monkeypatch):
         ev = [e for b in sent for e in b if e["event"] == "today_dishes"][0]
         assert ev["distinct_id"].startswith("u_") and "who@test.ua" not in json.dumps(sent)
         assert ev["distinct_id"] in c.get("/").text                 # той самий псевдонім для браузера (identify)
+
+
+def test_expiry_home_block_and_cooked(client):
+    """Фарш з холодильника позавчора → «Варто використати» на головній; перемикач у сповіщеннях;
+    «Приготовано» страви з фаршем прибирає його з холодильника (крупи лишаються)."""
+    from datetime import date, timedelta
+    token = register(client)
+    conn = client.app.state.conn
+    client.post("/fridge/save", data={"csrf": token, "have": ["minced", "cheese", "pasta"]})
+    row = conn.execute("SELECT user_id, data FROM profiles").fetchone()
+    data = json.loads(row["data"])
+    assert set(data["fridge_since"]) == {"minced", "cheese", "pasta"}
+    data["fridge_since"]["minced"] = (date.today() - timedelta(days=2)).isoformat()
+    conn.execute("UPDATE profiles SET data=? WHERE user_id=?", (json.dumps(data), row["user_id"]))
+    home = client.get("/").text
+    assert "Варто використати" in home and "фарш · сьогодні" in home and "твердий сир" not in home
+    assert 'name="tg_expiry"' in client.get("/notify").text
+    client.post("/cook/done", data={"csrf": token, "id": "flotski"})
+    data = json.loads(conn.execute("SELECT data FROM profiles").fetchone()["data"])
+    assert "minced" not in data["fridge"] and "minced" not in data["fridge_since"] and "pasta" in data["fridge"]
+    assert "Варто використати" not in client.get("/").text

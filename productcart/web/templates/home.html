@@ -24,6 +24,14 @@
   <a href="/today"><i>{{ ic("pan") }}</i><b>Що приготувати сьогодні</b><small>Скажіть, що є вдома — підберемо 3 страви</small></a>
   <a href="/week"><i>{{ ic("calendar") }}</i><b>План на тиждень</b><small>Меню з акцій і готовий список покупок</small></a>
 </nav>
+{% if soon %}
+<a class="xp-card" href="{{ soon_url }}">
+  <span class="xp-ic" aria-hidden="true">{{ ic("clock") }}</span>
+  <span class="xp-t"><b>Варто використати</b>
+    <span class="xp-list">{% for k, name, emo, when in soon %}<span class="xp-chip{% if when == 'сьогодні' %} hot{% endif %}"><i aria-hidden="true">{{ emo }}</i>{{ name|lower }} · {{ when }}</span>{% endfor %}</span>
+    <small>Що приготувати з цього →</small></span>
+</a>
+{% endif %}
 {% if cooking %}
 <a class="ck-card" href="/cook">
   <span class="ck-thumbs" aria-hidden="true">{% for it in cooking %}<i>{{ it.recipe.emoji }}</i>{% endfor %}</span>
