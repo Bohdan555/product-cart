@@ -33,7 +33,7 @@ async function audit(page) {
     const smallTap = [...document.querySelectorAll('a,button,label,[role=button],input[type=checkbox],select')]
       .filter(e => vis(e) && !e.closest('footer') && e.getBoundingClientRect().height < 44 && e.getBoundingClientRect().height > 8)
       // не рахуємо: логотип, посилання всередині тексту (WCAG 2.5.8 їх не вимагає), чекбокс у великому рядку-підписі
-      .filter(e => !e.matches('a.logo') && !(e.tagName === 'A' && getComputedStyle(e).display === 'inline' && e.closest('p,li,small,span.hint,.err,.ok,.hint,.notice'))
+      .filter(e => !e.matches('a.logo') && !((e.tagName === 'A' || e.matches('button.linkbtn')) && getComputedStyle(e).display === 'inline' && e.closest('p,li,small,span,.err,.ok,.hint,.notice,.note'))
         && !(e.tagName === 'INPUT' && e.closest('label') && e.closest('label').getBoundingClientRect().height >= 44)
         && !(e.tagName === 'LABEL' && !e.querySelector('input[type=checkbox],input[type=radio]')))
       .map(label);

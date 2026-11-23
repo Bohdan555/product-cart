@@ -1,12 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Приватність — Кошик з акцій<script>
-document.getElementById('phReset').onclick = function () {
-  document.cookie = 'pc_an=; path=/; max-age=0'; document.cookie.split('; ').forEach(function (c) {
-    var n = c.split('=')[0]; if (/^ph_/.test(n)) document.cookie = n + '=; path=/; max-age=0'; });
-  this.textContent = 'згоду скинуто — запитаємо знову';
-};
-</script>
-{% endblock %}
+{% block title %}Приватність — Кошик з акцій{% endblock %}
 {% block body %}
 <h1>Приватність і дані</h1>
 <div class="card stack">

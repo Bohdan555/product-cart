@@ -1566,7 +1566,7 @@ body:has(.admin-page) .dock{display:none}
 .lock-card{align-items:flex-start}.lock-card .lock-ic{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;border-radius:var(--r-sm);background:var(--chip)}.lock-card .btn{min-height:44px}.lock-card a.hint{display:inline-flex;align-items:center;min-height:44px}
 
 .fee-note{font-size:13px;color:var(--muted);margin:8px 0 0}
-.pr-tastes{margin-bottom:6px}.pr-tastes button{min-height:44px;background:var(--card);border-color:var(--line)}.pr-tastes b{overflow-wrap:anywhere;hyphens:auto}.pr-tastes [data-state=like]{border-color:var(--accent);background:var(--card)}.pr-tastes [data-state=hide]{background:var(--chip)}
+.pr-tastes{margin-bottom:6px}.pr-tastes button{min-height:44px;background:var(--card);border-color:var(--line)}.pr-tastes b{overflow-wrap:break-word;hyphens:auto}.pr-tastes [data-state=like]{border-color:var(--accent);background:var(--card)}.pr-tastes [data-state=hide]{background:var(--chip)}
 .consent-bar{position:fixed;left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:60;max-width:520px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-lift);padding:12px 14px;display:grid;gap:10px}
 .consent-bar p{margin:0;font-size:14px;line-height:1.4}.consent-bar div{display:flex;gap:8px}.consent-bar .btn{flex:1}
 .consent-bar[hidden]{display:none}
@@ -1583,4 +1583,4 @@ body:has(.admin-page) .dock{display:none}
 .xt-b{display:flex;flex-wrap:wrap;gap:6px}
 .xt-b button,.xt-cal{min-height:44px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:600 14px var(--body);padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .xt-cal{position:relative;overflow:hidden;padding:0 12px}.xt-cal input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-.xt-auto{border:0;background:none;color:var(--muted);font:500 13px var(--body);text-decoration:underline;cursor:pointer;min-height:32px;padding:0 4px}
+.xt-auto{border:0;background:none;color:var(--muted);font:500 13px var(--body);text-decoration:underline;cursor:pointer;min-height:44px;padding:0 8px}

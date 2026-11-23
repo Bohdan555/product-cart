@@ -1063,3 +1063,9 @@ def test_fridge_manual_expiry(client):
     client.post("/fridge/save", data={"csrf": token, "have": ["kefir"]})                       # макарони прибрали — дата зникла
     data = json.loads(client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"])
     assert "pasta" not in data["fridge_until"]
+
+
+def test_privacy_title_clean(client):
+    page = client.get("/privacy").text
+    title = page[page.index("<title>"):page.index("</title>")]
+    assert "<script" not in title and "phReset" in page
