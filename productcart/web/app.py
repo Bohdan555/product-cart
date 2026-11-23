@@ -970,7 +970,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     @app.get("/taste")
     def taste_page():
         """Старе посилання: смаки тепер — кроки конструктора меню."""
-        return go("/menu/setup?step=3")
+        return go("/profile")
 
     @app.get("/start", response_class=HTMLResponse)
     def start_page(request: Request):
@@ -1310,7 +1310,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                       stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"),
                       fresh=bool(request.query_params.get("fresh")),
-                      view="buy" if view == "buy" else "eat")
+                      view="buy" if view == "buy" else "eat", day_names=menu.DAYS,
+                      sel_days=p.menu_days or list(range(p.dinners)))
         return keep_guest(resp, p) if (changed and not u) else resp
 
     async def menu_form(request: Request):
@@ -1337,6 +1338,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 p.menu, p.menu_skip, p.menu_days = [], [], []
             if form.get("max_minutes"):
                 p.max_minutes = max(15, min(180, int(form["max_minutes"])))
+                p.menu, p.menu_skip = [], []
+            if "days" in form:
+                days = sorted({int(x) for x in str(form["days"]).split(",") if x.strip().isdigit() and int(x) <= 6})
+                if days:
+                    p.menu_days, p.dinners = days, len(days)
+                    p.menu, p.menu_skip = [], []
+            if "budget" in form:
+                b = int(float(form["budget"] or 0))
+                p.menu_budget = float(max(0, min(20000, b))) or None
                 p.menu, p.menu_skip = [], []
         except ValueError:
             return HTMLResponse("Неправильні налаштування меню.", status_code=400)
@@ -1381,7 +1391,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 offers = cached_offers(link["store_id"], STALE_TTL) or []
         return (planner.merge_nearby(offers), False) if offers else (planner.merge_nearby(demo.load()), True)
 
-    @app.get("/menu/setup", response_class=HTMLResponse)
+    @app.get("/menu/setup")
+    def menu_setup_moved():
+        """Конструктор замінено чипами на сторінці меню — старі посилання ведуть туди."""
+        return go("/menu")
+
+    @app.get("/menu/setup-old", response_class=HTMLResponse)
     def menu_setup_page(request: Request):
         u = user_of(request)
         p = load_profile(u["id"])[0] if u else guest_profile(request)
@@ -2145,7 +2160,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
         tp = p or guest_profile(request)
         return render(request, "fridge.html", u, p=p, choices=choices, names=dict(choices), words=words,
-                      next_url="/menu" if taste_known(tp) else "/menu/setup?first=1",
+                      next_url="/menu",
                       terms=[fridge_term(p, k) for k in p.fridge] if p else [])
 
     def fridge_term(p: Profile, k: str) -> dict:
@@ -2298,8 +2313,6 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu, p.menu_skip = [], []        # меню перебудуємо під те, що є вдома
         save_profile(u["id"], p, health)
         analytics.track(conn, u["id"], "fridge_saved", have=len(p.fridge), other=len(p.fridge_other))
-        if not taste_known(p):       # перше меню складаємо разом: люди, час, смаки, улюблені страви
-            return go("/menu/setup?first=1")
         return go("/menu?fresh=1" if p.fridge else "/menu")
 
     @app.post("/fridge/remove")

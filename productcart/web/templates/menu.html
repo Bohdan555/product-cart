@@ -7,8 +7,43 @@
 {% if view != 'buy' %}{% set step = 2 %}{% include "_week.html" %}
 <section class="eat-h">
   <h1 class="xh">Що <span class="hl">їмо</span></h1>
-  <a class="eat-set" href="/menu/setup" aria-label="Налаштувати меню">{{ ic("family", "mid") }}<span>Налаштувати</span></a>
 </section>
+{% set dn = day_names %}{% set sd = sel_days|sort %}
+{% set mins = 30 if p.max_minutes <= 30 else (45 if p.max_minutes <= 45 else (60 if p.max_minutes <= 60 else 90)) %}
+<nav class="ms-chips" aria-label="Налаштування меню">
+  <button type="button" data-sheet="msPeople">{{ ic("family", "sm") }} {{ p.household }}</button>
+  <button type="button" data-sheet="msDays">{{ ic("calendar", "sm") }} {% if sd == [0,1,2,3,4] %}Пн–Пт{% elif sd|length == 7 %}щодня{% else %}{% for i in sd %}{{ dn[i] }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</button>
+  <button type="button" data-sheet="msTime">{{ ic("clock", "sm") }} {{ '60+' if mins == 90 else mins }} хв</button>
+  <button type="button" data-sheet="msBudget">{{ ic("wallet", "sm") }} {{ (p.menu_budget|int ~ ' ₴') if p.menu_budget else 'без ліміту' }}</button>
+</nav>
+{% macro sheet(id, title) %}<dialog class="pn-sheet ms-sheet" id="{{ id }}"><form method="post" action="/menu/settings" data-turbo="false" data-plain>
+  {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}<b>{{ title }}</b>{{ caller() }}
+  <div class="pn-foot"><button type="button" class="btn alt" data-close>Скасувати</button><button type="submit" class="btn">Готово</button></div></form></dialog>{% endmacro %}
+{% call sheet("msPeople", "Скільки вас?") %}<div class="ms-pm"><button type="button" data-pm="-1" aria-label="Менше">−</button><output>{{ p.household }}</output><button type="button" data-pm="1" aria-label="Більше">+</button><input type="hidden" name="people" value="{{ p.household }}"></div>{% endcall %}
+{% call sheet("msDays", "Коли готуєте?") %}<div class="ms-days">{% for n in dn %}<button type="button" data-day="{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.index0 in sd else 'false' }}">{{ n }}</button>{% endfor %}</div><input type="hidden" name="days" value="{{ sd|join(',') }}">{% endcall %}
+{% call sheet("msTime", "Час на страву") %}<div class="ms-seg">{% for v, t in [(30, '30 хв'), (45, '45 хв'), (60, '60 хв'), (90, '60+')] %}<label><input type="radio" name="max_minutes" value="{{ v }}" {% if v == mins %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</div>{% endcall %}
+{% call sheet("msBudget", "Бюджет на тиждень") %}<div class="ms-seg">{% for v, t in [(0, 'без ліміту'), (1000, '1000 ₴'), (1500, '1500 ₴'), (2500, '2500 ₴')] %}<label><input type="radio" name="budget" value="{{ v }}" {% if (p.menu_budget or 0)|int == v %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</div>{% endcall %}
+<script>
+(function () {
+  document.querySelectorAll('[data-sheet]').forEach(function (b) { b.onclick = function () { document.getElementById(b.dataset.sheet).showModal(); }; });
+  document.querySelectorAll('.ms-sheet').forEach(function (d) {
+    d.addEventListener('click', function (e) { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+    var pm = d.querySelector('.ms-pm');
+    if (pm) pm.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-pm]'); if (!b) return;
+      var i = pm.querySelector('input'), v = Math.max(1, Math.min(12, +i.value + +b.dataset.pm)); i.value = v; pm.querySelector('output').textContent = v;
+    });
+    var days = d.querySelector('.ms-days');
+    if (days) days.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-day]'); if (!b) return;
+      var on = b.getAttribute('aria-pressed') !== 'true';
+      if (!on && days.querySelectorAll('[aria-pressed=true]').length < 2) return;   // хоча б один день
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      d.querySelector('input[name=days]').value = [].map.call(days.querySelectorAll('[aria-pressed=true]'), function (x) { return x.dataset.day; }).join(',');
+    });
+  });
+})();
+</script>
 {% endif %}
 {% if notice %}<div class="err" style="margin-bottom:14px">{{ notice }} <a href="/list">До списку</a></div>{% endif %}
 
@@ -273,6 +308,7 @@
   }
   root.addEventListener('submit', function (e) {
     var form = e.target, btn = e.submitter;
+    if (form.hasAttribute('data-plain')) return;   // налаштування з нижнього вікна — звичайний перехід
     if (form.hasAttribute('data-noajax')) {   // кошик «Сільпо»: звичайний перехід, але з позначками «куплено»
       form.querySelector('input[name=bought]').value = Array.prototype.filter.call(root.querySelectorAll('[data-buy]'), function (b) { return b.checked; }).map(function (b) { return b.dataset.buy; }).join(',');
       var sb = form.querySelector('button'); sb.disabled = true; sb.lastChild.textContent = 'Збираємо кошик…';

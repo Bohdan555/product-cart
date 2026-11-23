@@ -673,24 +673,23 @@ def test_my_dishes_in_menu_and_cart(client):
     assert "Мамині деруни" not in client.get("/menu").text
 
 
-def test_menu_setup_wizard_guest_and_user(client):
-    page = client.get("/menu/setup").text
-    assert "Скільки вас" in page and 'id="suDays"' in page and "/menu/preview" in page
-    d = client.post("/menu/preview", data={"people": "3", "days": "0,2,4", "minutes": "30", "likes": "fish", "hide": "pork"}).json()
-    assert len(d["dishes"]) == 3 and [x["day"] for x in d["dishes"]] == ["Пн", "Ср", "Пт"] and d["demo"]
-    assert all(x["title"] for x in d["dishes"]) and d["pool"] > 0
-    r = client.post("/menu/setup", data={"people": "3", "days": "0,2,4", "minutes": "30", "likes": "fish", "hide": "pork", "budget": "0"})
-    assert r.headers["location"] == "/menu?fresh=1"
-    m = client.get("/menu?fresh=1").text
-    assert "fresh-in" in m and "celebrate" in m and '<b class="eat-dn">Ср</b>' in m
-    assert client.get("/menu/setup").text.count('aria-pressed="true"') >= 3      # вибрані дні збереглись у cookie гостя
+def test_menu_chips_settings_guest_and_user(client):
+    """Меню одразу; налаштування — чипи зверху з вибором знизу (/menu/settings). Старий конструктор веде на меню."""
+    assert client.get("/menu/setup").headers["location"] == "/menu"
+    page = client.get("/menu").text
+    assert 'class="ms-chips"' in page and 'id="msDays"' in page and "Пн–Пт" in page and "без ліміту" in page
+    r = client.post("/menu/settings", data={"people": "3", "days": "0,2,4", "max_minutes": "30", "budget": "0"})
+    assert r.headers["location"] == "/menu"
+    m = client.get("/menu").text
+    assert '<b class="eat-dn">Ср</b>' in m and "Пн, Ср, Пт" in m and "30 хв" in m        # гість — у cookie
     token = register(client)
-    r = client.post("/menu/setup", data={"csrf": token, "people": "4", "days": "5,6", "minutes": "180", "budget": "1500"})
-    assert r.status_code == 303
+    client.post("/menu/settings", data={"csrf": token, "people": "4", "days": "5,6", "max_minutes": "90", "budget": "1500"})
     p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
-    assert '"menu_days": [5, 6]' in p and '"dinners": 2' in p and '"menu_budget": 1500.0' in p
-    assert "Сб" in client.get("/menu").text
-    assert client.post("/menu/setup", data={"csrf": "bad", "people": "2"}).status_code == 400
+    assert '"menu_days": [5, 6]' in p and '"dinners": 2' in p and '"menu_budget": 1500.0' in p and '"household": 4' in p
+    assert "1500 ₴" in client.get("/menu").text
+    client.post("/menu/settings", data={"csrf": token, "budget": "0"})
+    assert "без ліміту" in client.get("/menu").text
+    assert client.post("/menu/settings", data={"csrf": "bad", "people": "2"}).status_code == 400
 
 
 def test_today_flow_guest_and_user(client):
@@ -761,24 +760,12 @@ def test_me_profile_page(client):
     assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
 
 
-def test_tastes_inside_menu_setup(client):
-    page = client.get("/menu/setup?first=1&step=3").text
-    assert "до смаку" in page and 'id="suDishes"' in page and page.count('class="tq-dish"') == 12 and "go(3)" in page
-    base = {"people": "2", "days": "0,1,2,3,4", "minutes": "60"}
-    plain = client.post("/menu/preview", data=base).json()
-    liked = client.post("/menu/preview", data={**base, "likes": "fish", "dishes": "flotski", "shown": "flotski,omelette"}).json()
-    assert "flotski" in [d["id"] for d in liked["dishes"]] and liked["dishes"] != plain["dishes"]   # смаки міняють меню наживо
-    r = client.post("/menu/setup", data={**base, "likes": "fish", "hide": "pork", "dishes": "omelette,nope", "shown": "flotski,omelette"})
-    assert r.headers["location"] == "/menu?fresh=1"
-    page = client.get("/menu/setup").text
-    assert 'value="omelette" checked' in page and "Борщ зі свининою" not in page      # «не їм» свинину — без свинячих страв
-    token = register(client, "taste@b.ua")                                # смаки гостя переходять в акаунт
-    r = client.post("/fridge/save", data={"csrf": token, "have": ["potato"]})
-    assert r.headers["location"] == "/menu?fresh=1"                       # смаки вже знаємо — одразу меню
-    p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
-    assert '"taste_done": true' in p and '"omelette"' in p and '"pork"' in p and '"fish"' in p
+def test_tastes_go_to_profile(client):
+    """Смаки — на сторінці «Смаки й харчування»; старе посилання /taste веде туди."""
+    token = register(client, "taste@b.ua")
+    assert client.post("/fridge/save", data={"csrf": token, "have": ["potato"]}).headers["location"] == "/menu?fresh=1"
     assert 'href="/profile"' in client.get("/me").text and "Смаки й харчування" in client.get("/me").text
-    assert client.get("/taste").headers["location"] == "/menu/setup?step=3"
+    assert client.get("/taste").headers["location"] == "/profile"
 
 
 def test_dock_marks_section(client):
