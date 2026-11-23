@@ -1584,3 +1584,28 @@ body:has(.admin-page) .dock{display:none}
 .xt-b button,.xt-cal{min-height:44px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:600 14px var(--body);padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .xt-cal{position:relative;overflow:hidden;padding:0 12px}.xt-cal input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
 .xt-auto{border:0;background:none;color:var(--muted);font:500 13px var(--body);text-decoration:underline;cursor:pointer;min-height:44px;padding:0 8px}
+/* Холодильник */
+.pn-sub{color:var(--muted);margin:-6px 0 12px;font-size:16px}
+.pn-add{display:flex;gap:8px;align-items:flex-start}.pn-say{flex:1;min-width:0}.pn-say .hv-hint{display:none}
+.pn-cam{flex:none;width:52px;height:52px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;cursor:pointer;position:relative;overflow:hidden}
+.pn-cam input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.pn-state{min-height:18px;margin:6px 0 0;font-size:14px;color:var(--muted)}
+.pn-g{margin:16px 0 6px;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.pn-g.hot{color:#b4410f}
+.pn-list{background:var(--card);border-radius:var(--r-lg);padding:2px 14px}
+.pn-row{width:100%;display:flex;align-items:center;gap:12px;min-height:58px;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.pn-list .pn-row:first-child{border-top:0}.pn-row .e{font-size:24px}.pn-row .n{flex:1;font-weight:600;font-size:17px;min-width:0}
+.pn-b{flex:none;min-height:32px;padding:0 12px;border-radius:999px;display:inline-flex;align-items:center;font-size:14px;font-weight:700;background:var(--chip)}
+.pn-b.r{background:#b4410f;color:#fff}.pn-b.o{background:color-mix(in srgb,var(--sticker) 30%,var(--card))}.pn-b.g{background:var(--chip);color:var(--muted)}
+.pn-cook{display:flex;justify-content:center;align-items:center;gap:8px;width:100%;margin:18px 0 8px;background:#1d3b2f;color:#f6f3ee;min-height:52px}
+.pn-sheet{border:0;border-radius:var(--r-xl) var(--r-xl) 0 0;margin:auto auto 0;width:100%;max-width:560px;padding:20px 16px calc(20px + env(safe-area-inset-bottom));background:var(--card);color:var(--ink)}
+.pn-sheet::backdrop{background:rgba(0,0,0,.35)}.pn-sheet>b{display:block;font-size:20px;margin-bottom:12px}
+.pn-k{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.pn-btns{display:flex;flex-wrap:wrap;gap:8px}
+.pn-btns button,.pn-cal{min-height:44px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:600 15px var(--body);padding:0 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;position:relative;overflow:hidden}
+.pn-cal input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.pn-auto{border:0;background:none;color:var(--muted);text-decoration:underline;font:500 14px var(--body);min-height:44px;padding:0;cursor:pointer}
+.pn-foot{display:flex;gap:8px;margin-top:16px}.pn-foot .btn{flex:1;min-height:48px}
+.hm-fridge{display:flex;align-items:center;gap:12px;min-height:56px;text-decoration:none;color:var(--ink);background:var(--card);border-radius:var(--r-lg);padding:10px 14px;margin:10px 0 0}
+.hm-fridge i{width:40px;height:40px;border-radius:var(--r-sm);display:grid;place-items:center;background:var(--chip);flex:none}
+.hm-fridge b{font-size:16px}.hm-fridge span{margin-left:auto;color:var(--muted);font-size:14px;font-weight:600;text-align:right}
+.fr-terms{display:flex;align-items:center;gap:6px;min-height:44px;font-weight:600;color:var(--ink);margin:4px 0}

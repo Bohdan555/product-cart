@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Холодильник — Кошик з акцій{% endblock %}
+{% block body %}
+<h1 class="xh">Холодильник</h1>
+{% set n = p.fridge|length + p.fridge_other|length %}
+<p class="pn-sub">{% if n %}{{ n }} {{ plural(n, 'продукт', 'продукти', 'продуктів') }}{% else %}Поки порожньо{% endif %}</p>
+
+<div class="pn-add" id="pnAdd">
+  <div class="pn-say">{% include "_say.html" %}</div>
+  <label class="pn-cam" aria-label="Сфотографувати холодильник">{{ ic("camera") }}<input type="file" accept="image/*" id="pnPhoto"></label>
+</div>
+<p class="pn-state" id="pnState" aria-live="polite"></p>
+
+{% for gid, title, rows in groups %}
+<h2 class="pn-g{% if gid == 'soon' %} hot{% endif %}">{{ title }}</h2>
+<div class="pn-list">
+  {% for x in rows %}
+  <button type="button" class="pn-row" data-key="{{ x.key }}" data-name="{{ x.name }}" data-emoji="{{ x.emoji }}" data-date="{{ x.date if x.manual else '' }}">
+    <span class="e" aria-hidden="true">{{ x.emoji }}</span><span class="n">{{ x.name }}</span>
+    {% if x.label %}<span class="pn-b {{ 'r' if x.left is not none and x.left <= 1 else ('o' if x.left is not none and x.left <= 7 else 'g') }}">{{ x.label }}</span>{% endif %}
+  </button>
+  {% endfor %}
+</div>
+{% endfor %}
+{% if p.fridge_other %}
+<h2 class="pn-g">Інше</h2>
+<div class="pn-list">
+  {% for o in p.fridge_other %}<button type="button" class="pn-row" data-other="{{ o }}" data-name="{{ o }}" data-emoji="{{ name_visual(o).emoji }}"><span class="e" aria-hidden="true">{{ name_visual(o).emoji }}</span><span class="n">{{ o }}</span></button>{% endfor %}
+</div>
+{% endif %}
+
+{% if cook_url %}<a class="btn pn-cook" href="{{ cook_url }}">{{ ic("pan", "sm") }} Що приготувати з цього</a>{% endif %}
+
+<dialog class="pn-sheet" id="pnSheet" aria-labelledby="pnT">
+  <b id="pnT"></b>
+  <div class="pn-dates" id="pnDates">
+    <span class="pn-k">Вжити до</span>
+    <div class="pn-btns"><button type="button" data-d="0">Сьогодні</button><button type="button" data-d="1">Завтра</button><button type="button" data-d="3">+3 дні</button>
+      <label class="pn-cal">{{ ic("calendar", "sm") }} Дата<input type="date" id="pnDate" aria-label="Дата з упаковки"></label></div>
+    <button type="button" class="pn-auto" id="pnAuto">Рахувати самим</button>
+  </div>
+  <div class="pn-foot"><button type="button" class="btn alt" id="pnDel">Прибрати</button><button type="button" class="btn" id="pnClose">Готово</button></div>
+</dialog>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var CSRF = document.querySelector('meta[name=csrf]').content, cur = null, sheet = $('pnSheet');
+  function post(url, data) {
+    var fd = new FormData(); fd.append('csrf', CSRF);
+    Object.keys(data).forEach(function (k) { [].concat(data[k]).forEach(function (v) { fd.append(k, v); }); });
+    return fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+  }
+  function reload() { if (window.Turbo) Turbo.visit(location.pathname, { action: 'replace' }); else location.reload(); }
+  function add(keys, others) {
+    if (!keys.length && !others.length) return;
+    $('pnState').textContent = 'Зберігаємо…';
+    post('/pantry/add', { key: keys, other: others }).then(reload).catch(function () { $('pnState').textContent = 'Не вдалося зберегти. Перевірте інтернет.'; });
+  }
+  window.initSay({ words: {{ words|tojson }}, inline: false, onAdd: add });
+
+  $('pnPhoto').addEventListener('change', function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    $('pnState').textContent = 'Дивимось, що на фото…';
+    var input = this;
+    window.shrinkPhoto(f).then(function (blob) {
+      input.value = '';
+      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('photo', blob, 'fridge.jpg');
+      return fetch('/fridge/scan', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+    }).then(function (d) {
+      if (d.error) { $('pnState').textContent = d.error; return; }
+      var keys = d.items.filter(function (x) { return x.ingredient !== 'other'; }).map(function (x) { return x.ingredient; });
+      var others = d.items.filter(function (x) { return x.ingredient === 'other'; }).map(function (x) { return x.name; });
+      if (!keys.length && !others.length) { $('pnState').textContent = 'Їжі на фото не видно. Спробуйте ближче.'; return; }
+      add(keys, others);
+    }).catch(function () { $('pnState').textContent = 'Не вдалося надіслати фото.'; });
+  });
+
+  document.querySelectorAll('.pn-row').forEach(function (b) {
+    b.addEventListener('click', function () {
+      cur = b; $('pnT').textContent = b.dataset.emoji + ' ' + b.dataset.name;
+      $('pnDates').hidden = !b.dataset.key; $('pnDate').value = b.dataset.date || ''; $('pnAuto').hidden = !b.dataset.date;
+      sheet.showModal();
+    });
+  });
+  function iso(days) { var t = new Date(); t.setDate(t.getDate() + days); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }
+  function setDate(v) { post('/fridge/expiry', { key: cur.dataset.key, date: v }).then(function (d) { if (d.error) { $('pnState').textContent = d.error; } sheet.close(); reload(); }); }
+  $('pnDates').addEventListener('click', function (e) { var b = e.target.closest('button[data-d]'); if (b) setDate(iso(+b.dataset.d)); });
+  $('pnDate').addEventListener('change', function () { if (this.value) setDate(this.value); });
+  $('pnAuto').onclick = function () { setDate(''); };
+  $('pnDel').onclick = function () { post('/pantry/remove', cur.dataset.key ? { key: cur.dataset.key } : { other: cur.dataset.other }).then(function () { sheet.close(); reload(); }); };
+  $('pnClose').onclick = function () { sheet.close(); };
+  sheet.addEventListener('click', function (e) { if (e.target === sheet) sheet.close(); });
+})();
+</script>
+{% endblock %}

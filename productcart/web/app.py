@@ -47,7 +47,7 @@ GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 # Кнопка «←» на внутрішніх сторінках: куди повертатись (вкладки й сторінки зі своєю «←» тут не перелічені)
-BACK = {"/fridge": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
+BACK = {"/fridge": "/", "/pantry": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
         "/silpo": "/me", "/privacy": "/me", "/photos": "/me", "/admin/stats": "/me", "/login": "/", "/register": "/"}
 cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None)   # прилади з поточного запиту
 warm_soon: contextvars.ContextVar = contextvars.ContextVar("warm_soon", default=None)  # магазин, який варто оновити
@@ -77,7 +77,6 @@ def day_labels(p: Profile) -> list[str]:
     days = sorted(set(d for d in p.menu_days if 0 <= d <= 6))
     return [menu.DAYS[d] for d in days] if days and len(days) == p.dinners else menu.DAYS
 OFFERS_TTL = timedelta(hours=6)
-FRIDGE_TTL = timedelta(days=7)
 FRIDGE_PER_DAY = 15            # фото на людину за добу: кожне розпізнавання коштує грошей
 ERROR_PAGE = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
               "<title>Помилка — Кошик з акцій</title><body style='font:16px/1.5 system-ui;padding:32px;max-width:520px'>"
@@ -526,7 +525,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         soon_url = (f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}" if soon else None)
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
                       soon=[(k, menu.INGREDIENTS[k][0], menu.PANTRY_WORDS.get(k, ("", "🥫"))[1], menu.when_label(d))
-                            for k, d in soon], soon_url=soon_url,
+                            for k, d in soon], soon_url=soon_url, p_fridge_n=len(p.fridge) + len(p.fridge_other),
                       near=near_ip[0] if near_ip else None,
                       meal=meal, people=p.household or 2)
 
@@ -1269,11 +1268,20 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.menu, p.menu_skip, p.menu_week = [], [], week
         return True
 
+    def prune_fridge(p: Profile) -> bool:
+        """Прибирає з холодильника те, що зіпсувалося понад 2 дні тому. True, якщо щось прибрали."""
+        old = date.today() - timedelta(days=2)
+        gone = [k for k in p.fridge if (d := menu.use_by(k, p.fridge_since, p.fridge_until)[0]) and d < old]
+        for k in gone:
+            p.fridge.remove(k)
+            p.fridge_since.pop(k, None)
+            p.fridge_until.pop(k, None)
+        return bool(gone)
+
     def week_menu(p: Profile, offers: list[Offer]):
         """Меню цього тижня (змінює p.menu*). Повертає (меню, чи змінився профіль)."""
         new_week = roll_week(p)
-        if p.fridge and (not p.fridge_at or p.fridge_at < security.iso(security.now() - FRIDGE_TTL)):
-            p.fridge, p.fridge_other, p.fridge_at, p.fridge_since, p.fridge_until = [], [], None, {}, {}    # фото тижневої давнини — вже неправда
+        if p.fridge and prune_fridge(p):        # зіпсоване давно — вже не «є вдома»
             new_week = True
         m = menu.plan(offers, p, dinners=p.dinners, max_minutes=p.max_minutes, budget=p.menu_budget,
                       keep=p.menu, pantry_buy=p.pantry_buy)
@@ -2148,6 +2156,72 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                 "date": d.isoformat() if d else "", "manual": manual, "left": left,
                 "label": ("" if d is None else ("прострочено" if left < 0 else menu.when_label(left) if left <= 1
                           else f"до {d.day:02d}.{d.month:02d}"))}
+
+    # ---------- «Холодильник»: окрема сторінка — що є вдома й до коли ----------
+    def pantry_groups(p: Profile) -> list[tuple[str, str, list[dict]]]:
+        rows = sorted((fridge_term(p, k) for k in p.fridge),
+                      key=lambda x: (x["left"] is None, x["left"] if x["left"] is not None else 0, x["name"]))
+        g = [("soon", "Використати скоро", [x for x in rows if x["left"] is not None and x["left"] <= 1]),
+             ("week", "Цього тижня", [x for x in rows if x["left"] is not None and 1 < x["left"] <= 7]),
+             ("long", "Довго", [x for x in rows if x["left"] is None or x["left"] > 7])]
+        return [x for x in g if x[2]]
+
+    @app.get("/pantry", response_class=HTMLResponse)
+    def pantry(request: Request):
+        u, bad = need_user(request)
+        if bad:
+            return bad
+        p, health = load_profile(u["id"])
+        if prune_fridge(p):
+            save_profile(u["id"], p, health)
+        words = {k: [v[0], v[1], list(v[2])] for k, v in menu.PANTRY_WORDS.items()}
+        return render(request, "pantry.html", u, p=p, groups=pantry_groups(p), words=words,
+                      cook_url=f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}" if p.fridge else None)
+
+    @app.post("/pantry/add")
+    async def pantry_add(request: Request):
+        """Додати продукти (з поля, голосу чи фото): ключі з довідника й решту — «інше»."""
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return JSONResponse({"error": "Сторінка застаріла. Оновіть її."}, status_code=400)
+        p, health = load_profile(u["id"])
+        today_s = date.today().isoformat()
+        for k in form.getlist("key"):
+            if k in menu.INGREDIENTS and k not in p.fridge:
+                p.fridge.append(k)
+                p.fridge_since[k] = today_s
+        for x in form.getlist("other"):
+            x = str(x).strip()[:60]
+            if x and x.lower() not in {o.lower() for o in p.fridge_other} and len(p.fridge_other) < 40:
+                p.fridge_other.append(x)
+        p.fridge = sorted(set(p.fridge))
+        p.fridge_at = security.iso(security.now())
+        p.menu, p.menu_skip = [], []            # меню тижня перебудуємо під нове
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "pantry_add", have=len(p.fridge))
+        return JSONResponse({"ok": True, "n": len(p.fridge) + len(p.fridge_other)})
+
+    @app.post("/pantry/remove")
+    async def pantry_remove(request: Request):
+        form = await request.form()
+        u, bad = need_user(request, str(form.get("csrf", "")))
+        if bad:
+            return JSONResponse({"error": "Сторінка застаріла. Оновіть її."}, status_code=400)
+        p, health = load_profile(u["id"])
+        key, other = str(form.get("key", "")), str(form.get("other", ""))
+        if key:
+            p.fridge = [k for k in p.fridge if k != key]
+            p.fridge_since.pop(key, None)
+            p.fridge_until.pop(key, None)
+        if other:
+            p.fridge_other = [x for x in p.fridge_other if x != other]
+        if not p.fridge and not p.fridge_other:
+            p.fridge_at = None
+        p.menu, p.menu_skip = [], []
+        save_profile(u["id"], p, health)
+        analytics.track(conn, u["id"], "fridge_removed", key=key or "other")
+        return JSONResponse({"ok": True})
 
     @app.post("/fridge/expiry")
     async def fridge_expiry(request: Request):

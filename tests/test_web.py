@@ -1046,8 +1046,9 @@ def test_fridge_manual_expiry(client):
     from datetime import date, timedelta
     token = register(client)
     client.post("/fridge/save", data={"csrf": token, "have": ["kefir", "pasta"]})
-    page = client.get("/fridge").text
-    assert 'id="xt"' in page and "орієнтовно" in page and "не псується швидко" in page      # макарони — без строку
+    page = client.get("/pantry").text
+    assert "Холодильник" in page and "Довго" in page and 'data-key="pasta"' in page and 'data-key="kefir"' in page
+    assert 'href="/pantry"' in client.get("/fridge").text
     assert "Варто використати" not in client.get("/").text
     today = date.today().isoformat()
     d = client.post("/fridge/expiry", data={"csrf": token, "key": "kefir", "date": today}).json()
@@ -1069,3 +1070,25 @@ def test_privacy_title_clean(client):
     page = client.get("/privacy").text
     title = page[page.index("<title>"):page.index("</title>")]
     assert "<script" not in title and "phReset" in page
+
+
+def test_pantry_page_add_remove_groups(client):
+    """«Холодильник»: окрема сторінка з профілю й головної; додати (ключі й «інше»), групи за терміном, прибрати."""
+    from datetime import date
+    assert client.get("/pantry").status_code in (302, 303)                    # гість — на вхід
+    token = register(client)
+    assert 'href="/pantry"' in client.get("/me").text and 'href="/pantry"' in client.get("/").text
+    assert "Поки порожньо" in client.get("/pantry").text
+    assert client.post("/pantry/add", data={"csrf": "bad", "key": "minced"}).status_code == 400
+    d = client.post("/pantry/add", data={"csrf": token, "key": ["minced", "eggs", "nope"], "other": ["Кетчуп", "кетчуп"]}).json()
+    assert d == {"ok": True, "n": 3}
+    page = client.get("/pantry").text
+    assert "Використати скоро" in page and "Довго" in page and "Інше" in page and "Кетчуп" in page
+    assert page.index('data-key="minced"') < page.index('data-key="eggs"')    # терміновіше — вище
+    assert "фарш · завтра" in client.get("/").text.lower() or "Фарш" in client.get("/").text
+    client.post("/fridge/expiry", data={"csrf": token, "key": "eggs", "date": date.today().isoformat()})
+    assert "сьогодні" in client.get("/pantry").text
+    client.post("/pantry/remove", data={"csrf": token, "key": "minced"})
+    client.post("/pantry/remove", data={"csrf": token, "other": "Кетчуп"})
+    page = client.get("/pantry").text
+    assert 'data-key="minced"' not in page and "Кетчуп" not in page and 'data-key="eggs"' in page

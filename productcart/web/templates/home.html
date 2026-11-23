@@ -24,6 +24,12 @@
   <a href="/today"><i>{{ ic("pan") }}</i><b>Що приготувати сьогодні</b><small>Скажіть, що є вдома — підберемо 3 страви</small></a>
   <a href="/week"><i>{{ ic("calendar") }}</i><b>План на тиждень</b><small>Меню з акцій і готовий список покупок</small></a>
 </nav>
+{% if user %}
+<a class="hm-fridge" href="/pantry">
+  <i aria-hidden="true">{{ ic("fridge") }}</i><b>Холодильник</b>
+  <span>{% set fn = p_fridge_n %}{% if soon %}{{ soon[0][1]|lower }} · {{ soon[0][3] }}{% elif fn %}{{ fn }} {{ plural(fn, 'продукт', 'продукти', 'продуктів') }}{% else %}додати продукти{% endif %} →</span>
+</a>
+{% endif %}
 {% if soon %}
 <a class="xp-card" href="{{ soon_url }}">
   <span class="xp-ic" aria-hidden="true">{{ ic("clock") }}</span>

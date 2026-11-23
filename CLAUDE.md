@@ -12,7 +12,7 @@ Neon Postgres на Vercel, SQLite локально й у тестах. «Сіл�
 
 ## Робочий цикл (економно)
 1. Шукай `grep`/`sed -n` по рядках, не читай великі файли цілком (`web/app.py` ~2.4k рядків, `static/style.css` ~1.5k).
-2. Перед комітом: `.venv/bin/python -m pytest -q` (зараз 131 тест); комітити лише якщо він пройшов — `pytest -q && git commit …`, не через `| tail`.
+2. Перед комітом: `.venv/bin/python -m pytest -q` (зараз 132 тести); комітити лише якщо він пройшов — `pytest -q && git commit …`, не через `| tail`.
 3. Коміт: `git -c user.name=… -c user.email=…` (автор — з розділу Git), потім `git push -q origin main`.
 4. Деплой — ОКРЕМОЮ командою від коміту: `vercel deploy --prod --yes --token proxyinjectedplaceholder00`.
 5. Візуальна перевірка: локально `DB_PATH=<scratch>/x.db APP_SECRET=<16+ символів> .venv/bin/uvicorn api.index:app --port 8765` + Playwright (iPhone 13), знімки до/після.

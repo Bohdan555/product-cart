@@ -27,22 +27,7 @@
     </div>
     <small class="hint fr-note">Сірі — не з наших рецептів: у меню не підуть, але й купувати їх не будемо.</small>
   </div>
-  {% if terms %}
-  <section class="xt" id="xt" aria-label="Термін придатності">
-    <div class="fr-h"><b>Термін придатності</b></div>
-    <p class="hint" style="margin:0 0 8px">Орієнтовно рахуємо самі. Якщо знаєте дату з упаковки — вкажіть, нагадаємо вчасно.</p>
-    {% for x in terms %}
-    <div class="xt-row" data-key="{{ x.key }}">
-      <span class="xt-n"><i aria-hidden="true">{{ x.emoji }}</i>{{ x.name }}
-        <small class="xt-l{% if x.left is not none and x.left <= 1 %} hot{% endif %}">{% if x.label %}{{ x.label }}{{ ' · з упаковки' if x.manual else ' · орієнтовно' }}{% else %}не псується швидко{% endif %}</small>{% if x.manual %}<button type="button" class="xt-auto" data-d="">скинути</button>{% endif %}</span>
-      <span class="xt-b" role="group" aria-label="Вжити до: {{ x.name }}">
-        <button type="button" data-d="0">Сьогодні</button><button type="button" data-d="1">Завтра</button><button type="button" data-d="3">+3 дні</button>
-        <label class="xt-cal" title="Дата з упаковки">{{ ic("calendar", "sm") }}<input type="date" value="{{ x.date if x.manual else '' }}" aria-label="Дата з упаковки: {{ x.name }}"></label>
-      </span>
-    </div>
-    {% endfor %}
-  </section>
-  {% endif %}
+  {% if terms %}<a class="fr-terms" href="/pantry">{{ ic("clock", "sm") }} Терміни придатності — у «Холодильнику» →</a>{% endif %}
   <p class="fr-or">або сфотографуйте холодильник</p>
   <div class="fr-shot" id="frShot">
     <img id="frImg" alt="" hidden>
@@ -142,33 +127,6 @@
   count();
   form.querySelectorAll('[data-addkey]').forEach(function (b) { b.onclick = function () {
     $('frFound').hidden = false; chip({ ingredient: b.dataset.addkey, name: b.dataset.name, label: b.dataset.name, emoji: b.textContent.trim().split(' ')[0] }, 0); tap(); }; });
-
-  // термін придатності: зберігаємо одразу, без «Зберегти»
-  var xt = $('xt');
-  if (xt) {
-    function setTerm(row, val) {
-      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('key', row.dataset.key); fd.append('date', val);
-      fetch('/fridge/expiry', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
-        var l = row.querySelector('.xt-l');
-        if (d.error) { l.textContent = d.error; return; }
-        l.textContent = d.label ? d.label + (d.manual ? ' · з упаковки' : ' · орієнтовно') : 'не псується швидко';
-        l.classList.toggle('hot', d.left !== null && d.left <= 1);
-        row.querySelector('input[type=date]').value = d.manual ? d.date : '';
-        var a = row.querySelector('.xt-auto');
-        if (d.manual && !a) { a = document.createElement('button'); a.type = 'button'; a.className = 'xt-auto'; a.dataset.d = ''; a.textContent = 'скинути'; row.querySelector('.xt-n').appendChild(a); }
-        if (!d.manual && a) a.remove();
-        tap();
-      }).catch(function () { row.querySelector('.xt-l').textContent = 'Не вдалося зберегти — перевірте інтернет.'; });
-    }
-    function iso(days) { var t = new Date(); t.setDate(t.getDate() + days); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }
-    xt.addEventListener('click', function (e) {
-      var b = e.target.closest('button[data-d]'); if (!b) return;
-      setTerm(b.closest('.xt-row'), b.dataset.d === '' ? '' : iso(+b.dataset.d));
-    });
-    xt.addEventListener('change', function (e) {
-      if (e.target.type === 'date' && e.target.value) setTerm(e.target.closest('.xt-row'), e.target.value);
-    });
-  }
 
   form.addEventListener('submit', function (e) {
     var h = $('frHidden'); h.innerHTML = '';
