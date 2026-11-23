@@ -986,19 +986,28 @@ SHELF_DAYS = {
 }
 
 
-def expiring(since: dict[str, str], have, today: date | None = None, within: int = 1) -> list[tuple[str, int]]:
+def use_by(k: str, since: dict[str, str], until: dict[str, str] | None = None) -> tuple[date | None, bool]:
+    """(дата «вжити до», чи вказана вручну). Ручна дата з упаковки важливіша за оцінку «з'явився вдома + типовий строк»."""
+    try:
+        if until and until.get(k):
+            return date.fromisoformat(until[k][:10]), True
+        days, d0 = SHELF_DAYS.get(k), since.get(k)
+        return (date.fromisoformat(d0[:10]) + timedelta(days=days), False) if days and d0 else (None, False)
+    except ValueError:
+        return None, False
+
+
+def expiring(since: dict[str, str], have, today: date | None = None, within: int = 1,
+             until: dict[str, str] | None = None) -> list[tuple[str, int]]:
     """Продукти з холодильника, які варто використати за `within` днів: [(ключ, днів лишилось)], найтерміновіші першими.
     0 — сьогодні (або вже прострочено), 1 — завтра."""
     today = today or date.today()
     out = []
     for k in have:
-        days, d0 = SHELF_DAYS.get(k), since.get(k)
-        if not days or not d0:
+        d, _ = use_by(k, since, until)
+        if d is None:
             continue
-        try:
-            left = (date.fromisoformat(d0[:10]) + timedelta(days=days) - today).days
-        except ValueError:
-            continue
+        left = (d - today).days
         if left <= within:
             out.append((k, max(0, left)))
     return sorted(out, key=lambda x: (x[1], INGREDIENTS[x[0]][0]))

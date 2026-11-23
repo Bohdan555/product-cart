@@ -1039,3 +1039,27 @@ def test_expiry_home_block_and_cooked(client):
     data = json.loads(conn.execute("SELECT data FROM profiles").fetchone()["data"])
     assert "minced" not in data["fridge"] and "minced" not in data["fridge_since"] and "pasta" in data["fridge"]
     assert "Варто використати" not in client.get("/").text
+
+
+def test_fridge_manual_expiry(client):
+    """Дата з упаковки важливіша за оцінку: кефір «до сьогодні» → «Варто використати»; «Авто» — знову орієнтовно."""
+    from datetime import date, timedelta
+    token = register(client)
+    client.post("/fridge/save", data={"csrf": token, "have": ["kefir", "pasta"]})
+    page = client.get("/fridge").text
+    assert 'id="xt"' in page and "орієнтовно" in page and "не псується швидко" in page      # макарони — без строку
+    assert "Варто використати" not in client.get("/").text
+    today = date.today().isoformat()
+    d = client.post("/fridge/expiry", data={"csrf": token, "key": "kefir", "date": today}).json()
+    assert d["manual"] and d["label"] == "сьогодні" and d["left"] == 0
+    assert "кефір · сьогодні" in client.get("/").text
+    d = client.post("/fridge/expiry", data={"csrf": token, "key": "pasta", "date": (date.today() + timedelta(days=1)).isoformat()}).json()
+    assert d["label"] == "завтра" and "макарони · завтра" in client.get("/").text            # і для того, що не псується «за таблицею»
+    assert client.post("/fridge/expiry", data={"csrf": token, "key": "kefir", "date": "2099-01-01"}).status_code == 400
+    assert client.post("/fridge/expiry", data={"csrf": token, "key": "beef", "date": today}).status_code == 400
+    assert client.post("/fridge/expiry", data={"csrf": "bad", "key": "kefir", "date": today}).status_code == 400
+    d = client.post("/fridge/expiry", data={"csrf": token, "key": "kefir", "date": ""}).json()
+    assert not d["manual"] and d["label"]                                                       # знову за оцінкою
+    client.post("/fridge/save", data={"csrf": token, "have": ["kefir"]})                       # макарони прибрали — дата зникла
+    data = json.loads(client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"])
+    assert "pasta" not in data["fridge_until"]

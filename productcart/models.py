@@ -108,6 +108,7 @@ class Profile:
     fridge_other: list[str] = field(default_factory=list)  # решта знайденого на фото (не з довідника) — лише показуємо
     fridge_at: str | None = None                           # коли сфотографували (через тиждень забуваємо)
     fridge_since: dict[str, str] = field(default_factory=dict)  # ключ → дата (YYYY-MM-DD), коли продукт з'явився вдома
+    fridge_until: dict[str, str] = field(default_factory=dict)  # ключ → «вжити до» з упаковки (вручну), важливіше за оцінку
     tg_expiry: bool = True                                  # нагадувати, що продукт скоро зіпсується
     menu_days: list[int] = field(default_factory=list)     # у які дні готуємо (0 = пн); порожньо — підряд з понеділка
     kitchen: list[str] = field(default_factory=list)       # кухонні прилади, що є (menu.KITCHEN); порожньо — без обмежень

@@ -1576,3 +1576,11 @@ body:has(.admin-page) .dock{display:none}
 .xp-list{display:flex;flex-wrap:wrap;gap:6px}
 .xp-chip{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;border-radius:999px;padding:4px 10px;background:var(--chip)}
 .xp-chip i{font-style:normal}.xp-chip.hot{background:color-mix(in srgb,var(--sticker) 30%,var(--card))}
+.xt{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;margin:12px 0}
+.xt-row{display:grid;gap:6px;padding:10px 0;border-top:1px solid var(--line)}.xt-row:first-of-type{border-top:0}
+.xt-n{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-weight:600}.xt-n i{font-style:normal}
+.xt-l{font-weight:500;color:var(--muted);font-size:13px}.xt-l.hot{color:var(--ink);font-weight:700}
+.xt-b{display:flex;flex-wrap:wrap;gap:6px}
+.xt-b button,.xt-cal{min-height:44px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:600 14px var(--body);padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.xt-cal{position:relative;overflow:hidden;padding:0 12px}.xt-cal input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.xt-auto{border:0;background:none;color:var(--muted);font:500 13px var(--body);text-decoration:underline;cursor:pointer;min-height:32px;padding:0 4px}
