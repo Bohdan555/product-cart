@@ -1567,3 +1567,6 @@ body:has(.admin-page) .dock{display:none}
 
 .fee-note{font-size:13px;color:var(--muted);margin:8px 0 0}
 .pr-tastes{margin-bottom:6px}.pr-tastes button{min-height:44px;background:var(--card);border-color:var(--line)}.pr-tastes b{overflow-wrap:anywhere;hyphens:auto}.pr-tastes [data-state=like]{border-color:var(--accent);background:var(--card)}.pr-tastes [data-state=hide]{background:var(--chip)}
+.consent-bar{position:fixed;left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:60;max-width:520px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-lift);padding:12px 14px;display:grid;gap:10px}
+.consent-bar p{margin:0;font-size:14px;line-height:1.4}.consent-bar div{display:flex;gap:8px}.consent-bar .btn{flex:1}
+.consent-bar[hidden]{display:none}

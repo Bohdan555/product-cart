@@ -13,7 +13,9 @@ import logging
 from datetime import timedelta
 from urllib.parse import urlencode
 
-from . import logs, security
+from . import logs, posthog, security
+
+ph_secret: list[str] = []   # секрет сайту для псевдонімів у PostHog (ставить create_app)
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +58,9 @@ def track(conn, user_id: int | None, event: str, *, chain: str | None = None, st
     logs.event(log, "ev." + event, logging.DEBUG if event.endswith("_viewed") else logging.INFO,
                uid=user_id, chain=chain, store=store_id, product=product_id, discount=discount,
                **{k: v for k, v in meta.items() if k not in ("email", "lat", "lon", "address")})
+    if ph_secret:
+        posthog.capture(ph_secret[0], user_id, event, dict(meta, chain=chain, store_id=store_id, product_id=product_id,
+                                                           category=category, discount=discount))
     try:
         conn.execute(
             "INSERT INTO events (ts, user_id, event, chain, store_id, product_id, category, discount, meta) "

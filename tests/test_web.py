@@ -991,3 +991,30 @@ def test_tastes_diets_one_page(client):
     assert 'data-tag="fish" data-hide="1"' in page and 'data-state="like"' in page and 'data-state="hide"' in page
     client.post("/profile", data={"csrf": token, "_f": ["likes", "dislikes"]})          # усе скинули
     assert 'data-state="like"' not in client.get("/profile").text
+
+
+def test_posthog_server_events_and_consent(tmp_path, monkeypatch):
+    """PostHog: без ключа — нічого; з ключем — події пакетом після відповіді, без email; скрипт лише після згоди."""
+    from productcart.web import posthog
+    sent = []
+
+    async def fake_send(events):
+        sent.append(events)
+    monkeypatch.setattr(posthog, "send", fake_send)
+    app = create_app(db_path=str(tmp_path / "p.db"), app_secret="x" * 32, base_url="http://test", gateway=FakeGateway())
+    with TestClient(app, follow_redirects=False) as c:
+        c.get("/today/dishes", params={"have": "eggs", "t": "30", "n": "2"})
+        assert sent == [] and "phConsent" not in c.get("/").text
+        monkeypatch.setenv("POSTHOG_KEY", "phc_test")
+        page = c.get("/").text
+        assert 'id="phConsent"' in page and "eu-assets.i.posthog.com" in page and "phc_test" in page
+        sent.clear()
+        c.get("/today/dishes", params={"have": "eggs", "t": "30", "n": "2"})
+        ev = [e for b in sent for e in b if e["event"] == "today_dishes"]
+        assert ev and ev[0]["properties"]["$process_person_profile"] is False and ev[0]["properties"]["$pathname"] == "/today/dishes"
+        register(c, "who@test.ua")
+        sent.clear()
+        c.get("/today/dishes", params={"have": "eggs", "t": "30", "n": "2"})
+        ev = [e for b in sent for e in b if e["event"] == "today_dishes"][0]
+        assert ev["distinct_id"].startswith("u_") and "who@test.ua" not in json.dumps(sent)
+        assert ev["distinct_id"] in c.get("/").text                 # той самий псевдонім для браузера (identify)

@@ -33,7 +33,7 @@ from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
 from starlette.background import BackgroundTask, BackgroundTasks
 
-from . import analytics, db, fridge, icons, logs, recipe_import, security, silpo_identity, unsplash, webpush
+from . import analytics, db, fridge, icons, logs, posthog, recipe_import, security, silpo_identity, unsplash, webpush
 from .analytics import verify_click
 from .google_oauth import GoogleAuth
 from .telegram import Telegram
@@ -131,6 +131,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         except (KeyError, ValueError):
             cur_ip.set(None)
         warm_soon.set(None)
+        posthog.start(request.cookies, path)
         t = time.perf_counter()
         try:
             resp = await call_next(request)
@@ -143,6 +144,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         resp.headers["Server-Timing"] = (f'app;dur={total:.0f}, db;dur={stats[1] * 1000:.0f};desc="{stats[0]} queries", '
                                          f'region;desc="{os.environ.get("VERCEL_REGION", "local")}"')
         resp.headers["X-Request-ID"] = ctx["rid"]
+        if (ph := posthog.take()):          # події запиту — у PostHog після відповіді
+            prev = resp.background
+
+            async def after():
+                if prev:
+                    await prev()
+                await posthog.send(ph)
+            resp.background = BackgroundTask(after)
         if not path.startswith("/static/"):
             st = resp.status_code
             level = (logging.ERROR if st >= 500 else logging.WARNING if total > 800 or st == 429
@@ -214,6 +223,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                            DIET_LABELS=DIET_LABELS, TAG_LABELS=TAG_LABELS)
     app.state.conn, app.state.gw = conn, gw
     analytics.init(conn)
+    analytics.ph_secret[:] = [app_secret]
     admin_emails = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
     tpl.env.globals.update(watch_word=watch_word, ic=icons.ic)
     tpl.env.globals.update(kcal=menu.kcal_per_portion)
@@ -261,7 +271,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             bg.add_task(warm_store, st)
         bg = bg if bg.tasks else None
         ctx.setdefault("back_url", BACK.get(request.url.path))
-        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled,
+        ph = {"key": posthog.key(), "host": posthog.HOST, "assets": posthog.ASSETS,
+              "id": posthog.user_alias(app_secret, user["id"]) if user else None} if posthog.key() else None
+        return tpl.TemplateResponse(request, name, dict(ctx, user=user, is_admin=is_admin, google_on=google.enabled, ph=ph,
                                                         cart_n=int(n) if n.isdigit() else None), status_code=status,
                                     background=bg)
 

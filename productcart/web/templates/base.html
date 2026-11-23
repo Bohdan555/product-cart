@@ -116,6 +116,40 @@ window.setCartCount = function (n) {   // цифра на значку коши�
   document.querySelectorAll('.cartN').forEach(function (b) { b.textContent = n > 99 ? '99+' : n; b.hidden = !n; });
 };
 </script>
+{% if ph %}<div class="consent-bar" id="phConsent" hidden data-turbo-permanent role="dialog" aria-label="Аналітика">
+  <p>Дозволите анонімну аналітику й запис сеансів (без введеного тексту)? Це допомагає робити сайт зручнішим. <a href="/privacy#analytics">Докладніше</a></p>
+  <div><button type="button" class="btn small" data-ph="1">Дозволити</button><button type="button" class="btn alt small" data-ph="0">Ні</button></div>
+</div>
+<script>
+(function () {   // PostHog у браузері — лише після згоди (cookie pc_an=1); id користувача — псевдонім
+  var PH = {{ {"key": ph.key, "host": ph.host, "assets": ph.assets, "id": ph.id}|tojson }};
+  function get() { var m = document.cookie.match(/(?:^|; )pc_an=([01])/); return m ? m[1] : null; }
+  function load() {
+    if (window.__phLoaded) { if (PH.id && window.posthog && posthog.identify) posthog.identify(PH.id); return; }
+    window.__phLoaded = true;
+    var s = document.createElement('script'); s.async = true; s.src = PH.assets + '/static/array.js';
+    s.onload = function () {
+      if (!window.posthog) return;
+      posthog.init(PH.key, { api_host: PH.host, person_profiles: 'identified_only', capture_pageview: 'history_change',
+        capture_pageleave: true, session_recording: { maskAllInputs: true }, persistence: 'cookie' });
+      if (PH.id) posthog.identify(PH.id);
+    };
+    document.head.appendChild(s);
+  }
+  var bar = document.getElementById('phConsent'), c = get();
+  if (c === '1') load();
+  else if (c === null && bar && !/^\/(admin|privacy)/.test(location.pathname)) bar.hidden = false;
+  if (bar && !bar.dataset.on) {
+    bar.dataset.on = '1';
+    bar.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-ph]'); if (!b) return;
+      document.cookie = 'pc_an=' + b.dataset.ph + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '');
+      bar.hidden = true;
+      if (b.dataset.ph === '1') load();
+    });
+  }
+})();
+</script>{% endif %}
 {% if user %}<script>
 (function () {   // свіжа кількість товарів у кошику «Сільпо» для значка
   if (!window.fetch || location.pathname === '/silpo/cart') return;

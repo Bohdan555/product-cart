@@ -42,7 +42,9 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert c.post("/menu/setup", data={"csrf": token, "people": "2"}).headers["location"] == "/menu?fresh=1"
         m = c.get("/menu").text
         assert "✓ є вдома: стегно куряче, картопля" in m and "✓ Вже є вдома" in c.get("/buy").text
-        assert "Курячі стегна з картоплею" in m        # страва, що доїдає стегна й картоплю, потрапила в меню
+        # страва, що доїдає стегна й картоплю, потрапила в меню (яка саме — залежить від тижня)
+        assert any(t in m for t in ("Курячі стегна з картоплею", "Курячий суп з локшиною", "Курка, запечена з овочами",
+                                    "Курячий суп з овочами й рисом"))
         page = c.get("/fridge").text
         assert 'data-key="potato"' in page and 'data-other="Кетчуп"' in page and "bogus" not in page
 
