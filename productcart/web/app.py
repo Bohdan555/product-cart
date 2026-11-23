@@ -992,6 +992,25 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         resp.delete_cookie(NEXT_COOKIE)
         return resp
 
+    @app.post("/silpo/nearest")
+    def silpo_nearest(request: Request, csrf: str = Form(""), lat: float = Form(...), lon: float = Form(...)):
+        """Відкрили застосунок — перемикаємо «мій магазин» на найближчий до телефона (не далі 50 км)."""
+        u, bad = need_user(request, csrf)
+        if bad:
+            return JSONResponse({"error": "csrf"}, status_code=400)
+        link = silpo_link(u["id"])
+        if not link or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return JSONResponse({"changed": False})
+        near = near_stores(round(lat, 3), round(lon, 3), n=1)
+        if not near:
+            return JSONResponse({"changed": False})
+        st = near[0]
+        changed = st["id"] != link["store_id"]
+        if changed:
+            conn.execute("UPDATE silpo_links SET store_id=?, store_title=? WHERE user_id=?", (st["id"], st["title"][:120], u["id"]))
+            analytics.track(conn, u["id"], "store_selected", chain="silpo", store_id=st["id"], auto=True)
+        return JSONResponse({"changed": changed, "store": st})
+
     @app.post("/silpo/disconnect")
     def silpo_disconnect(request: Request, csrf: str = Form("")):
         u, bad = need_user(request, csrf)

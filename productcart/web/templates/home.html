@@ -75,15 +75,26 @@
     var s = d && d.stores && d.stores[0];
     if (!s) { return false; }
     var pick = '/silpo?lat=' + d.lat + '&lon=' + d.lon;
-    if (mode === 'store') {
-      if (s.id === mine) S.textContent = 'Акції цього магазину · ' + km(s.km) + ' км від вас';
-      else { S.textContent = 'Поруч ближчий: ' + s.address + ' · ' + km(s.km) + ' км'; A.href = pick; }
+    if (mode === 'store' || mode === 'pick') {
+      if (s.id === mine) S.textContent = 'Найближчий · ' + km(s.km) + ' км';
+      else switchTo(d);          // відкрили застосунок не там — одразу перемикаємо на найближчий
     } else {
       T.textContent = 'Сільпо, ' + s.address;
       S.textContent = km(s.km) + ' км від вас · ' + tail[mode];
       A.href = mode === 'guest' ? '/register' : pick;
     }
     return true;
+  }
+  function switchTo(d) {
+    var csrf = document.querySelector('meta[name=csrf]'); if (!csrf) return;
+    var fd = new FormData(); fd.append('csrf', csrf.content); fd.append('lat', d.lat); fd.append('lon', d.lon);
+    fetch('/silpo/nearest', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (x) {
+      if (!x.store) return;
+      mine = x.store.id; box.dataset.store = mine; mode = 'store';
+      T.textContent = 'Сільпо, ' + x.store.address; S.textContent = 'Найближчий · ' + km(x.store.km) + ' км'; A.href = '/silpo';
+      if (window.bump) bump(box);
+      if (x.changed) { if (window.toast) toast('Магазин: ' + x.store.address); setTimeout(function () { location.reload(); }, 900); }   // акції нового магазину
+    }).catch(function () {});
   }
   function hide() { card.hidden = true; }
   function show(title, text, buttons) {
@@ -102,7 +113,7 @@
     navigator.geolocation.getCurrentPosition(function (p) {
       fetch('/near?lat=' + p.coords.latitude.toFixed(3) + '&lon=' + p.coords.longitude.toFixed(3), { credentials: 'same-origin' })
         .then(function (r) { return r.json(); }).then(function (d) {
-          try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
+          d._t = Date.now(); try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
           if (render(d)) { hide(); if (window.bump) bump(box); }
           else show('Поруч «Сільпо» не знайшли', 'У радіусі 50 км немає магазинів. Оберіть магазин вручну в профілі.', false);
         }).catch(hide);
@@ -114,10 +125,12 @@
   }
   $('hmGeoGo').onclick = function () { locate(false); };
   $('hmGeoNo').onclick = function () { ls.set(LATER, String(Date.now())); hide(); };
-  try { var c = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (c && render(c)) return; } catch (e) {}
+  try { var c = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (c && Date.now() - (c._t || 0) < 20 * 6e4 && render(c)) return; } catch (e) {}   // місце — не старше 20 хв
   var later = +ls.get(LATER) || 0, snoozed = Date.now() - later < 7 * 864e5, refused = !!ls.get(NO);
   // спершу користь, потім прохання: питаємо про місце лише після першої добірки страв
-  function ask() { if (!snoozed && !refused && mode !== 'store' && ls.get('saw-dishes')) card.hidden = false; }
+  // з підключеним «Сільпо» — питаємо одразу (щоб магазин був найближчий); іншим — після першої добірки страв
+  var linked = mode === 'store' || mode === 'pick';
+  function ask() { if (!snoozed && !refused && (linked || ls.get('saw-dishes'))) card.hidden = false; }
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
       if (st.state === 'granted') locate(true); else if (st.state === 'prompt') ask();

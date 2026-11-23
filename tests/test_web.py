@@ -1079,3 +1079,21 @@ def test_pantry_page_add_remove_groups(client):
     client.post("/pantry/remove", data={"csrf": token, "other": "Кетчуп"})
     page = client.get("/pantry").text
     assert 'data-key="minced"' not in page and "Кетчуп" not in page and 'data-key="eggs"' in page
+
+
+def test_nearest_store_auto_switch(client):
+    """Відкрили застосунок з геолокацією — «мій магазин» стає найближчим (лише з підключеним «Сільпо», ≤ 50 км)."""
+    from productcart.web import db as wdb
+    conn = client.app.state.conn
+    branches = [{"id": "b1", "city": "Київ", "address": "вул. Хрещатик, 1", "title": "Київ, вул. Хрещатик, 1", "lat": 50.447, "lon": 30.522},
+                {"id": "b3", "city": "Львів", "address": "пл. Ринок, 1", "title": "Львів, пл. Ринок, 1", "lat": 49.842, "lon": 24.031}]
+    token = register(client)
+    assert client.post("/silpo/nearest", data={"csrf": token, "lat": "49.84", "lon": "24.03"}).json() == {"changed": False}   # без «Сільпо»
+    link_silpo(client, token)                                          # магазин b1 (Київ)
+    wdb.set_setting(conn, "silpo_branches", json.dumps({"at": "2000-01-01T00:00:00+00:00", "items": branches}))
+    d = client.post("/silpo/nearest", data={"csrf": token, "lat": "49.84", "lon": "24.03"}).json()
+    assert d["changed"] and d["store"]["id"] == "b3"
+    assert conn.execute("SELECT store_id FROM silpo_links").fetchone()["store_id"] == "b3"
+    assert client.post("/silpo/nearest", data={"csrf": token, "lat": "49.84", "lon": "24.03"}).json()["changed"] is False
+    assert client.post("/silpo/nearest", data={"csrf": token, "lat": "41.26", "lon": "-95.86"}).json() == {"changed": False}  # далеко
+    assert client.post("/silpo/nearest", data={"csrf": "bad", "lat": "49.84", "lon": "24.03"}).status_code == 400
