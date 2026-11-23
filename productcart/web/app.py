@@ -2594,22 +2594,24 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         """Акції й меню тижня — у Telegram (якщо прив'язаний) і push на пристрої (якщо ввімкнені)."""
         has_push = bool(push_subs(uid))
 
-        async def deliver(tg_text: str, tg_btn: tuple[str, str], title: str, body: str, url: str, tag: str) -> bool:
+        async def deliver(tg_text: str, tg_btn: tuple[str, str], title: str, body: str, url: str, tag: str,
+                          telegram: bool = True) -> bool:
             ok = False
-            if chat and tg.enabled:
+            if telegram and chat and tg.enabled:
                 ok = await asyncio.to_thread(tg.send, chat, tg_text, [tg_btn]) or ok
             if has_push:
                 ok = bool(await asyncio.to_thread(push_user, uid, title, body, url, tag)) or ok
             return ok
 
         p, health = load_profile(uid)
-        soon = menu.expiring(p.fridge_since, p.fridge, within=1, until=p.fridge_until) if p.tg_expiry and p.fridge else []
+        soon = menu.expiring(p.fridge_since, p.fridge, within=1, until=p.fridge_until) if p.tg_expiry and p.fridge and has_push else []
         xk = "x:" + date.today().isoformat()
         if soon and not conn.execute("SELECT 1 FROM tg_sent WHERE user_id=? AND key=?", (uid, xk)).fetchone():
             names = ", ".join(f"{menu.INGREDIENTS[k][0].lower()} — {menu.when_label(d)}" for k, d in soon)
             url = f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}"
             if await deliver(f"⏳ Варто використати: {names}.\nПідібрали страви з того, що є вдома.",
-                             ("Що приготувати", base_url + url), "⏳ Скоро зіпсується", names, url, "expiry"):
+                             ("Що приготувати", base_url + url), "⏳ Скоро зіпсується", names, url, "expiry",
+                             telegram=False):      # лише push на телефон
                 conn.execute("INSERT INTO tg_sent (user_id, key, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
                              (uid, xk, security.iso(security.now())))
                 st["expiry"] = st.get("expiry", 0) + 1
