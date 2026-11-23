@@ -7,14 +7,23 @@
 {% include "_install.html" %}
 <div class="card stack npush" data-push>
   <label class="nrow"><input type="checkbox" data-push-toggle>
-    <span><b>{{ ic("phone", "ii") }}На цей телефон</b><small>знижки на ваші товари й меню щопонеділка — як звичайні сповіщення</small></span></label>
+    <span><b>{{ ic("phone", "ii") }}На цей телефон</b><small>як звичайні сповіщення</small></span></label>
   <p data-state-msg="on">{{ ic("check", "ii") }}Увімкнено на цьому пристрої{% if push_n > 1 %} · усього пристроїв: {{ push_n }}{% endif %}</p>
   <p data-state-msg="ios">На iPhone сповіщення працюють, коли Кошик додано на початковий екран: <b>Поділитися</b> → <b>«На початковий екран»</b>, потім відкрийте його звідти.</p>
   <p data-state-msg="denied">Сповіщення для сайту заборонені. Дозвольте їх у налаштуваннях браузера (значок 🔒 біля адреси → Сповіщення).</p>
   <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram нижче.</p>
 </div>
+<form method="post" action="/notify" class="card stack nset" data-turbo="false">
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+  <label class="nrow"><input type="checkbox" name="tg_deals" value="1" {% if p.tg_deals %}checked{% endif %}>
+    <span><b>{{ ic("bell", "ii") }}Цікаві акції</b><small>великі знижки на те, що ви купуєте</small></span></label>
+  <label class="nrow"><input type="checkbox" name="tg_weekly" value="1" {% if p.tg_weekly %}checked{% endif %}>
+    <span><b>{{ ic("calendar", "ii") }}Меню на тиждень</b><small>щопонеділка зранку</small></span></label>
+  <label class="nrow"><input type="checkbox" name="tg_expiry" value="1" {% if p.tg_expiry %}checked{% endif %}>
+    <span><b>{{ ic("clock", "ii") }}Скоро зіпсується</b><small>push на телефон вранці</small></span></label>
+  <noscript><button type="submit" class="btn">Зберегти</button></noscript>
+</form>
 <h2 class="ph">Або в Telegram</h2>
-{% if saved %}<div class="ok" style="margin-bottom:12px">Збережено ✓</div>{% endif %}
 
 <div class="card stack ntg" style="--c:var(--p-sky)">
   {% if chat %}
@@ -31,45 +40,10 @@
   {% if not silpo %}<div class="note warnbox">Акції надходять від «Сільпо» — <a href="/silpo">підключіть «Сільпо»</a>, щоб сповіщення працювали.</div>{% endif %}
 </div>
 
-<form method="post" action="/notify" class="card stack nset" data-turbo="false">
-  <input type="hidden" name="csrf" value="{{ user.csrf }}">
-  <label class="nrow"><input type="checkbox" name="tg_deals" value="1" {% if p.tg_deals %}checked{% endif %}>
-    <span><b>{{ ic("bell", "ii") }}Цікаві акції</b><small>на обрані товари і великі знижки (від 25%) на те, що ви купуєте щотижня</small></span></label>
-  <label class="nrow"><input type="checkbox" name="tg_weekly" value="1" {% if p.tg_weekly %}checked{% endif %}>
-    <span><b>{{ ic("calendar", "ii") }}Меню на тиждень</b><small>щопонеділка зранку</small></span></label>
-  <label class="nrow"><input type="checkbox" name="tg_expiry" value="1" {% if p.tg_expiry %}checked{% endif %}>
-    <span><b>{{ ic("clock", "ii") }}Скоро зіпсується</b><small>push на телефон вранці</small></span></label>
-  {% set MINS = [(0, 'будь-яка'), (10, 'від 10%'), (20, 'від 20%'), (30, 'від 30%'), (40, 'від 40%'), (50, 'від 50%')] %}
-  {% macro minsel(name, val) %}<select name="{{ name }}" aria-label="Мінімальна знижка">{% for v, t in MINS %}<option value="{{ v }}" {% if v == val %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>{% endmacro %}
-  <div>
-    <b>{{ ic("star", "ii") }}Обрані товари</b>
-    <small class="hint" style="display:block">Повідомимо, коли на них буде знижка — не менша за вказану.</small>
-    <div class="nlist" id="nlist">{% for w in p.watch %}
-      <div class="nitem"><span class="nname">{{ w }}</span><input type="hidden" name="w" value="{{ w }}">{{ minsel('wmin', p.watch_min.get(w, 0)) }}<button type="button" class="nrm" aria-label="Прибрати {{ w }}">×</button></div>{% endfor %}
-    </div>
-    <div class="nadd"><input type="text" id="nword" placeholder="кава, лосось, підгузки…" autocomplete="off" maxlength="40"><button type="button" class="btn alt small" id="nplus">Додати</button></div>
-    <label class="ndef">Для нових обраних (і з {{ ic("bell", "ii") }} на картках): {{ minsel('watch_default', p.watch_default) }}</label>
-  </div>
-  <template id="ntpl"><div class="nitem"><span class="nname"></span><input type="hidden" name="w">{{ minsel('wmin', p.watch_default) }}<button type="button" class="nrm">×</button></div></template>
-  <div><button type="submit" class="btn">Зберегти</button></div>
-</form>
+
 <script>
-(function () {
-  var list = document.getElementById('nlist'), inp = document.getElementById('nword'), tpl = document.getElementById('ntpl');
-  function add() {
-    inp.value.split(',').forEach(function (x) {
-      x = x.trim().toLowerCase(); if (x.length < 2) return;
-      var have = [].some.call(list.querySelectorAll('input[name=w]'), function (i) { return i.value === x; }); if (have) return;
-      var n = tpl.content.firstElementChild.cloneNode(true);
-      n.querySelector('.nname').textContent = x; n.querySelector('input').value = x; n.querySelector('.nrm').setAttribute('aria-label', 'Прибрати ' + x);
-      n.querySelector('select').value = document.querySelector('select[name=watch_default]').value;
-      list.appendChild(n);
-    });
-    inp.value = ''; if (window.haptic) haptic(8);
-  }
-  document.getElementById('nplus').onclick = add;
-  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
-  list.addEventListener('click', function (e) { var b = e.target.closest('.nrm'); if (b) b.parentNode.remove(); });
-})();
+document.querySelectorAll('.nset input[type=checkbox]').forEach(function (c) {   // зберігаємо одразу
+  c.addEventListener('change', function () { c.form.requestSubmit ? c.form.requestSubmit() : c.form.submit(); });
+});
 </script>
 {% endblock %}

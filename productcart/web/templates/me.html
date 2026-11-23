@@ -48,7 +48,6 @@
 {% if user %}
 <form method="post" action="/logout" class="plogout"><input type="hidden" name="csrf" value="{{ user.csrf }}">
   <button type="submit">{{ ic("out", "sm") }} Вийти</button></form>
-{% if is_admin %}<p style="text-align:center"><a href="/admin/stats">Статистика сайту</a></p>{% endif %}
 {% endif %}
 </div>
 {% endblock %}

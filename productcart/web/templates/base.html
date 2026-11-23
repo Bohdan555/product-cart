@@ -91,7 +91,6 @@ document.addEventListener('turbo:before-prefetch', function (e) {
     <a class="tabbed" href="/">Готуємо</a>
     <a class="tabbed" href="/list">Акції</a>
     <a class="tabbed" href="/me">Профіль</a>
-    {% if is_admin %}<a href="/admin/stats" {% if request.url.path == '/admin/stats' %}class="on"{% endif %}>Статистика</a>{% endif %}
   </nav>
   {% else %}
   <nav class="top"><a class="tabbed" href="/login">Увійти</a></nav>

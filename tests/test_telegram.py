@@ -49,8 +49,8 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         hook(c, f"/start {code}")
         assert "Готово" in tg.sent[-1][1] and "Telegram підключено" in c.get("/notify").text
 
-        # «🔔» з картки акції і стрічка показує кнопку
-        assert 'class="pbell"' in c.get("/list").text
+        # обраних товарів в інтерфейсі більше немає (лише сервер — для старих підписок)
+        assert 'class="pbell"' not in c.get("/list").text and "Обрані товари" not in c.get("/notify").text
         assert c.post("/notify/watch", data={"csrf": token, "word": "Молоко"}).json() == {"ok": True, "word": "молоко", "min": 0, "linked": True}
 
         assert c.get("/cron/notify").status_code == 403                       # не Vercel Cron
@@ -70,11 +70,9 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         assert c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()["deals"] == 0 and not tg.sent
 
         # налаштування і /stop
-        c.post("/notify", data={"csrf": token, "w": ["кава", "сир"], "wmin": ["20", "0"], "tg_weekly": "1",
-                                 "watch_default": "30"})
+        c.post("/notify", data={"csrf": token, "tg_weekly": "1"})
         page = c.get("/notify").text
-        assert '<span class="nname">сир</span>' in page and '<option value="20" selected>' in page
-        assert c.post("/notify/watch", data={"csrf": token, "word": "хек"}).json()["min"] == 30
+        assert 'name="tg_weekly" value="1" checked' in page and 'name="tg_deals" value="1" checked' not in page
         hook(c, "/stop")
         assert "Підключити Telegram" in c.get("/notify").text
 
