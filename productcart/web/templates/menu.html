@@ -68,7 +68,7 @@
     <div class="buyprog-h"><b id="progressTxt">Торкайтесь товарів, які вже купили</b><span id="progressLeft"></span></div>
     <div class="progress"><i id="bar"></i></div>
   </div>
-  {% if not is_demo %}<p class="fee-note" style="margin:-4px 0 12px">Ціни без сервісного збору «Сільпо» — його додає магазин під час оформлення.</p>{% endif %}
+  {% if not is_demo %}<p class="fee-note" style="margin:-4px 0 12px">Без сервісного збору «Сільпо»</p>{% endif %}
   {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
   {% elif link and not is_demo %}
   <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
@@ -105,19 +105,19 @@
   {% endfor %}</div>
   {% endif %}
   {% if m.home_lines %}
-  <div class="group" data-copy="🏠 Вже є вдома — не купуємо"><div class="gh"><b>✓ Вже є вдома</b><small>не купуємо</small></div>
+  <details class="group home-fold" data-copy="🏠 Вже є вдома — не купуємо"><summary class="gh"><b>✓ Є вдома · {{ m.home_lines|length }}</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ')|truncate(40) }}</small></summary>
   {% for l in m.home_lines %}{% set nv = name_visual(l.name) %}
     <div class="brow static" data-have="1" data-emoji="{{ nv.emoji }}" data-text="{{ l.name }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span>
       <form method="post" action="/fridge/remove" data-noajax data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Немає</button></form></div>
-  {% endfor %}</div>
+  {% endfor %}</details>
   {% endif %}
   {% if m.pantry_lines %}
-  <div class="group pantry" data-copy="🫙 Запаси вдома"><div class="gh"><b>Запаси вдома</b><small>олія, крупи — зазвичай є</small></div>
+  <details class="group pantry home-fold" data-copy="🫙 Запаси вдома"{% if m.pantry_lines|selectattr('buy')|list %} open{% endif %}><summary class="gh"><b>Запаси · {{ m.pantry_lines|length }}</b><small>олія, крупи — зазвичай є</small></summary>
   {% for l in m.pantry_lines %}
     <div class="brow static{% if l.buy %} buying{% endif %}" {% if not l.buy %}data-have="1"{% endif %} data-text="{{ l.name }}{% if l.buy %} — {{ fmt_qty(l.need, l.unit) }}{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}купуємо ✓ · {{ fmt_qty(l.need, l.unit) }}{% else %}є вдома{% endif %}</small></span>
       <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}">
         <button type="submit" class="switch{% if l.buy %} back{% endif %}">{{ 'Є вдома' if l.buy else 'Закінчилось' }}</button></form></div>
-  {% endfor %}</div>
+  {% endfor %}</details>
   {% endif %}
 
 </section>

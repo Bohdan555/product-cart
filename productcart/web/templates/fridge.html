@@ -4,7 +4,6 @@
 {% set step = 1 %}{% include "_week.html" %}
 <section class="intro">
   <h1 class="xh">Що в <span class="hl">холодильнику?</span></h1>
-  <p class="lead">Скажіть, напишіть або сфотографуйте — меню спершу доїсть те, що вже є, а решту купимо з акцій.</p>
 </section>
 
 {% if not user %}
@@ -16,7 +15,7 @@
 
   <div class="fr-say">
     
-    {% with say_hint = "Натисніть 🎤 і скажіть: «курка, пів пачки масла, яйця і трохи сиру» — або напишіть через кому." %}{% include "_say.html" %}{% endwith %}
+    {% with say_hint = "Напр.: курка, масло, яйця" %}{% include "_say.html" %}{% endwith %}
   </div>
   <div class="fr-found" id="frFound"{% if not p.fridge and not p.fridge_other %} hidden{% endif %}>
     <div class="fr-h"><b>Є вдома <span class="fr-n" id="frN"></span></b><button type="button" class="fr-all" id="frAll">Прибрати все</button></div>
@@ -25,18 +24,17 @@
       {% for k in p.fridge %}<button type="button" class="fr-chip" data-key="{{ k }}" aria-label="Прибрати: {{ names[k] }}"><i>{{ name_visual(names[k]).emoji }}</i>{{ names[k] }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
       {% for n in p.fridge_other %}<button type="button" class="fr-chip other" data-other="{{ n }}" aria-label="Прибрати: {{ n }}"><i>{{ name_visual(n).emoji }}</i>{{ n }}<b class="x" aria-hidden="true">×</b></button>{% endfor %}
     </div>
-    <small class="hint fr-note">Сірі — не з наших рецептів: у меню не підуть, але й купувати їх не будемо.</small>
+    <small class="hint fr-note">Сірі — не в рецептах</small>
   </div>
   {% if terms %}<a class="fr-terms" href="/pantry">{{ ic("clock", "sm") }} Терміни придатності — у «Холодильнику» →</a>{% endif %}
-  <p class="fr-or">або сфотографуйте холодильник</p>
-  <div class="fr-shot" id="frShot">
+  <div class="fr-shot" id="frShot" hidden>
     <img id="frImg" alt="" hidden>
     <span class="fr-scan" aria-hidden="true"></span>
     <span class="fr-cta" id="frCta"><span class="cam" aria-hidden="true">{{ ic("camera", "big") }}</span><b>Сфотографуйте холодильник</b><small>полиці, чек або продукти на столі</small></span>
   </div>
   <div class="pick-row">
-    <label class="btn pick-btn">{{ ic("camera", "sm") }} Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
-    <label class="btn alt pick-btn">{{ ic("image", "sm") }} Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
+    <label class="btn alt small pick-btn">{{ ic("camera", "sm") }} Фото<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
+    <label class="btn alt small pick-btn">{{ ic("image", "sm") }} Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
   </div>
   <p class="fr-state" id="frState" aria-live="polite"></p>
 
@@ -102,7 +100,7 @@
   function onPhoto() {
     var f = this.files && this.files[0]; if (!f) return;
     try { $('frImg').src = URL.createObjectURL(f); $('frImg').hidden = false; $('frCta').hidden = true; } catch (e) {}
-    $('frShot').classList.add('scanning'); $('frState').textContent = 'Дивимось, що є…'; tap(15);
+    $('frShot').hidden = false; $('frShot').classList.add('scanning'); $('frState').textContent = 'Дивимось, що є…'; tap(15);
     var input = this;
     window.shrinkPhoto(f).then(function (blob) {
       input.value = '';

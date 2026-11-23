@@ -712,7 +712,7 @@ def test_today_flow_guest_and_user(client):
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
     assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
     d2 = client.get("/today/dish/flotski", params={"have": "", "t": "60", "n": "2"}).text
-    assert "Показати реальні ціни" in d2 and 'href="/register"' in d2
+    assert "Реальні ціни в «Сільпо»" in d2 and 'href="/register"' in d2
     assert "Смачного" in client.post("/today/cooked", data={"id": "omelette"}).text
     token = register(client)
     assert "Смачного" in client.post("/today/cooked", data={"csrf": token, "id": "omelette"}).text
@@ -802,7 +802,7 @@ def test_today_maybe_have_can_be_bought(client):
     url = re.search(r'href="(/today/dish/thighs\?[^"]*need=oil[^"]*)"', page).group(1).replace("&amp;", "&")
     page2 = client.get(url).text
     assert "Олія соняшникова" in page2 and ">Є</a>" in page2 and "мабуть, є" not in page2   # тепер у «докупити» з ціною
-    assert "Показати реальні ціни" in page2       # є що докупити — пропонуємо ціни й кошик
+    assert "Реальні ціни в «Сільпо»" in page2       # є що докупити — пропонуємо ціни й кошик
 
 
 def test_checkout_link_shape_and_in_app_browser():
@@ -817,7 +817,7 @@ def test_checkout_link_shape_and_in_app_browser():
 
 
 def test_cook_list_saves_recipes_for_guest_and_user(client):
-    assert "Тут з'являться рецепти" in client.get("/cook").text
+    assert "Тут будуть ваші рецепти" in client.get("/cook").text
     r = client.post("/today/cooked", data={"id": "omelette", "n": "3"})
     assert 'href="/cook/omelette"' in r.text
     home = client.get("/").text
@@ -825,7 +825,7 @@ def test_cook_list_saves_recipes_for_guest_and_user(client):
     page = client.get("/cook/omelette").text
     assert "3 порції" in page and "Як готувати" in page and "✓ Приготовано" in page
     assert client.post("/cook/done", data={"id": "omelette"}).headers["location"] == "/cook?done=1"
-    assert "Тут з'являться рецепти" in client.get("/cook").text
+    assert "Тут будуть ваші рецепти" in client.get("/cook").text
     token = register(client)
     client.post("/today/cooked", data={"csrf": token, "id": "plov", "n": "2"})
     assert "Плов з куркою" in client.get("/cook").text and "1 рецепт" in client.get("/me").text

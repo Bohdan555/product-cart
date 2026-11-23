@@ -41,7 +41,7 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert r.headers["location"] == "/menu/setup?first=1"        # перше меню — через конструктор зі смаками
         assert c.post("/menu/setup", data={"csrf": token, "people": "2"}).headers["location"] == "/menu?fresh=1"
         m = c.get("/menu").text
-        assert "✓ є вдома: стегно куряче, картопля" in m and "✓ Вже є вдома" in c.get("/buy").text
+        assert "✓ є вдома: стегно куряче, картопля" in m and "✓ Є вдома" in c.get("/buy").text
         # страва, що доїдає стегна й картоплю, потрапила в меню (яка саме — залежить від тижня)
         assert any(t in m for t in ("Курячі стегна з картоплею", "Курячий суп з локшиною", "Курка, запечена з овочами",
                                     "Курячий суп з овочами й рисом"))
@@ -54,7 +54,7 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert 'data-key="potato"' not in c.get("/fridge").text and 'data-key="chicken_thigh"' in c.get("/fridge").text
         c.post("/fridge/save", data={"csrf": token})
         m = c.get("/menu").text
-        assert "✓ Вже є вдома" not in c.get("/buy").text and 'href="/fridge"><i>1</i>Що є' in m
+        assert "✓ Є вдома" not in c.get("/buy").text and 'href="/fridge"><i>1</i>Що є' in m
 
 
 def test_not_configured_and_errors(tmp_path, monkeypatch):

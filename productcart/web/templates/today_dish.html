@@ -27,12 +27,9 @@
     <input type="hidden" name="have" value="{{ have|join(',') }}"><input type="hidden" name="n" value="{{ n }}"><input type="hidden" name="need" value="{{ need|join(',') }}">
     <button type="submit" class="btn td-cart">{{ ic("cart", "mid") }}<span>Додати {{ o.lines|length }} в кошик «Сільпо» · {{ uah(o.buy_cost|round) }}</span></button>
   </form>
-  <p class="fee-note">Ціни без сервісного збору «Сільпо» — його додає магазин під час оформлення.</p>
+  <p class="fee-note">Без сервісного збору «Сільпо»</p>
   {% else %}
-  <a class="td-gate" href="{{ '/silpo' if user else '/register' }}">
-    <span class="icotile">{{ ic("tag", "mid") }}</span>
-    <span><b>Показати реальні ціни у вашому «Сільпо»</b><small>і додати бракуюче в кошик одним дотиком</small></span>
-  </a>
+  <a class="td-gate-link" href="{{ '/silpo' if user else '/register' }}">{{ ic("store", "sm") }} Реальні ціни в «Сільпо» →</a>
   {% endif %}
 {% endif %}
 
@@ -45,6 +42,7 @@
 <form method="post" action="/today/cooked" class="td-done-form">
   {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}
   <input type="hidden" name="id" value="{{ d.id }}"><input type="hidden" name="n" value="{{ n }}">
-  <button type="submit" class="btn{% if o.lines %} alt{% endif %}">{{ 'Я все маю — готую!' if o.lines else 'Готую! 👩‍🍳' }}</button>
+  {% set cart_btn = o.lines and user and link and not is_demo %}
+  <button type="submit" class="btn{% if cart_btn %} alt{% endif %}">{{ 'Я все маю — готую!' if o.lines else 'Готую! 👩‍🍳' }}</button>
 </form>
 {% endblock %}

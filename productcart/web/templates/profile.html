@@ -6,7 +6,7 @@
 {% set chosen_diets = picked_diets or p.diets %}
 <div class="me-lite">
 <h1 class="xh">{% if welcome %}Про <span class="hl">вас</span>{% else %}Смаки й <span class="hl">харчування</span>{% endif %}</h1>
-<p class="me-sub">Хвилина — і підбір акцій та меню стане точнішим.</p>
+<p class="pr-saved" id="prSaved" aria-live="polite"></p>
 {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
 <form class="anketa" id="anketa" method="post" action="/profile" novalidate>
@@ -23,7 +23,7 @@
   {% endif %}
 
   <h2 class="ph">Що до смаку?</h2>
-  <p class="hint" style="margin:-4px 0 10px">Торкніться — <b>люблю</b> ❤️, ще раз — <b>не їм</b> 🚫, ще раз — скинути.</p>
+  <p class="hint" style="margin:-4px 0 10px">❤️ люблю · 🚫 не їм</p>
   {% set tile_tags = tastes|map(attribute=0)|list %}
   <div class="su-tastes pr-tastes" id="prTastes">
     {% for t, e, label in tastes %}<button type="button" data-tag="{{ t }}" data-hide="{{ 1 if t in hideable else 0 }}" style="--c:var(--p-{{ ['citrus','sky','basil','berry','tomato','plum','citrus'][loop.index0] }})"
@@ -57,7 +57,7 @@
     <div class="sl-s"><span>будь-які</span><span>від 50%</span></div>
   </div>
 
-  <div class="an-save"><button type="submit" class="btn">{{ 'Готово' if welcome else 'Зберегти' }}</button></div>
+  {% if welcome %}<div class="an-save"><button type="submit" class="btn">Готово</button></div>{% endif %}
 </form>
 </div>
 
@@ -81,17 +81,33 @@
     b.addEventListener('click', function () {
       var s = b.dataset.state, canHide = b.dataset.hide === '1';
       b.dataset.state = s === '' ? 'like' : (s === 'like' && canHide ? 'hide' : '');
-      tastes();
+      tastes(); if (window.prSave) prSave();
     });
   });
   tastes();
   function diets() { consentBox.hidden = !form.querySelector('#diets input:checked'); }
   form.querySelectorAll('#diets input').forEach(function (i) { i.addEventListener('change', diets); });
-  form.addEventListener('submit', function (e) {
+  function consentOk() {
     if (form.querySelector('#diets input:checked') && !consentBox.querySelector('input').checked) {
-      e.preventDefault(); consentBox.classList.add('shake'); setTimeout(function () { consentBox.classList.remove('shake'); }, 600);
+      consentBox.classList.add('shake'); setTimeout(function () { consentBox.classList.remove('shake'); }, 600); return false;
     }
-  });
+    return true;
+  }
+  form.addEventListener('submit', function (e) { if (!consentOk()) e.preventDefault(); });
+  // зберігаємо одразу після кожної зміни (без кнопки «Зберегти»)
+  var timer = null, ready = false, saved = document.getElementById('prSaved');
+  window.prSave = function () {
+    if (!ready || {{ 'true' if welcome else 'false' }}) return;
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      if (!consentOk()) return;
+      saved.textContent = 'Зберігаємо…';
+      fetch('/profile', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
+        .then(function (r) { saved.textContent = r.ok ? 'Збережено ✓' : 'Не вдалося зберегти'; })
+        .catch(function () { saved.textContent = 'Немає інтернету — не збережено'; });
+    }, 500);
+  };
+  form.addEventListener('change', function (e) { if (e.target.id !== 'min_discount' || e.type === 'change') prSave(); });
 
   // «що купуєте щотижня» — теги
   form.querySelectorAll('.taginput').forEach(function (w) {
@@ -107,6 +123,7 @@
         box.appendChild(b);
       });
       w.querySelectorAll('[data-add]').forEach(function (s) { s.hidden = items.indexOf(s.dataset.add) >= 0; });
+      if (window.prSave) prSave();
     }
     function add(v) { v = (v || '').trim().toLowerCase(); if (v && items.indexOf(v) < 0 && items.length < 30) items.push(v); sync(); }
     w._add = add;
@@ -143,6 +160,7 @@
   };
 
   diets(); money();
+  ready = true;
 })();
 </script>
 {% endblock %}

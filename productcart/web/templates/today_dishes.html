@@ -39,6 +39,7 @@
   {% for o in opts[:3] %}{{ card(o, loop.index0) }}{% endfor %}
 </div>
 {% if nshow > 1 %}<div class="td-dots-nav" id="tdDots" role="tablist" aria-label="Страви">{% for o in opts[:3] %}<button type="button" role="tab" aria-label="Страва {{ loop.index }} з {{ nshow }}"{% if loop.first %} aria-selected="true"{% endif %}></button>{% endfor %}</div>
+<script>try { localStorage.setItem('saw-dishes', '1'); } catch (e) {}</script>
 <script>
 (function () {
   var reel = document.getElementById('tdReel'), dots = document.getElementById('tdDots'); if (!reel || !dots) return;

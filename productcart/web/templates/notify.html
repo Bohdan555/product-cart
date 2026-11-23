@@ -4,13 +4,12 @@
 <section class="intro">
   <h1 class="xh"><span class="hl">Сповіщення</span></h1>
 </section>
-{% include "_install.html" %}
 <div class="card stack npush" data-push>
   <label class="nrow"><input type="checkbox" data-push-toggle>
     <span><b>{{ ic("phone", "ii") }}На цей телефон</b><small>як звичайні сповіщення</small></span></label>
   <p data-state-msg="on">{{ ic("check", "ii") }}Увімкнено на цьому пристрої{% if push_n > 1 %} · усього пристроїв: {{ push_n }}{% endif %}</p>
   <p data-state-msg="ios">На iPhone сповіщення працюють, коли Кошик додано на початковий екран: <b>Поділитися</b> → <b>«На початковий екран»</b>, потім відкрийте його звідти.</p>
-  <p data-state-msg="denied">Сповіщення для сайту заборонені. Дозвольте їх у налаштуваннях браузера (значок 🔒 біля адреси → Сповіщення).</p>
+  <p data-state-msg="denied">Вимкнено в браузері · <details class="howto"><summary>Як увімкнути</summary>🔒 біля адреси → Сповіщення → Дозволити</details></p>
   <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram нижче.</p>
 </div>
 <form method="post" action="/notify" class="card stack nset" data-turbo="false">

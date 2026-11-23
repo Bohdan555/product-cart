@@ -15,15 +15,15 @@
     {% if user %}
     <div class="hv-photo" id="tdShot">
       <span class="icotile">{{ ic("fridge", "mid") }}</span>
-      <span class="hv-photo-t"><b id="tdShotTxt">Або сфотографуйте холодильник</b><small>знайдене додамо само</small></span>
+      <span class="hv-photo-t"><b id="tdShotTxt">Або фото холодильника</b></span>
       <div class="pick-row">
-        <label class="btn small pick-btn">{{ ic("camera", "sm") }} Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
+        <label class="btn alt small pick-btn">{{ ic("camera", "sm") }} Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
         <label class="btn alt small pick-btn">{{ ic("image", "sm") }} Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
       </div>
     </div>
     {% else %}
     <a class="hv-photo" href="/register"><span class="icotile">{{ ic("fridge", "mid") }}</span>
-      <span class="hv-photo-t"><b>Або сфотографуйте холодильник</b><small class="td-lock">{{ ic("lock", "sm") }} після входу</small></span></a>
+      <span class="hv-photo-t"><b>Або фото холодильника</b><small class="td-lock">{{ ic("lock", "sm") }} після входу</small></span></a>
     {% endif %}
     <div class="td-nav"><button type="button" class="btn alt" data-skip>Пропустити</button><button type="button" class="btn" data-next>Далі</button></div>
   </section>

@@ -19,7 +19,6 @@
 {% endif %}
 
 {% if request.query_params.get("saved") %}<div class="ok" style="margin-bottom:12px">Збережено ✓</div>{% endif %}
-{% include "_install.html" %}
 
 <h2 class="ph">Кухня</h2>
 <div class="pgroup">
@@ -45,6 +44,7 @@
   {% endif %}
 </div>
 
+{% include "_install.html" %}
 {% if user %}
 <form method="post" action="/logout" class="plogout"><input type="hidden" name="csrf" value="{{ user.csrf }}">
   <button type="submit">{{ ic("out", "sm") }} Вийти</button></form>

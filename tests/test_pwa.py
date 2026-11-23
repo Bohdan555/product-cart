@@ -70,7 +70,7 @@ def test_manifest_sw_icons_offline(tmp_path):
         sw = c.get("/sw.js")
         assert sw.headers["service-worker-allowed"] == "/" and "__CSS_V__" not in sw.text and "__VERSION__" not in sw.text
         assert c.get("/offline").status_code == 200 and c.get("/favicon.ico").status_code == 200
-        page = c.get("/").text
+        page = c.get("/me").text
         assert 'rel="manifest"' in page and "apple-touch-icon" in page and "data-install" in page
 
 

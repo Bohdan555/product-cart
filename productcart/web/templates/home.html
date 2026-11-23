@@ -15,7 +15,7 @@
   <h1 class="hm-h">Що готуємо сьогодні?</h1>
   <a class="hm-search" href="/today"><span class="hm-sico" aria-hidden="true">{{ ic("search", "sm") }}</span><span>Курка, рис, яйця…</span><b aria-hidden="true">{{ ic("mic") }}</b></a>
   <div class="hm-geo" id="hmGeo" hidden>
-    <div class="hm-geo-t"><b id="hmGeoT">Показати найближчий «Сільпо»?</b><small id="hmGeoS">Знайдемо магазин поруч і його акції. Місце не зберігаємо — лише рахуємо відстань.</small></div>
+    <div class="hm-geo-t"><b id="hmGeoT">Показати найближчий «Сільпо»?</b><small id="hmGeoS">Місце не зберігаємо.</small></div>
     <div class="hm-geo-b" id="hmGeoB"><button type="button" class="hm-geo-go" id="hmGeoGo">{{ ic("pin", "ii") }}Знайти поруч</button><button type="button" class="hm-geo-no" id="hmGeoNo">Не зараз</button></div>
   </div>
 </section>
@@ -44,7 +44,6 @@
   <span class="ck-t"><b>Готуєте: {{ cooking|map(attribute='recipe')|map(attribute='title')|join(', ')|truncate(48) }}</b><small>рецепти збережено →</small></span>
 </a>
 {% endif %}
-{% with dismiss = "pc-install-hide" %}{% include "_install.html" %}{% endwith %}
 
 {% if deals %}
 <div class="hm-sec"><h2>Гарячі акції{% if not is_demo %} поруч{% endif %}</h2><a href="/list">Усі →</a></div>
@@ -117,7 +116,8 @@
   $('hmGeoNo').onclick = function () { ls.set(LATER, String(Date.now())); hide(); };
   try { var c = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (c && render(c)) return; } catch (e) {}
   var later = +ls.get(LATER) || 0, snoozed = Date.now() - later < 7 * 864e5, refused = !!ls.get(NO);
-  function ask() { if (!snoozed && !refused && mode !== 'store') card.hidden = false; }
+  // спершу користь, потім прохання: питаємо про місце лише після першої добірки страв
+  function ask() { if (!snoozed && !refused && mode !== 'store' && ls.get('saw-dishes')) card.hidden = false; }
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
       if (st.state === 'granted') locate(true); else if (st.state === 'prompt') ask();
