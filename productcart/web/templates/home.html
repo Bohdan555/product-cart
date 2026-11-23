@@ -66,7 +66,7 @@
   if (!box || !card || !window.fetch) return;
   var $ = function (id) { return document.getElementById(id); };
   var T = $('hmLocT'), S = $('hmLocS'), A = $('hmLocA');
-  var mode = box.dataset.mode, mine = box.dataset.store, KEY = 'near-v1', LATER = 'geo-later', NO = 'geo-no';
+  var mode = box.dataset.mode, mine = box.dataset.store, KEY = 'near-v1', LATER = 'geo-later', NO = 'geo-no', OK = 'geo-ok';
   var tail = { guest: 'увійдіть, щоб бачити його акції', nolink: 'підключіть, щоб бачити його акції', pick: 'обрати цей магазин' };
   var ls = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
   var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -111,6 +111,7 @@
     if (!navigator.geolocation) { if (!quiet) show('Не вдалося визначити місце', 'Цей браузер не вміє геолокацію — оберіть магазин вручну.', false); return; }
     if (!quiet) { $('hmGeoGo').disabled = true; $('hmGeoGo').lastChild.textContent = 'Шукаємо…'; }
     navigator.geolocation.getCurrentPosition(function (p) {
+      ls.set(OK, '1');                     // дозвіл є — наступного разу питаємо місце одразу
       fetch('/near?lat=' + p.coords.latitude.toFixed(3) + '&lon=' + p.coords.longitude.toFixed(3), { credentials: 'same-origin' })
         .then(function (r) { return r.json(); }).then(function (d) {
           d._t = Date.now(); try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
@@ -118,7 +119,7 @@
           else show('Поруч «Сільпо» не знайшли', 'У радіусі 50 км немає магазинів. Оберіть магазин вручну в профілі.', false);
         }).catch(hide);
     }, function (e) {
-      if (e && e.code === 1) { if (!quiet) denied(); }
+      if (e && e.code === 1) { try { localStorage.removeItem(OK); } catch (x) {} if (!quiet) denied(); }
       else if (!quiet) show('Не вдалося визначити місце', 'Спробуйте ще раз на вулиці або оберіть магазин вручну.', true);
       if ($('hmGeoGo')) { $('hmGeoGo').disabled = false; $('hmGeoGo').lastChild.textContent = 'Знайти поруч'; }
     }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 });
@@ -130,7 +131,9 @@
   // спершу користь, потім прохання: питаємо про місце лише після першої добірки страв
   // з підключеним «Сільпо» — питаємо одразу (щоб магазин був найближчий); іншим — після першої добірки страв
   var linked = mode === 'store' || mode === 'pick';
-  function ask() { if (!snoozed && !refused && (linked || ls.get('saw-dishes'))) card.hidden = false; }
+  function ask() { if (!refused && (linked || (!snoozed && ls.get('saw-dishes')))) card.hidden = false; }
+  // Safari (iPhone) не каже, що дозвіл уже дано, — якщо місце вже раз визначали, просто питаємо його знову
+  if (ls.get(OK)) { locate(true); return; }
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
       if (st.state === 'granted') locate(true); else if (st.state === 'prompt') ask();
