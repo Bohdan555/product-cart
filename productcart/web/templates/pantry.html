@@ -17,7 +17,7 @@
   {% for x in rows %}
   <button type="button" class="pn-row" data-key="{{ x.key }}" data-name="{{ x.name }}" data-emoji="{{ x.emoji }}" data-date="{{ x.date if x.manual else '' }}">
     <span class="e" aria-hidden="true">{{ x.emoji }}</span><span class="n">{{ x.name }}</span>
-    {% if x.label %}<span class="pn-b {{ 'r' if x.left is not none and x.left <= 1 else ('o' if x.left is not none and x.left <= 7 else 'g') }}">{{ x.label }}</span>{% endif %}
+    {% if x.label %}<span class="pn-b {{ 'r' if x.left is not none and x.left <= 1 else ('o' if x.left is not none and x.left <= 7 else 'g') }}">{% if not x.manual %}≈ {% endif %}{{ x.label }}</span>{% endif %}
   </button>
   {% endfor %}
 </div>
@@ -29,6 +29,7 @@
 </div>
 {% endif %}
 
+{% if groups %}<p class="pn-note">≈ — приблизний термін за видом продукту. Точну дату з упаковки можна вказати: торкніться продукту.</p>{% endif %}
 {% if cook_url %}<a class="btn pn-cook" href="{{ cook_url }}">{{ ic("pan", "sm") }} Що приготувати з цього</a>{% endif %}
 
 <dialog class="pn-sheet" id="pnSheet" aria-labelledby="pnT">

@@ -130,7 +130,7 @@ def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
         st = c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()
         xp = [m for _, m in push.sent if m["tag"] == "expiry"]
         assert st.get("expiry") == 1 and len(xp) == 1 and xp[0]["url"].startswith("/today/dishes?")       # один зведений push
-        assert "фарш — сьогодні" in xp[0]["body"] and "кефір — післязавтра" in xp[0]["body"] and "2 продукти" in xp[0]["title"]
+        assert "фарш — ≈ сьогодні" in xp[0]["body"] and "кефір — ≈ післязавтра" in xp[0]["body"] and "приблизно" in xp[0]["body"] and "2 продукти" in xp[0]["title"]
         conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
         push.sent.clear()
         c.get("/cron/notify", headers={"authorization": "Bearer test-cron"})

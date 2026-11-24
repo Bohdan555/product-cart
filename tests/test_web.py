@@ -1020,7 +1020,7 @@ def test_expiry_home_block_and_cooked(client):
     data["fridge_since"]["minced"] = (date.today() - timedelta(days=2)).isoformat()
     conn.execute("UPDATE profiles SET data=? WHERE user_id=?", (json.dumps(data), row["user_id"]))
     home = client.get("/").text
-    assert "Варто використати" in home and "фарш · сьогодні" in home and "твердий сир" not in home
+    assert "Варто використати" in home and "фарш · ≈ сьогодні" in home and "приблизн" not in home and "твердий сир" not in home
     assert 'name="tg_expiry"' in client.get("/notify").text
     client.post("/cook/done", data={"csrf": token, "id": "flotski"})
     data = json.loads(conn.execute("SELECT data FROM profiles").fetchone()["data"])
@@ -1072,9 +1072,11 @@ def test_pantry_page_add_remove_groups(client):
     page = client.get("/pantry").text
     assert "Використати скоро" in page and "Довго" in page and "Інше" in page and "Кетчуп" in page
     assert page.index('data-key="minced"') < page.index('data-key="eggs"')    # терміновіше — вище
-    assert "фарш · завтра" in client.get("/").text.lower() or "Фарш" in client.get("/").text
+    assert "фарш · ≈ завтра" in client.get("/").text
     client.post("/fridge/expiry", data={"csrf": token, "key": "eggs", "date": date.today().isoformat()})
-    assert "сьогодні" in client.get("/pantry").text
+    page = client.get("/pantry").text
+    assert "сьогодні" in page and "≈ сьогодні" not in page                        # дата з упаковки — без «≈»
+    assert "≈ завтра" in page and "приблизний термін" in page                       # фарш — оцінка за видом продукту
     client.post("/pantry/remove", data={"csrf": token, "key": "minced"})
     client.post("/pantry/remove", data={"csrf": token, "other": "Кетчуп"})
     page = client.get("/pantry").text

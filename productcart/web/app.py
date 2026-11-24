@@ -524,7 +524,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         soon = menu.expiring(p.fridge_since, p.fridge, within=1, until=p.fridge_until) if u else []
         soon_url = (f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}" if soon else None)
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
-                      soon=[(k, menu.INGREDIENTS[k][0], menu.PANTRY_WORDS.get(k, ("", "🥫"))[1], menu.when_label(d))
+                      soon=[(k, menu.INGREDIENTS[k][0], menu.PANTRY_WORDS.get(k, ("", "🥫"))[1],
+                             ("" if p.fridge_until.get(k) else "≈ ") + menu.when_label(d))     # ≈ — приблизно, за видом продукту
                             for k, d in soon], soon_url=soon_url, p_fridge_n=len(p.fridge) + len(p.fridge_other),
                       near=near_ip[0] if near_ip else None,
                       meal=meal, people=p.household or 2)
@@ -2646,10 +2647,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         soon = menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until) if p.tg_expiry and p.fridge and has_push else []
         xk = "x:" + date.today().isoformat()
         if soon and not conn.execute("SELECT 1 FROM tg_sent WHERE user_id=? AND key=?", (uid, xk)).fetchone():
-            names = ", ".join(f"{menu.INGREDIENTS[k][0].lower()} — {menu.when_label(d)}" for k, d in soon)
+            names = ", ".join(f"{menu.INGREDIENTS[k][0].lower()} — {'' if p.fridge_until.get(k) else '≈ '}{menu.when_label(d)}"
+                              for k, d in soon)
+            approx = any(not p.fridge_until.get(k) for k, _ in soon)
             url = f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}"
             title = f"⏳ Скоро зіпсується: {len(soon)} {plural(len(soon), 'продукт', 'продукти', 'продуктів')}"
-            if await deliver(f"⏳ Варто використати: {names}.\nПідібрали страви з того, що є вдома.",
+            if approx:
+                names += " (≈ приблизно)"
+            if await deliver(f"⏳ Варто використати: {names}.\n" + ("≈ — приблизний термін за видом продукту, точна дата — на упаковці.\n" if approx else "")
+                             + "Підібрали страви з того, що є вдома.",
                              ("Що приготувати", base_url + url), title, names, url, "expiry",
                              telegram=False):      # лише push на телефон
                 conn.execute("INSERT INTO tg_sent (user_id, key, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",

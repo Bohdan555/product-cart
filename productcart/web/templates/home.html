@@ -34,7 +34,7 @@
 <a class="xp-card" href="{{ soon_url }}">
   <span class="xp-ic" aria-hidden="true">{{ ic("clock") }}</span>
   <span class="xp-t"><b>Варто використати</b>
-    <span class="xp-list">{% for k, name, emo, when in soon %}<span class="xp-chip{% if when == 'сьогодні' %} hot{% endif %}"><i aria-hidden="true">{{ emo }}</i>{{ name|lower }} · {{ when }}</span>{% endfor %}</span>
+    <span class="xp-list">{% for k, name, emo, when in soon %}<span class="xp-chip{% if when.endswith('сьогодні') %} hot{% endif %}"><i aria-hidden="true">{{ emo }}</i>{{ name|lower }} · {{ when }}</span>{% endfor %}</span>
     <small>Що приготувати з цього →</small></span>
 </a>
 {% endif %}

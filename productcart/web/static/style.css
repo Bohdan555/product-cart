@@ -1628,3 +1628,4 @@ body:has(.admin-page) .dock{display:none}
 .ms-seg span{display:grid;place-items:center;min-height:44px;border-radius:var(--r-sm);font:700 14px var(--body);cursor:pointer;white-space:nowrap}
 .ms-seg input:checked+span{background:var(--card);box-shadow:var(--sh-soft)}
 .ms-seg input:focus-visible+span{outline:2px solid var(--ink)}
+.pn-note{font-size:13px;color:var(--muted);margin:10px 2px 0}
