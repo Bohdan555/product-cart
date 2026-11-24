@@ -1668,3 +1668,6 @@ html.sk-wait .wrap{opacity:1}
   .box svg path{transition:none}
   :where(.btn,button,.l-btn,.pcard,.eat-open,.xp-card,.ck-card,.hm-deal,.hm-fridge,.hm-me,.prow,.brow,.fchip,.daychips button,.td-cart,.bgo){transition:none}
 }
+/* Згорнуті групи («Запаси», «Є вдома»): Safari не робить <details> grid-контейнером, тож проміжок задаємо відступом */
+.mlist details.group{display:block}
+.mlist details.group>.brow{margin-top:8px}
