@@ -353,6 +353,10 @@ from . import recipes_extra as _extra  # noqa: E402 — третя порція:
 RECIPES += _extra.dinners(_r)
 RECIPES += [replace(r, meals=frozenset({"breakfast"})) for r in _extra.breakfasts(_r)]
 RECIPES += [replace(r, meals=frozenset({"salad"})) for r in _extra.salads(_r)]
+from . import recipes_ua as _ua  # noqa: E402 — четверта порція: українська домашня кухня
+RECIPES += _ua.dinners(_r)
+RECIPES += [replace(r, meals=frozenset({"breakfast"})) for r in _ua.breakfasts(_r)]
+RECIPES += [replace(r, meals=frozenset({"salad"})) for r in _ua.salads(_r)]
 RECIPE_BY_ID = {r.id: r for r in RECIPES}
 
 # ---------- власні страви користувача ----------
