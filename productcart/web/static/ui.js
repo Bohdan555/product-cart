@@ -75,7 +75,8 @@
 
   // Фото для розпізнавання: зменшуємо до 1568 px (швидше й дешевше). Якщо телефон не вміє декодувати
   // (рідкісні формати, старі вбудовані браузери) — віддаємо оригінал, аби фото все одно пішло.
-  window.shrinkPhoto = function (file) {
+  window.shrinkPhoto = function (file, max) {   // max — довша сторона (чек — 2000, щоб читався дрібний шрифт)
+    max = max || 1568;
     return new Promise(function (ok) {
       var done = false, url = null;
       function give(x) { if (done) return; done = true; if (url) { try { URL.revokeObjectURL(url); } catch (e) {} } ok(x || file); }
@@ -83,7 +84,7 @@
       var img = new Image();
       img.onload = function () {
         try {
-          var k = Math.min(1, 1568 / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+          var k = Math.min(1, max / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
           var c = document.createElement('canvas');
           c.width = Math.max(1, Math.round((img.naturalWidth || img.width) * k)); c.height = Math.max(1, Math.round((img.naturalHeight || img.height) * k));
           c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);

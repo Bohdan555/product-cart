@@ -2252,10 +2252,14 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return JSONResponse({"error": "Сторінка застаріла. Оновіть її."}, status_code=400)
         p, health = load_profile(u["id"])
         today_s = date.today().isoformat()
+        bought = fridge.receipt_date(str(form.get("since", "")))   # дата покупки з чека — точніший відлік терміну
         for k in form.getlist("key"):
             if k in menu.INGREDIENTS and k not in p.fridge:
                 p.fridge.append(k)
-                p.fridge_since[k] = today_s
+                p.fridge_since[k] = bought or today_s
+            elif k in p.fridge and bought and bought > p.fridge_since.get(k, ""):
+                p.fridge_since[k] = bought          # купили свіже — відлік з нової покупки
+                p.fridge_until.pop(k, None)
         for x in form.getlist("other"):
             x = str(x).strip()[:60]
             if x and x.lower() not in {o.lower() for o in p.fridge_other} and len(p.fridge_other) < 40:
@@ -2313,6 +2317,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         analytics.track(conn, u["id"], "fridge_expiry_set", manual=bool(val))
         return JSONResponse(fridge_term(p, key))
 
+    @app.get("/fridge/badge")
+    def fridge_badge(request: Request):
+        """Число на іконці встановленої апки: скільки продуктів зіпсується за ≤ 2 дні (0 — прибрати значок)."""
+        u = user_of(request)
+        if u is None:
+            return JSONResponse({"n": 0}, headers={"Cache-Control": "no-store"})
+        p, _ = load_profile(u["id"])
+        n = len(menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until)) if p.tg_expiry and p.fridge else 0
+        return JSONResponse({"n": n}, headers={"Cache-Control": "no-store"})
+
     @app.post("/fridge/scan")
     async def fridge_scan(request: Request):
         """Фото → список продуктів (JSON). Фото не зберігаємо."""
@@ -2329,9 +2343,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return JSONResponse({"error": "Потрібне фото JPG, PNG або WebP до 8 МБ"}, status_code=400)
         if fridge_scans_today(u["id"]) >= FRIDGE_PER_DAY:
             return JSONResponse({"error": "На сьогодні досить фото — спробуйте завтра"}, status_code=429)
-        analytics.track(conn, u["id"], "fridge_scan", size_kb=len(data) // 1024)
+        kind = "receipt" if form.get("kind") == "receipt" else "fridge"
+        analytics.track(conn, u["id"], "receipt_scan" if kind == "receipt" else "fridge_scan", size_kb=len(data) // 1024)
         try:
-            items = await asyncio.to_thread(vision, data, media, request.headers.get("x-vercel-oidc-token"))
+            oidc = request.headers.get("x-vercel-oidc-token")
+            items = await asyncio.to_thread(vision, data, media, oidc, kind) if kind == "receipt" else \
+                await asyncio.to_thread(vision, data, media, oidc)
         except fridge.NotConfigured:
             log.warning("Холодильник: розпізнавання не налаштоване (немає ключа)")
             return JSONResponse({"error": "Розпізнавання фото ще налаштовується. Додайте продукти вручну нижче."}, status_code=503)
@@ -2481,12 +2498,17 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def push_subs(user_id: int) -> list:
         return conn.execute("SELECT endpoint, p256dh, auth FROM push_subs WHERE user_id=?", (user_id,)).fetchall()
 
-    def push_user(user_id: int, title: str, body: str, url: str = "/", tag: str | None = None) -> int:
-        """Надсилає на всі пристрої людини. Повертає, на скільки дійшло. Відписані — прибираємо."""
+    def push_user(user_id: int, title: str, body: str, url: str = "/", tag: str | None = None,
+                  badge: int | None = None) -> int:
+        """Надсилає на всі пристрої людини. Повертає, на скільки дійшло. Відписані — прибираємо.
+        badge — число на іконці встановленої апки (скільки продуктів скоро зіпсується)."""
         ok = 0
+        msg = {"title": title, "body": body[:240], "url": url, "tag": tag}
+        if badge is not None:
+            msg["badge"] = badge
         for r in push_subs(user_id):
             try:
-                if push_send(vapid, dict(r), {"title": title, "body": body[:240], "url": url, "tag": tag}):
+                if push_send(vapid, dict(r), msg):
                     ok += 1
             except webpush.Gone:
                 conn.execute("DELETE FROM push_subs WHERE endpoint=?", (r["endpoint"],))
@@ -2658,12 +2680,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         has_push = bool(push_subs(uid))
 
         async def deliver(tg_text: str, tg_btn: tuple[str, str], title: str, body: str, url: str, tag: str,
-                          telegram: bool = True) -> bool:
+                          telegram: bool = True, badge: int | None = None) -> bool:
             ok = False
             if telegram and chat and tg.enabled:
                 ok = await asyncio.to_thread(tg.send, chat, tg_text, [tg_btn]) or ok
             if has_push:
-                ok = bool(await asyncio.to_thread(push_user, uid, title, body, url, tag)) or ok
+                ok = bool(await asyncio.to_thread(push_user, uid, title, body, url, tag, badge)) or ok
             return ok
 
         p, health = load_profile(uid)
@@ -2681,7 +2703,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             if await deliver(f"⏳ Варто використати: {names}.\n" + ("≈ — приблизний термін за видом продукту, точна дата — на упаковці.\n" if approx else "")
                              + "Підібрали страви з того, що є вдома.",
                              ("Що приготувати", base_url + url), title, names, url, "expiry",
-                             telegram=False):      # лише push на телефон
+                             telegram=False, badge=len(soon)):      # лише push на телефон + число на іконці
                 conn.execute("INSERT INTO tg_sent (user_id, key, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
                              (uid, xk, security.iso(security.now())))
                 st["expiry"] = st.get("expiry", 0) + 1

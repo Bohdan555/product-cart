@@ -33,13 +33,22 @@ SYSTEM = (
 )
 
 
+RECEIPT = (
+    "Ти допомагаєш вести список продуктів удома. На фото — касовий чек магазину. Перелічи лише харчові продукти з чека "
+    "(без пакетів, побутової хімії, косметики, знижок і підсумків). Для кожного дай коротку назву українською без бренду "
+    "й ваги (\"Молоко\", \"Філе куряче\"), ключ із довідника інгредієнтів, якщо продукт йому відповідає (інакше \"other\"), "
+    "кількість чи вагу з чека, і чи ти впевнений. Окремо — дату покупки з чека у форматі РРРР-ММ-ДД "
+    "(порожній рядок, якщо дати не видно). Якщо це не чек — поверни порожній список."
+)
+
+
 class NotConfigured(RuntimeError):
     """Немає ні ключа Anthropic, ні токена Vercel OIDC / AI Gateway."""
 
 
-def schema() -> dict:
+def schema(receipt: bool = False) -> dict:
     keys = sorted(menu.INGREDIENTS) + ["other"]
-    return {
+    out = {
         "type": "object",
         "properties": {
             "items": {"type": "array", "items": {
@@ -57,6 +66,10 @@ def schema() -> dict:
         "required": ["items"],
         "additionalProperties": False,
     }
+    if receipt:
+        out["properties"]["date"] = {"type": "string"}
+        out["required"] = ["items", "date"]
+    return out
 
 
 def dictionary() -> str:
@@ -107,25 +120,27 @@ def make_client(oidc_token: str | None):
     return client, gateway_candidates()
 
 
-def _ask(client, model: str, image: bytes, media_type: str):
-    out = {"format": {"type": "json_schema", "schema": schema()}}
+def _ask(client, model: str, image: bytes, media_type: str, receipt: bool = False):
+    out = {"format": {"type": "json_schema", "schema": schema(receipt)}}
     if not any(x in model for x in NO_EFFORT):
         out["effort"] = "low"
     return client.messages.create(
         model=model,
         max_tokens=4000,
         output_config=out,
-        system=SYSTEM + "\n\nДовідник інгредієнтів (ключ: назва):\n" + dictionary(),
+        system=(RECEIPT if receipt else SYSTEM) + "\n\nДовідник інгредієнтів (ключ: назва):\n" + dictionary(),
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                          "data": base64.standard_b64encode(image).decode()}},
-            {"type": "text", "text": "Що з продуктів є на фото?"},
+            {"type": "text", "text": "Які продукти куплено за цим чеком?" if receipt else "Що з продуктів є на фото?"},
         ]}],
     )
 
 
-def recognize(image: bytes, media_type: str, oidc_token: str | None = None) -> list[dict]:
-    """Фото → [{name, ingredient, amount, confident}]. Перша модель, до якої пускає шлюз."""
+def recognize(image: bytes, media_type: str, oidc_token: str | None = None, kind: str = "fridge") -> list[dict]:
+    """Фото → [{name, ingredient, amount, confident}]. Перша модель, до якої пускає шлюз.
+    kind="receipt" — фото чека: до кожного продукту додаємо "bought" — дату покупки з чека (або "")."""
+    receipt = kind == "receipt"
     import anthropic
 
     client, models = make_client(oidc_token)
@@ -133,7 +148,7 @@ def recognize(image: bytes, media_type: str, oidc_token: str | None = None) -> l
     last: Exception | None = None
     for model in models:
         try:
-            response = _ask(client, model, image, media_type)
+            response = _ask(client, model, image, media_type, receipt)
         except (anthropic.PermissionDeniedError, anthropic.NotFoundError, anthropic.BadRequestError) as e:
             if not _blocked(e) and not isinstance(e, anthropic.NotFoundError):
                 raise
@@ -147,11 +162,17 @@ def recognize(image: bytes, media_type: str, oidc_token: str | None = None) -> l
         if response.stop_reason == "refusal":
             raise RuntimeError("модель відмовилась розпізнавати це фото")
         text = next((b.text for b in response.content if b.type == "text"), "")
-        items = json.loads(text).get("items", []) if text else []
-        logs.event(log, "fridge.scan", model=model, items=len(items), ms=round((time.perf_counter() - t) * 1000),
+        data = json.loads(text) if text else {}
+        items = data.get("items", [])
+        logs.event(log, "fridge.scan", model=model, items=len(items), kind=kind, ms=round((time.perf_counter() - t) * 1000),
                    in_tokens=getattr(response.usage, "input_tokens", None),
                    out_tokens=getattr(response.usage, "output_tokens", None))
-        return clean(items)
+        out = clean(items)
+        if receipt:
+            bought = receipt_date(str(data.get("date") or ""))
+            for it in out:
+                it["bought"] = bought
+        return out
     raise last or RuntimeError("немає доступної моделі")
 
 
@@ -168,3 +189,14 @@ def clean(items: list[dict]) -> list[dict]:
         out.append({"name": name, "ingredient": key, "amount": str(it.get("amount") or "")[:40],
                     "confident": bool(it.get("confident", True))})
     return out
+
+
+def receipt_date(text: str, today=None) -> str:
+    """Дата з чека → «РРРР-ММ-ДД», лише якщо вона правдоподібна: не в майбутньому й не давніше 60 днів."""
+    from datetime import date, timedelta
+    today = today or date.today()
+    try:
+        d = date.fromisoformat(text.strip()[:10])
+    except ValueError:
+        return ""
+    return d.isoformat() if today - timedelta(days=60) <= d <= today else ""

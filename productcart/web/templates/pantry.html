@@ -8,6 +8,7 @@
 <div class="pn-add" id="pnAdd">
   <div class="pn-say">{% include "_say.html" %}</div>
   <label class="pn-cam" aria-label="Сфотографувати холодильник">{{ ic("camera") }}<input type="file" accept="image/*" id="pnPhoto"></label>
+  <label class="pn-cam" aria-label="Сфотографувати чек — додамо куплене з датою покупки">{{ ic("receipt") }}<input type="file" accept="image/*" id="pnReceipt"></label>
 </div>
 <p class="pn-state" id="pnState" aria-live="polite"></p>
 
@@ -53,29 +54,31 @@
     return fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
   }
   function reload() { if (window.Turbo) Turbo.visit(location.pathname, { action: 'replace' }); else location.reload(); }
-  function add(keys, others) {
+  function add(keys, others, since) {
     if (!keys.length && !others.length) return;
     $('pnState').textContent = 'Зберігаємо…';
-    post('/pantry/add', { key: keys, other: others }).then(reload).catch(function () { $('pnState').textContent = 'Не вдалося зберегти. Перевірте інтернет.'; });
+    post('/pantry/add', { key: keys, other: others, since: since || '' }).then(reload).catch(function () { $('pnState').textContent = 'Не вдалося зберегти. Перевірте інтернет.'; });
   }
   window.initSay({ words: {{ words|tojson }}, inline: false, onAdd: add });
 
-  $('pnPhoto').addEventListener('change', function () {
-    var f = this.files && this.files[0]; if (!f) return;
-    $('pnState').textContent = 'Дивимось, що на фото…';
-    var input = this;
-    window.shrinkPhoto(f).then(function (blob) {
+  // фото холодильника або чека: чек — ще й дата покупки, від неї рахуємо термін
+  function scan(input, kind) {
+    var f = input.files && input.files[0]; if (!f) return;
+    $('pnState').textContent = kind === 'receipt' ? 'Читаємо чек…' : 'Дивимось, що на фото…';
+    window.shrinkPhoto(f, kind === 'receipt' ? 2000 : undefined).then(function (blob) {
       input.value = '';
-      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('photo', blob, 'fridge.jpg');
+      var fd = new FormData(); fd.append('csrf', CSRF); fd.append('photo', blob, kind + '.jpg'); fd.append('kind', kind);
       return fetch('/fridge/scan', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
     }).then(function (d) {
       if (d.error) { $('pnState').textContent = d.error; return; }
       var keys = d.items.filter(function (x) { return x.ingredient !== 'other'; }).map(function (x) { return x.ingredient; });
       var others = d.items.filter(function (x) { return x.ingredient === 'other'; }).map(function (x) { return x.name; });
-      if (!keys.length && !others.length) { $('pnState').textContent = 'Їжі на фото не видно. Спробуйте ближче.'; return; }
-      add(keys, others);
+      if (!keys.length && !others.length) { $('pnState').textContent = kind === 'receipt' ? 'Продуктів у чеку не знайшли. Сфотографуйте ближче й рівніше.' : 'Їжі на фото не видно. Спробуйте ближче.'; return; }
+      add(keys, others, (d.items[0] || {}).bought);
     }).catch(function () { $('pnState').textContent = 'Не вдалося надіслати фото.'; });
-  });
+  }
+  $('pnPhoto').addEventListener('change', function () { scan(this, 'fridge'); });
+  $('pnReceipt').addEventListener('change', function () { scan(this, 'receipt'); });
 
   document.querySelectorAll('.pn-row').forEach(function (b) {
     b.addEventListener('click', function () {

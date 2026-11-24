@@ -36,6 +36,8 @@
 {% if d.recipe.steps %}
 <h2 class="td-h">Як готувати</h2>
 <ol class="td-steps">{% for s in d.recipe.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+{% set ns = namespace(ings=[]) %}{% for k, q in d.ingredients.items() %}{% set ns.ings = ns.ings + [name_visual(ingredients[k][0]).emoji ~ ' ' ~ ingredients[k][0] ~ ' — ' ~ fmt_qty(q, ingredients[k][1])] %}{% endfor %}{% for x in d.recipe.extras %}{% set ns.ings = ns.ings + [name_visual(x).emoji ~ ' ' ~ x] %}{% endfor %}
+{% from "_cookmode.html" import cookmode with context %}{{ cookmode(d.title, d.recipe.steps, ns.ings) }}
 {% endif %}
 
 {% from "_vote.html" import vote with context %}{{ vote(d.id, p, user) }}

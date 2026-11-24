@@ -81,6 +81,20 @@ document.addEventListener('turbo:load', markTab);
   });
   window.addEventListener('pageshow', done);
 })();
+// Значок на іконці встановленої апки: скільки продуктів скоро зіпсується (не частіше ніж раз на 5 хв; у «Холодильнику» — завжди)
+{% if user %}(function () {
+  if (!('setAppBadge' in navigator) || !window.fetch) return;
+  function sync() {
+    var t = 0; try { t = +sessionStorage.getItem('badge-at') || 0; } catch (e) {}
+    if (location.pathname !== '/pantry' && Date.now() - t < 5 * 6e4) return;
+    try { sessionStorage.setItem('badge-at', Date.now()); } catch (e) {}
+    fetch('/fridge/badge', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      (d.n ? navigator.setAppBadge(d.n) : navigator.clearAppBadge()).catch(function () {});
+    }).catch(function () {});
+  }
+  document.addEventListener('turbo:load', sync);
+})();{% else %}if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(function () {});   // вийшли з акаунта
+{% endif %}
 // PWA: service worker (офлайн-копії сторінок і push). Вихід з акаунта — прибираємо збережені сторінки.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });

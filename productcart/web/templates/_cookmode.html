@@ -1,0 +1,157 @@
+{# Режим «Готую»: кроки на весь екран, таймери з кроку, екран не гасне, озвучення й «далі» голосом.
+   Виклик: {% from "_cookmode.html" import cookmode with context %}{{ cookmode(title, steps, ings) }}
+   ings — список рядків «🥕 Морква — 150 г» (перший екран «Підготуйте»). #}
+{% macro cookmode(title, steps, ings) %}
+<button type="button" class="btn alt cm-open" id="cmOpen">{{ ic("chef", "mid") }} Готувати покроково</button>
+<dialog class="cm" id="cm" aria-label="Покроковий режим: {{ title }}">
+  <div class="cm-top">
+    <button type="button" class="cm-x" id="cmX" aria-label="Закрити">✕</button>
+    <span class="cm-n" id="cmN" aria-live="polite"></span>
+    <button type="button" class="cm-tog" id="cmSpeak" aria-pressed="false" aria-label="Читати кроки вголос">{{ ic("speaker", "sm") }}</button>
+    <button type="button" class="cm-tog" id="cmMic" aria-pressed="false" aria-label="Керувати голосом: «далі», «назад», «таймер»" hidden>{{ ic("mic", "sm") }}</button>
+  </div>
+  <div class="cm-bar"><i id="cmBar"></i></div>
+  <div class="cm-timers" id="cmTimers" aria-live="polite"></div>
+  <div class="cm-body" id="cmBody"></div>
+  <button type="button" class="cm-timer" id="cmTimer" hidden>{{ ic("clock", "sm") }} <span></span></button>
+  <p class="cm-hint" id="cmHint"></p>
+  <div class="cm-nav">
+    <button type="button" class="btn alt" id="cmPrev">Назад</button>
+    <button type="button" class="btn" id="cmNext">Далі</button>
+  </div>
+</dialog>
+<script type="application/json" id="cmData">{{ {"title": title, "steps": steps|list, "ings": ings|list}|tojson }}</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById('cmData').textContent), $ = function (id) { return document.getElementById(id); };
+  var dlg = $('cm'), i = 0, lock = null, speak = false, rec = null, listening = false, timers = [], tick = null;
+  try { speak = localStorage.getItem('cm-speak') === '1'; } catch (e) {}
+  var pages = (D.ings.length ? [{ ings: D.ings }] : []).concat(D.steps.map(function (s) { return { text: s }; }));
+
+  // «варіть 15 хвилин», «4–5 хвилин», «1,5 години», «2 год» → секунди (з діапазону беремо більше число)
+  function minutesIn(t) {
+    var m = /(\d+(?:[,.]\d+)?)(?:\s*[–-]\s*(\d+(?:[,.]\d+)?))?\s*(хвилин|хвилини|хвилину|хв|годин|години|годину|год)/i.exec(t);
+    if (!m) return 0;
+    var v = parseFloat((m[2] || m[1]).replace(',', '.'));
+    return Math.round(v * (/^год/i.test(m[3]) ? 60 : 1) * 60);
+  }
+  function fmt(s) { s = Math.max(0, Math.ceil(s)); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
+  function label(sec) { var m = Math.round(sec / 60); return m >= 60 ? (m / 60).toString().replace('.', ',') + ' год' : m + ' хв'; }
+
+  function show() {
+    var p = pages[i], body = $('cmBody'); body.innerHTML = '';
+    var stepNo = D.ings.length ? i : i + 1, total = D.steps.length;
+    $('cmN').textContent = p.ings ? 'Підготуйте' : 'Крок ' + stepNo + ' з ' + total;
+    $('cmBar').style.width = (pages.length > 1 ? i / (pages.length - 1) * 100 : 100) + '%';
+    if (p.ings) {
+      var h = document.createElement('b'); h.className = 'cm-h'; h.textContent = D.title; body.appendChild(h);
+      var ul = document.createElement('ul'); ul.className = 'cm-ings';
+      p.ings.forEach(function (x) { var li = document.createElement('li'); li.textContent = x; ul.appendChild(li); });
+      body.appendChild(ul);
+    } else {
+      var t = document.createElement('p'); t.className = 'cm-step'; t.textContent = p.text; body.appendChild(t);
+    }
+    var sec = p.text ? minutesIn(p.text) : 0, tb = $('cmTimer');
+    tb.hidden = !sec || timers.some(function (x) { return x.step === i; });
+    if (sec) { tb.dataset.sec = sec; tb.lastElementChild.textContent = 'Таймер ' + label(sec); }
+    $('cmPrev').disabled = i === 0;
+    $('cmNext').textContent = i === pages.length - 1 ? 'Готово 🎉' : 'Далі';
+    body.classList.remove('in'); void body.offsetWidth; body.classList.add('in');
+    if (speak) say(p.ings ? 'Підготуйте: ' + p.ings.join(', ').replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, '') : p.text);
+  }
+  function go(d) {
+    if (i + d >= pages.length) { close(); if (window.celebrate) celebrate(); return; }
+    i = Math.max(0, Math.min(pages.length - 1, i + d)); show(); if (window.haptic) haptic(10);
+  }
+
+  // ---- таймери: живуть, поки відкрита сторінка; час рахуємо від кінця, тож не «відстають» у фоні ----
+  function startTimer() {
+    var sec = +$('cmTimer').dataset.sec; if (!sec) return;
+    timers.push({ step: i, end: Date.now() + sec * 1000, name: 'Крок ' + (D.ings.length ? i : i + 1) });
+    $('cmTimer').hidden = true; renderTimers();
+    if (!tick) tick = setInterval(renderTimers, 500);
+    unlockAudio();
+  }
+  function renderTimers() {
+    var box = $('cmTimers'); box.innerHTML = '';
+    timers = timers.filter(function (t) {
+      var left = (t.end - Date.now()) / 1000;
+      if (left <= 0 && !t.rang) { t.rang = true; ring(t); }
+      if (t.rang && Date.now() - t.end > 60000) return false;          // через хвилину після дзвінка — прибираємо
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'cm-chip' + (left <= 0 ? ' done' : '');
+      b.textContent = (left <= 0 ? '⏰ ' + t.name + ' — час!' : '⏱ ' + t.name + ' · ' + fmt(left));
+      b.setAttribute('aria-label', left <= 0 ? t.name + ': час вийшов, прибрати' : t.name + ': лишилось ' + fmt(left) + ', торкніться, щоб скасувати');
+      b.onclick = function () { timers = timers.filter(function (x) { return x !== t; }); renderTimers(); show(); };
+      box.appendChild(b); return true;
+    });
+    if (!timers.length && tick) { clearInterval(tick); tick = null; }
+  }
+  var ac = null;
+  function unlockAudio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) {} }
+  function ring(t) {
+    try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); } catch (e) {}
+    try {
+      unlockAudio();
+      [0, 0.35, 0.7].forEach(function (d) {
+        var o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, ac.currentTime + d); g.gain.exponentialRampToValueAtTime(0.4, ac.currentTime + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d + 0.28); o.start(ac.currentTime + d); o.stop(ac.currentTime + d + 0.3);
+      });
+    } catch (e) {}
+    if (window.toast) toast('⏰ ' + t.name + ' — час!');
+    if (speak) say(t.name + ': час вийшов');
+    // апка у фоні й сповіщення вже дозволені — показуємо сповіщення (нового дозволу не просимо)
+    if (document.hidden && window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) {
+      navigator.serviceWorker.ready.then(function (r) { r.showNotification('⏰ ' + t.name + ' — час!', { body: D.title, tag: 'cm-timer', icon: '/static/icons/icon-192.png' }); }).catch(function () {});
+    }
+  }
+
+  // ---- екран не гасне, поки режим відкритий ----
+  function wake() { if ('wakeLock' in navigator && dlg.open && !document.hidden) navigator.wakeLock.request('screen').then(function (l) { lock = l; }).catch(function () {}); }
+  document.addEventListener('visibilitychange', wake);
+
+  // ---- голос: читаємо крок і слухаємо «далі» ----
+  function say(text) {
+    if (!window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); var u = new SpeechSynthesisUtterance(text); u.lang = 'uk-UA'; u.rate = 1;
+      var v = speechSynthesis.getVoices().filter(function (x) { return /^uk/i.test(x.lang); })[0]; if (v) u.voice = v;
+      speechSynthesis.speak(u); } catch (e) {}
+  }
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) $('cmMic').hidden = false;
+  function listen(on) {
+    listening = on; $('cmMic').setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('cmHint').textContent = on ? 'Скажіть «далі», «назад», «повтори» або «таймер»' : '';
+    if (!on) { if (rec) try { rec.abort(); } catch (e) {} rec = null; return; }
+    rec = new SR(); rec.lang = 'uk-UA'; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = function (e) {
+      var t = e.results[e.results.length - 1][0].transcript.toLowerCase();
+      if (/дал|наступ|вперед/.test(t)) go(1); else if (/назад|попередн/.test(t)) go(-1);
+      else if (/повтор|ще раз/.test(t)) { var p = pages[i]; say(p.text || ''); } else if (/таймер|старт|засік/.test(t)) startTimer();
+    };
+    rec.onend = function () { if (listening && dlg.open) try { rec.start(); } catch (e) {} };
+    rec.onerror = function (e) { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { listen(false); $('cmHint').textContent = 'Немає доступу до мікрофона'; } };
+    try { rec.start(); } catch (e) {}
+  }
+
+  function open() { i = 0; dlg.showModal(); show(); wake(); $('cmSpeak').setAttribute('aria-pressed', speak ? 'true' : 'false'); }
+  function close() {
+    if (dlg.open) dlg.close();
+  }
+  dlg.addEventListener('close', function () { if (lock) { lock.release().catch(function () {}); lock = null; } listen(false); if (window.speechSynthesis) speechSynthesis.cancel(); });
+  $('cmOpen').onclick = open; $('cmX').onclick = close;
+  $('cmPrev').onclick = function () { go(-1); }; $('cmNext').onclick = function () { go(1); };
+  $('cmTimer').onclick = startTimer;
+  $('cmSpeak').onclick = function () { speak = !speak; this.setAttribute('aria-pressed', speak ? 'true' : 'false');
+    try { localStorage.setItem('cm-speak', speak ? '1' : '0'); } catch (e) {} if (speak) { var p = pages[i]; say(p.text || D.title); } else if (window.speechSynthesis) speechSynthesis.cancel(); };
+  $('cmMic').onclick = function () { listen(!listening); };
+  // гортання пальцем
+  var x0 = null;
+  dlg.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  dlg.addEventListener('touchend', function (e) { if (x0 === null) return; var dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1); });
+  // клавіатура (планшет/ноутбук)
+  dlg.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1); });
+})();
+</script>
+{% endmacro %}

@@ -7,7 +7,7 @@ var VERSION = '__VERSION__';
 var STATIC = 'static-' + VERSION, PAGES = 'pages-v2';
 var PRECACHE = ['/offline', '/static/style.css?v=__CSS_V__', '/static/ui.js?v=__JS_V__', '/static/vendor/turbo-8.0.12.js',
                 '/static/icons/icon-192.png?v=__ICON_V__'];
-var NO_CACHE = /^\/(silpo|auth|go|cron|tg|push|client-log|logout|login|register|admin|offers|fridge\/scan|photos)/;
+var NO_CACHE = /^\/(silpo|auth|go|cron|tg|push|client-log|logout|login|register|admin|offers|fridge\/(scan|badge)|photos)/;
 var MAX_PAGES = 40;
 var FAST = /^\/(|me|pantry|menu|buy|cook|today|list|profile|notify)$/;   // екрани, що відкриваються миттєво з копії
 function strip(t) { return t.replace(/<meta name="csrf"[^>]*>/, '').replace(/data-rid="[^"]*"/g, ''); }
@@ -100,6 +100,10 @@ self.addEventListener('message', function (e) {
 self.addEventListener('push', function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
+  // число на іконці апки (скільки продуктів скоро зіпсується) — там, де браузер це вміє
+  if (typeof d.badge === 'number' && self.navigator && self.navigator.setAppBadge) {
+    try { (d.badge ? self.navigator.setAppBadge(d.badge) : self.navigator.clearAppBadge()).catch(function () {}); } catch (err) {}
+  }
   e.waitUntil(self.registration.showNotification(d.title || 'Кошик з акцій', {
     body: d.body || '', icon: '/static/icons/icon-192.png?v=__ICON_V__', badge: '/static/icons/favicon-64.png',
     tag: d.tag || undefined, data: { url: d.url || '/' }

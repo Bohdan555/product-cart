@@ -1681,3 +1681,28 @@ html.sk-wait[data-sk=list] .skel:not(.skel-list),html.sk-wait:not([data-sk=list]
 /* стрілка «←» у шапці — логотип не потрібен (нічого не каже поруч зі стрілкою) */
 header.top:has(.hback) .logo{display:none}
 .ui-toast.undo span{flex:1;min-width:0}.ui-toast.undo button{flex:none}
+/* ---------- Режим «Готую»: кроки на весь екран ---------- */
+.cm-open{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin:4px 0 18px}
+.cm{position:fixed;inset:0;width:100%;max-width:none;height:100%;max-height:none;margin:0;padding:calc(12px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));border:0;background:var(--bg);color:var(--ink)}
+.cm[open]{display:flex;flex-direction:column;gap:12px}
+.cm::backdrop{background:var(--bg)}
+.cm-top{display:flex;align-items:center;gap:8px}
+.cm-x,.cm-tog{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--chip);color:var(--ink);display:grid;place-items:center;font:700 18px/1 var(--body);cursor:pointer}
+.cm-tog[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.cm-n{flex:1;font:700 16px/1.2 var(--body);text-align:center}
+.cm-bar{height:4px;border-radius:999px;background:var(--chip);overflow:hidden}
+.cm-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:inherit;transition:width .3s ease}
+.cm-timers{display:flex;flex-wrap:wrap;gap:8px}
+.cm-timers:empty{display:none}
+.cm-chip{border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:700 14px/1 var(--body);padding:10px 14px;min-height:44px;font-variant-numeric:tabular-nums;cursor:pointer}
+.cm-chip.done{background:var(--sticker);color:var(--sticker-ink);animation:tab-pulse 1s ease-in-out infinite}
+.cm-body{flex:1;overflow:auto;display:flex;flex-direction:column;justify-content:center}
+.cm-body.in{animation:vt-in .25s cubic-bezier(.2,.8,.2,1) both}
+.cm-step{font:600 24px/1.4 var(--body);margin:0}
+.cm-h{font:800 24px/1.2 var(--display);margin-bottom:12px}
+.cm-ings{list-style:none;margin:0;padding:0;display:grid;gap:10px;font:500 18px/1.3 var(--body)}
+.cm-timer{align-self:center;display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font:700 16px/1 var(--body);padding:14px 22px;min-height:48px;cursor:pointer}
+.cm-hint{margin:0;min-height:18px;text-align:center;color:var(--muted);font-size:14px}
+.cm-nav{display:grid;grid-template-columns:1fr 2fr;gap:10px}
+.cm-nav .btn{min-height:56px;font-size:18px;justify-content:center}
+@media (prefers-reduced-motion:reduce){.cm-body.in,.cm-chip.done{animation:none}.cm-bar i{transition:none}}

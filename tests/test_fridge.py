@@ -123,3 +123,30 @@ def test_skips_models_blocked_on_free_tier(monkeypatch):
     assert calls == ["anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5"]
     assert fridge._model_cache["good"] == "anthropic/claude-haiku-4.5"
     fridge._model_cache.clear()
+
+
+def test_receipt_scan_dates_and_badge(tmp_path):
+    from datetime import date, timedelta
+    bought = (date.today() - timedelta(days=1)).isoformat()
+    kinds = []
+
+    def vision(data, media, oidc, kind="fridge"):
+        kinds.append(kind)
+        items = fridge.clean([{"name": "Філе куряче", "ingredient": "chicken_fillet", "amount": "1 кг", "confident": True},
+                              {"name": "Кетчуп", "ingredient": "other", "amount": "", "confident": True}])
+        for it in items:
+            it["bought"] = bought if kind == "receipt" else None
+        return items
+
+    assert fridge.receipt_date(bought) == bought and fridge.receipt_date("2001-01-01") == ""
+    assert fridge.receipt_date((date.today() + timedelta(days=3)).isoformat()) == "" and fridge.receipt_date("сміття") == ""
+    with TestClient(app_with(vision, tmp_path), follow_redirects=False) as c:
+        assert c.get("/fridge/badge").json() == {"n": 0}
+        token = register(c)
+        page = c.get("/pantry").text
+        assert 'id="pnReceipt"' in page and 'id="pnPhoto"' in page
+        r = c.post("/fridge/scan", data={"csrf": token, "kind": "receipt"}, files={"photo": ("r.jpg", PNG, "image/jpeg")})
+        assert r.status_code == 200 and kinds == ["receipt"] and r.json()["items"][0]["bought"] == bought
+        c.post("/pantry/add", data={"csrf": token, "key": "chicken_fillet", "other": "Кетчуп", "since": bought})
+        # куряче філе живе ~2 дні: куплено вчора → лишився ≤ 1 день, тож воно в значку на іконці
+        assert c.get("/fridge/badge").json()["n"] == 1
