@@ -85,7 +85,7 @@
     });
   });
   function iso(days) { var t = new Date(); t.setDate(t.getDate() + days); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }
-  function setDate(v) { post('/fridge/expiry', { key: cur.dataset.key, date: v }).then(function (d) { if (d.error) { $('pnState').textContent = d.error; } sheet.close(); reload(); }); }
+  function setDate(v) { post('/fridge/expiry', { key: cur.dataset.key, date: v }).then(function (d) { sheet.close(); if (d.error) { $('pnState').textContent = d.error; return; } reload(); }); }
   $('pnDates').addEventListener('click', function (e) { var b = e.target.closest('button[data-d]'); if (b) setDate(iso(+b.dataset.d)); });
   $('pnDate').addEventListener('change', function () { if (this.value) setDate(this.value); });
   $('pnAuto').onclick = function () { setDate(''); };

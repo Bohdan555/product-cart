@@ -52,14 +52,16 @@ self.addEventListener('fetch', function (e) {
   if (!html || NO_CACHE.test(url.pathname) || url.searchParams.has('partial')) return;
   // Відкриття застосунку (повне завантаження головних екранів): одразу збережена копія, свіжа — у фоні.
   // Якщо свіжа інша — кажемо сторінці тихо оновитися (Turbo). Переходи всередині (Turbo) — як і раніше, з мережі.
-  if (req.mode === 'navigate' && FAST.test(url.pathname) && !url.search) {
+  // лише «відкриття застосунку» (без referrer): після збереження форми чи переходу — завжди свіже з мережі
+  if (req.mode === 'navigate' && FAST.test(url.pathname) && !url.search && !req.referrer) {
     var key = url.pathname, client = e.resultingClientId || e.clientId;
     e.respondWith(caches.open(PAGES).then(function (c) {
       return c.match(key).then(function (hit) {
+        var old = hit && hit.clone();      // клон до того, як hit піде сторінці (тіло читається лише раз)
         var fresh = fetch(req).then(function (res) {
           if (res.ok && res.type === 'basic' && !res.redirected) {
             var copy = res.clone();
-            if (hit) Promise.all([hit.clone().text(), res.clone().text()]).then(function (t) {
+            if (old) Promise.all([old.text(), res.clone().text()]).then(function (t) {
               if (strip(t[0]) !== strip(t[1])) setTimeout(function () { tell(client, key); }, 300);
             });
             c.put(key, copy).then(function () { trim(c); });
