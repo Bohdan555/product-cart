@@ -127,7 +127,7 @@ def test_recipe_catalog_is_consistent():
     from productcart.menu import recipe_tags
     from productcart.web import unsplash
     ids = [r.id for r in menu.RECIPES]
-    assert len(ids) >= 100 and len(set(ids)) == len(ids)
+    assert len(ids) >= 200 and len(set(ids)) == len(ids)
     for r in menu.RECIPES:
         assert set(r.ingredients) <= set(menu.INGREDIENTS), r.id
         assert r.steps and r.id in unsplash.QUERIES, r.id

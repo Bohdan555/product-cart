@@ -80,6 +80,8 @@ QUERIES.update({"p:" + k: v for k, v in PRODUCT_QUERIES.items()})
 
 from ..recipes_more import PHOTO_QUERIES as _MORE  # noqa: E402
 QUERIES.update(_MORE)
+from ..recipes_extra import PHOTO_QUERIES as _EXTRA  # noqa: E402
+QUERIES.update(_EXTRA)
 from ..recipes_bs import PHOTO_QUERIES as _BS  # noqa: E402
 QUERIES.update(_BS)
 

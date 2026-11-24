@@ -324,6 +324,10 @@ RECIPES = [replace(r, meals=r.meals | ({"breakfast"} if r.id in ALSO_BREAKFAST e
                    | ({"salad"} if r.id in ALSO_SALAD else set())) for r in RECIPES]
 RECIPES += [replace(r, meals=frozenset({"breakfast"})) for r in breakfasts(_r)]
 RECIPES += [replace(r, meals=frozenset({"salad"})) for r in salads(_r)]
+from . import recipes_extra as _extra  # noqa: E402 — третя порція: вечері, сніданки й салати
+RECIPES += _extra.dinners(_r)
+RECIPES += [replace(r, meals=frozenset({"breakfast"})) for r in _extra.breakfasts(_r)]
+RECIPES += [replace(r, meals=frozenset({"salad"})) for r in _extra.salads(_r)]
 RECIPE_BY_ID = {r.id: r for r in RECIPES}
 
 # ---------- власні страви користувача ----------
