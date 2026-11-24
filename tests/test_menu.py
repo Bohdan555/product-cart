@@ -39,7 +39,8 @@ def test_plan_prefers_promo_and_respects_diets():
     veg = menu.plan(offers, Profile(diets=["vegetarian"]), dinners=5)
     assert veg.dishes and not any(menu.recipe_tags(d.recipe) & {"meat", "fish"} for d in veg.dishes)
     vegan = menu.plan(offers, Profile(diets=["vegan"]), dinners=7)
-    assert all(d.protein in {"бобові", "гриби", "овочі"} for d in vegan.dishes)
+    assert all(d.protein in {"бобові", "гриби", "овочі", "крупи"} for d in vegan.dishes)
+    assert not any(menu.recipe_tags(d.recipe) & {"meat", "fish", "dairy", "eggs"} for d in vegan.dishes)
 
 
 def test_time_budget_and_diversity():
@@ -114,6 +115,7 @@ def test_pantry_words_cover_dictionary_and_synonyms():
     assert menu.word_to_key("Курятина") == "chicken_fillet" and menu.word_to_key("картошка") == "potato"
     assert menu.word_to_key("помідори") == "tomato" and menu.word_to_key("томати в соку") == "tomatoes_can" and menu.word_to_key("творог") == "cottage"
     assert menu.word_to_key("сир") == "cheese" and menu.word_to_key("авокадо") == "avocado" and menu.word_to_key("кумкват") is None
+    assert menu.word_to_key("крильця") == "chicken_wings" and menu.word_to_key("шпинат") == "spinach" and menu.word_to_key("кускус") == "couscous"
 
 
 def test_other_products_with_ingredient_word_do_not_match():
@@ -121,6 +123,9 @@ def test_other_products_with_ingredient_word_do_not_match():
     assert not m("Паштет «Онисс» «Одеський» печінковий з вершковим маслом 240г", "butter")
     assert not m("Оливки «Повна Чаша»® зелені фаршировані лососем 290г", "minced")
     assert m("Масло вершкове Селянське 82% 200г", "butter") and m("Фарш свино-яловичий 500г", "minced")
+    assert m("Філе лосося охолоджене 300г", "salmon") and not m("Форель слабосолена 150г", "salmon")
+    assert not m("Локшина швидкого приготування", "noodles") and not m("Чай з лимоном", "lemon")
+    assert m("Шпинат заморожений 400г", "spinach") and not m("Шпинат заморожений 400г", "lettuce")
 
 
 def test_recipe_catalog_is_consistent():
