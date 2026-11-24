@@ -30,7 +30,14 @@
   };
   function countAll(root) { (root || document).querySelectorAll('[data-count]').forEach(window.countUp); }
   window.uiRefresh = countAll;
-  document.addEventListener('turbo:load', function () { countAll(); });
+  document.addEventListener('turbo:load', function () { countAll(); markImgs(); });
+  // фото: поки вантажиться — м'який відблиск; завантажилось (або не вдалося) — прибираємо
+  function markImgs() { document.querySelectorAll('img:not(.ok)').forEach(function (i) { if (i.complete) i.classList.add('ok'); }); }
+  function imgDone(e) { if (e.target && e.target.tagName === 'IMG') e.target.classList.add('ok'); }
+  document.addEventListener('load', imgDone, true); document.addEventListener('error', imgDone, true);
+  if (document.readyState !== 'loading') markImgs(); else document.addEventListener('DOMContentLoaded', markImgs);
+  // iOS Safari вмикає :active (стискання кнопок) лише якщо є слухач дотику
+  document.addEventListener('touchstart', function () {}, { passive: true });
   if (document.readyState !== 'loading') countAll(); else document.addEventListener('DOMContentLoaded', function () { countAll(); });
 
   // «пульс» елемента (значок кошика, сердечко)

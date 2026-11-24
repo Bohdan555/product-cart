@@ -132,9 +132,11 @@ document.getElementById('loc-btn').addEventListener('click', function () {
     var q = '?sort=' + encodeURIComponent(state.sort) + '&cat=' + encodeURIComponent(state.cat);
     history.replaceState(history.state, '', '/list' + q);
     feed.classList.add('busy');
+    // довго — показуємо сірі заготовки карток замість старих
+    var skT = setTimeout(function () { feed.classList.remove('busy'); feed.innerHTML = new Array(7).join('<i class="sk pc-sk" aria-hidden="true"></i>'); }, 220);
     fetch('/list' + q + '&page=1&partial=1', { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (html) {
-      feed.innerHTML = html; feed.classList.remove('busy'); window.scrollTo({ top: feed.offsetTop - 120 }); watch(); checkStock();
-    }).catch(function () { feed.classList.remove('busy'); });
+      clearTimeout(skT); feed.innerHTML = html; feed.classList.remove('busy'); window.scrollTo({ top: feed.offsetTop - 120 }); watch(); checkStock();
+    }).catch(function () { clearTimeout(skT); feed.classList.remove('busy'); });
   }
   if (sel) sel.addEventListener('change', function () { state.sort = sel.value; try { localStorage.setItem(KEY, sel.value); } catch (e) {} reload(); });
   document.querySelectorAll('.fchip').forEach(function (b) {

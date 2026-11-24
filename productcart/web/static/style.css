@@ -1253,12 +1253,20 @@ html.navigating .wrap *{pointer-events:none}
 /* View Transitions: нижня панель стоїть на місці, вміст — легкий наплив знизу */
 .dock{view-transition-name:dock}
 header.top{view-transition-name:topbar}
-::view-transition-old(root){animation:vt-out .16s ease both}
-::view-transition-new(root){animation:vt-in .26s cubic-bezier(.2,.8,.2,1) both}
-@keyframes vt-out{to{opacity:0;transform:translateY(-4px)}}
-@keyframes vt-in{from{opacity:0;transform:translateY(10px)}}
-html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:vt-in-back}
-@keyframes vt-in-back{from{opacity:0;transform:translateY(-10px)}}
+::view-transition-old(root){animation:vt-out .14s ease both}
+::view-transition-new(root){animation:vt-in .28s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vt-out{to{opacity:0}}
+@keyframes vt-in{from{opacity:0;transform:translateY(8px)}}
+/* вглиб (страва, налаштування) — наїжджає справа; «назад» — зліва; між вкладками — у бік вкладки */
+html[data-turbo-visit-direction=forward]::view-transition-new(root){animation-name:vt-fwd}
+html[data-turbo-visit-direction=back]::view-transition-new(root){animation-name:vt-back}
+html[data-vt=r]::view-transition-new(root){animation-name:vt-r}
+html[data-vt=l]::view-transition-new(root){animation-name:vt-l}
+html[data-vt=s]::view-transition-new(root){animation-name:vt-in}
+@keyframes vt-fwd{from{opacity:0;transform:translateX(28px)}}
+@keyframes vt-back{from{opacity:0;transform:translateX(-28px)}}
+@keyframes vt-r{from{opacity:0;transform:translateX(16px)}}
+@keyframes vt-l{from{opacity:0;transform:translateX(-16px)}}
 /* Без View Transitions (старіші браузери) — просто плавна поява */
 @supports not (view-transition-name:none){.wrap{animation:vt-in .24s cubic-bezier(.2,.8,.2,1) both}}
 @media (prefers-reduced-motion:reduce){
@@ -1630,3 +1638,33 @@ body:has(.admin-page) .dock{display:none}
 .ms-seg input:focus-visible+span{outline:2px solid var(--ink)}
 .pn-note{font-size:13px;color:var(--muted);margin:10px 2px 0}
 .ms-sheet form>b{display:block;font-size:18px;margin-bottom:12px}
+
+/* ---------- Мінімалістичні анімації: натискання, галочки, скелетони ---------- */
+/* Відгук на дотик: кнопка чи картка ледь стискається під пальцем */
+:where(.btn,button,.l-btn,.pcard,.eat-open,.xp-card,.ck-card,.hm-deal,.hm-fridge,.hm-me,.prow,.brow,.fchip,.daychips button,.td-cart,.bgo){transition:transform .14s cubic-bezier(.3,.7,.4,1)}
+:where(.btn,button,.l-btn,.pcard,.eat-open,.xp-card,.ck-card,.hm-deal,.hm-fridge,.hm-me,.fchip,.daychips button,.td-cart,.bgo):active:not(:disabled){transform:scale(.97)}
+:where(.prow,.brow):active{transform:scale(.985)}
+/* Галочка «куплено» малюється штрихом */
+.box svg path{stroke-dasharray:22;stroke-dashoffset:22;transition:stroke-dashoffset .28s cubic-bezier(.4,0,.2,1) .04s}
+.brow input:checked+.box svg path,.brow:has(input:checked) .box svg path{stroke-dashoffset:0}
+/* Скелетони: сірі заготовки з м'яким відблиском */
+.sk,.skel i{display:block;border-radius:var(--r-md);background:linear-gradient(100deg,var(--chip) 30%,color-mix(in srgb,var(--chip) 55%,var(--bg)) 50%,var(--chip) 70%) 0 0/250% 100%;animation:sk 1.3s linear infinite}
+@keyframes sk{from{background-position:100% 0}to{background-position:-150% 0}}
+img:not(.ok){background-image:linear-gradient(100deg,var(--chip) 30%,color-mix(in srgb,var(--chip) 55%,var(--bg)) 50%,var(--chip) 70%)!important;background-size:250% 100%!important;animation:sk 1.3s linear infinite}
+img.ok{animation:none}
+.skel{display:none}
+html.sk-wait .wrap>*:not(header):not(.skel){display:none}
+html.sk-wait .skel{display:grid;gap:12px;padding-top:4px;animation:vt-in .2s ease both}
+html.sk-wait .wrap{opacity:1}
+.skel .sk-t{height:32px;width:60%}
+.skel .sk-s{height:14px;width:40%;margin-bottom:6px}
+.skel .sk-c{height:112px;border-radius:var(--r-lg)}
+.skel .sk-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:none;animation:none}
+.skel .sk-row i{height:168px;border-radius:var(--r-xl)}
+.feed-more{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.feed-more .sk,.pc-sk{height:250px;border-radius:var(--r-xl)}
+@media (prefers-reduced-motion:reduce){
+  .sk,.skel i,img:not(.ok){animation:none}
+  .box svg path{transition:none}
+  :where(.btn,button,.l-btn,.pcard,.eat-open,.xp-card,.ck-card,.hm-deal,.hm-fridge,.hm-me,.prow,.brow,.fchip,.daychips button,.td-cart,.bgo){transition:none}
+}

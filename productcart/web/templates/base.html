@@ -44,9 +44,20 @@ document.addEventListener('turbo:load', markTab);
     var a = e.target.closest && e.target.closest('a');
     if (a && a.closest('.dock')) { pressed = a; a.classList.add('loading'); }
   });
+  var ORDER = { cook: 0, deals: 1, cart: 2, me: 3 }, skT = 0;
   document.addEventListener('turbo:visit', function (e) {
     t0 = Date.now();
-    document.documentElement.classList.add('navigating');
+    var H = document.documentElement;
+    H.classList.add('navigating');
+    // сервер думає довше за мить — показуємо сірі заготовки сторінки
+    clearTimeout(skT); skT = setTimeout(function () { if (H.classList.contains('navigating')) H.classList.add('sk-wait'); }, 320);
+    // напрямок анімації переходу: між вкладками — у бік вкладки
+    try {
+      var to = sectOf(new URL(e.detail.url).pathname), from = sectOf(location.pathname);
+      if (e.detail.action !== 'restore' && to !== from) H.dataset.vt = ORDER[to] > ORDER[from] ? 'r' : 'l';
+      else if (e.detail.action !== 'restore' && new URL(e.detail.url).pathname === location.pathname) H.dataset.vt = 's';
+      else delete H.dataset.vt;
+    } catch (err) {}
     setTimeout(function () { if (Date.now() - t0 >= 15000) done(); }, 15000);   // запобіжник, якщо щось зависло
     try {
       var sect = sectOf(new URL(e.detail.url).pathname);
@@ -54,7 +65,9 @@ document.addEventListener('turbo:load', markTab);
     } catch (err) {}
   });
   function done() {
-    document.documentElement.classList.remove('navigating');
+    clearTimeout(skT);
+    document.documentElement.classList.remove('navigating', 'sk-wait');
+    setTimeout(function () { delete document.documentElement.dataset.vt; }, 600);
     if (pressed) { pressed.classList.remove('loading'); pressed = null; }
     document.querySelectorAll('.dock a.loading').forEach(function (a) { a.classList.remove('loading'); });
   }
@@ -132,6 +145,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
     <b id="hcartN" class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b>
   </a>
 </header>
+<div class="skel" aria-hidden="true"><i class="sk-t"></i><i class="sk-s"></i><i class="sk-c"></i><div class="sk-row"><i></i><i></i></div><i class="sk-c"></i></div>
 {% block body %}{% endblock %}
 <footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
 </div>
