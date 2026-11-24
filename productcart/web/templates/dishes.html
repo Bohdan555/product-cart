@@ -29,10 +29,10 @@
 {% if not c.id %}
 <form method="post" action="/dishes/import" class="imp" id="imp" data-turbo="false">
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
-  <label for="impUrl"><b>Є рецепт в інтернеті?</b> Вставте посилання — заповнимо все самі</label>
+  <label for="impUrl"><b>Рецепт з інтернету</b> — вставте посилання</label>
   <div class="imp-row">
     <input type="url" id="impUrl" name="url" inputmode="url" placeholder="https://…" required value="{{ imp_url or '' }}">
-    <button type="submit" class="btn" id="impGo">Розібрати</button>
+    <button type="submit" class="btn alt" id="impGo">Розібрати</button>
   </div>
   {% if imp_error %}<div class="err">{{ imp_error }}</div>{% endif %}
 </form>
@@ -54,8 +54,7 @@
 
   <div>
     <b>Інгредієнти</b>
-    <small class="hint" style="display:block">З цих рахуємо ціну й шукаємо акції.</small>
-    <div class="ilist" id="ilist">
+        <div class="ilist" id="ilist">
       {% set sv = (c.servings or 4) %}
       {% for k, q in (c.ing or {}).items() %}
       <div class="irow"><select name="ing">{% for ck, cn, cu in choices %}<option value="{{ ck }}" data-u="{{ cu }}" {% if ck == k %}selected{% endif %}>{{ cn }}</option>{% endfor %}</select>

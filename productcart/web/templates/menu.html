@@ -104,13 +104,6 @@
     <div class="progress"><i id="bar"></i></div>
   </div>
   {% if not is_demo %}<p class="fee-note" style="margin:-4px 0 12px">Без сервісного збору «Сільпо»</p>{% endif %}
-  {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
-  {% elif link and not is_demo %}
-  <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
-    <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="">
-    <button class="btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>Зібрати кошик у «Сільпо»</button>
-  </form>
-  {% else %}<a class="scart-alt" href="/silpo">Зробити кошик у «Сільпо» →</a>{% endif %}
   {% macro row(l, price) %}
   {% set nv = name_visual(l.name) %}<label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-emoji="{{ nv.emoji }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}" data-price="{{ price }}">
 <span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
@@ -143,18 +136,25 @@
   <details class="group home-fold" data-copy="🏠 Вже є вдома — не купуємо"><summary class="gh"><b>✓ Є вдома · {{ m.home_lines|length }}</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ')|truncate(40) }}</small></summary>
   {% for l in m.home_lines %}{% set nv = name_visual(l.name) %}
     <div class="brow static" data-have="1" data-emoji="{{ nv.emoji }}" data-text="{{ l.name }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span>
-      <form method="post" action="/fridge/remove" data-noajax data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}"><button type="submit" class="switch">Немає</button></form></div>
+      <form method="post" action="/menu/have" data-undo="{{ l.name }} — у списку" data-undo-op="add"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}"><input type="hidden" name="op" value="remove"><button type="submit" class="switch">Немає</button></form></div>
   {% endfor %}</details>
   {% endif %}
   {% if m.pantry_lines %}
-  <details class="group pantry home-fold" data-copy="🫙 Запаси вдома"{% if m.pantry_lines|selectattr('buy')|list %} open{% endif %}><summary class="gh"><b>Запаси · {{ m.pantry_lines|length }}</b><small>олія, крупи — зазвичай є</small></summary>
+  <details class="group pantry home-fold" data-copy="🫙 Запаси вдома"{% if m.pantry_lines|selectattr('buy')|list %} open{% endif %}><summary class="gh"><b>Запаси · {{ m.pantry_lines|length }}</b><small>{{ m.pantry_lines|map(attribute='name')|map('lower')|join(', ')|truncate(40) }}</small></summary>
   {% for l in m.pantry_lines %}
-    <div class="brow static{% if l.buy %} buying{% endif %}" {% if not l.buy %}data-have="1"{% endif %} data-text="{{ l.name }}{% if l.buy %} — {{ fmt_qty(l.need, l.unit) }}{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}купуємо ✓ · {{ fmt_qty(l.need, l.unit) }}{% else %}є вдома{% endif %}</small></span>
-      <form method="post" action="/menu/pantry"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="key" value="{{ l.key }}">
-        <button type="submit" class="switch{% if l.buy %} back{% endif %}">{{ 'Є вдома' if l.buy else 'Закінчилось' }}</button></form></div>
+    <div class="brow static{% if l.buy %} buying{% endif %}" {% if not l.buy %}data-have="1"{% endif %} data-text="{{ l.name }}{% if l.buy %} — {{ fmt_qty(l.need, l.unit) }}{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}у списку вище{% else %}є вдома{% endif %}</small></span>
+      <form method="post" action="/menu/pantry"{% if not l.buy %} data-undo="{{ l.name }} — у списку"{% else %} data-undo="{{ l.name }} — не купуємо"{% endif %}><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}">
+        <button type="submit" class="switch{% if l.buy %} back{% endif %}">{{ 'Не треба' if l.buy else 'Закінчилось' }}</button></form></div>
   {% endfor %}</details>
   {% endif %}
 
+  {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
+  {% elif link and not is_demo %}
+  <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="">
+    <button class="btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>Зібрати кошик у «Сільпо»</button>
+  </form>
+  {% else %}<a class="scart-alt" href="/silpo">Зробити кошик у «Сільпо» →</a>{% endif %}
 </section>
 
 
@@ -299,7 +299,10 @@
           olds.slice(news.length).forEach(function (o) { o.remove(); });
           oldList.remove();
         }
+        var opened = {}; root.querySelectorAll('details[data-copy]').forEach(function (d) { opened[d.dataset.copy] = d.open; });
         root.innerHTML = fresh.innerHTML;
+        root.querySelectorAll('details[data-copy]').forEach(function (d) { if (d.dataset.copy in opened) d.open = opened[d.dataset.copy]; });
+        if (form.dataset.undo) undoToast(form);
         if (oldList && newList) { var place = root.querySelector('.eat-list'); if (place) place.replaceWith(oldList); }
         var r1 = document.getElementById('reel'); if (r1) r1.scrollLeft = left;
         root.querySelectorAll('[data-count]').forEach(function (x, k) { if (old[k] !== undefined) x.dataset.from = old[k]; });
@@ -310,6 +313,18 @@
         if (f && rr) rr.scrollTo({ left: f.offsetLeft - (rr.clientWidth - f.clientWidth) / 2, behavior: 'smooth' });
       })
       .catch(function () { if (my === seq) { root.classList.remove('busy'); if (row) row.classList.remove('swapping'); form.submit(); } });
+  }
+  // «Немає» / «Закінчилось»: коротка підказка з «Повернути» — та сама дія у зворотний бік
+  var ut;
+  function undoToast(form) {
+    var t = document.getElementById('undoToast');
+    if (!t) { t = document.createElement('div'); t.id = 'undoToast'; t.className = 'ui-toast undo'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.innerHTML = ''; var s = document.createElement('span'); s.textContent = form.dataset.undo; t.appendChild(s);
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Повернути'; t.appendChild(b);
+    var back = form.cloneNode(true); back.removeAttribute('data-undo'); back.hidden = true; document.body.appendChild(back);
+    var op = back.querySelector('input[name=op]'); if (op) op.value = form.dataset.undoOp || 'add';
+    b.addEventListener('click', function () { t.classList.remove('on'); send(back, null); });
+    t.classList.add('on'); clearTimeout(ut); ut = setTimeout(function () { t.classList.remove('on'); }, 5000);
   }
   root.addEventListener('submit', function (e) {
     var form = e.target, btn = e.submitter;

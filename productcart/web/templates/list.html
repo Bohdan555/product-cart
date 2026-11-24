@@ -3,12 +3,12 @@
 {% block body %}
 <h1 class="xh">{% if guest %}Популярні <span class="hl">акції</span>{% else %}Акції <span class="hl">для вас</span>{% endif %}</h1>
 {% include "_stale.html" %}
-{% if link and p.lat is none %}
+{% if link and p.lat is none and not link.store_id %}
 <form class="card stack" method="post" action="/location" id="loc-form" style="margin-bottom:14px">
   <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="lat" id="loc-lat"><input type="hidden" name="lon" id="loc-lon">
   <b>Магазини поруч</b>
   <label class="consent"><input type="checkbox" name="consent" value="1" id="loc-consent" checked> <span>Зберегти моє приблизне місце</span></label>
-  <div class="row"><button class="btn" type="button" id="loc-btn">{{ ic("pin", "ii") }}Визначити моє місце</button><span class="hint" id="loc-msg"></span></div>
+  <div class="row"><button class="btn alt" type="button" id="loc-btn">{{ ic("pin", "ii") }}Визначити моє місце</button><span class="hint" id="loc-msg"></span></div>
   {% if not link.store_id %}<p class="hint" style="margin:0"><a href="/silpo">Вибрати магазин вручну</a></p>{% endif %}
 </form>
 <script>

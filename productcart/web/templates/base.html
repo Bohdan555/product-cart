@@ -50,6 +50,7 @@ document.addEventListener('turbo:load', markTab);
     var H = document.documentElement;
     H.classList.add('navigating');
     // сервер думає довше за мить — показуємо сірі заготовки сторінки
+    try { H.dataset.sk = /^\/(buy|pantry|silpo\/cart|me|profile|notify|dishes|fridge)/.test(new URL(e.detail.url).pathname) ? 'list' : 'cards'; } catch (err) {}
     clearTimeout(skT); skT = setTimeout(function () { if (H.classList.contains('navigating')) H.classList.add('sk-wait'); }, 320);
     // напрямок анімації переходу: між вкладками — у бік вкладки
     try {
@@ -145,6 +146,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
     <b id="hcartN" class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b>
   </a>
 </header>
+<div class="skel skel-list" aria-hidden="true"><i class="sk-t"></i><i class="sk-s"></i><i class="sk-r"></i><i class="sk-r"></i><i class="sk-r"></i><i class="sk-r"></i><i class="sk-r"></i></div>
 <div class="skel" aria-hidden="true"><i class="sk-t"></i><i class="sk-s"></i><i class="sk-c"></i><div class="sk-row"><i></i><i></i></div><i class="sk-c"></i></div>
 {% block body %}{% endblock %}
 <footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>

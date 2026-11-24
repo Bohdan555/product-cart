@@ -51,6 +51,13 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         r = c.post("/fridge/remove", data={"csrf": token, "key": "potato"})
         assert r.headers["location"] == "/buy"
         assert 'data-key="potato"' not in c.get("/fridge").text and 'data-key="chicken_thigh"' in c.get("/fridge").text
+        # «Немає» в списку покупок і «Повернути» — без перезавантаження (/menu/have)
+        assert 'action="/menu/have"' in c.get("/buy").text
+        r = c.post("/menu/have", data={"csrf": token, "key": "chicken_thigh", "op": "remove"})
+        assert r.headers["location"] == "/buy" and 'data-key="chicken_thigh"' not in c.get("/fridge").text
+        c.post("/menu/have", data={"csrf": token, "key": "chicken_thigh", "op": "add"})
+        assert 'data-key="chicken_thigh"' in c.get("/fridge").text
+        assert c.post("/menu/have", data={"csrf": token, "key": "bogus"}).status_code == 400
         c.post("/fridge/save", data={"csrf": token})
         m = c.get("/menu").text
         assert "✓ Є вдома" not in c.get("/buy").text and 'href="/fridge"><i>1</i>Що є' in m

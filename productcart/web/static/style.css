@@ -202,7 +202,7 @@ footer{color:var(--muted);font-size:13px;margin-top:40px}
 .est{color:var(--muted);font-weight:600}
 .bgo{flex:0 0 32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;background:var(--chip);color:var(--ink);text-decoration:none;font-weight:700}
 .bgo:hover{background:var(--ink);color:var(--bg)}
-.switch{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:var(--r-sm);padding:6px 10px;font:600 13px/1.2 var(--body);cursor:pointer;white-space:nowrap}
+.switch{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:var(--r-sm);padding:6px 10px;font:600 14px/1.2 var(--body);cursor:pointer;white-space:nowrap}
 .brow form{margin:0}
 form.inline{display:inline;margin:0}
 .linkbtn{border:0;background:none;padding:12px 4px;margin:-12px -4px;font:inherit;color:var(--accent);cursor:pointer;text-decoration:underline}
@@ -605,7 +605,8 @@ nav.top a.tabbed,.hcart{display:none!important}
 .mlist .brow .box{grid-column:4;grid-row:1;width:26px;height:26px;border-radius:var(--r-sm)}
 .mlist .brow .bgo{display:none}
 .mlist .brow:has(input:checked){opacity:.5}
-.mlist .brow.static{grid-template-columns:1fr auto}
+.mlist .brow.static{grid-template-columns:44px minmax(0,1fr) auto}
+.mlist .brow.static form{grid-column:3;grid-row:1}
 /* ---------- нова візуальна мова: «Акції» ---------- */
 .filters{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 calc(-1 * max(16px,env(safe-area-inset-left,0px))) 14px;padding:0 max(16px,env(safe-area-inset-left,0px))}
 .filters::-webkit-scrollbar{display:none}
@@ -1086,7 +1087,7 @@ body:has(.su) footer{display:none}
 .eat-next{display:flex;gap:8px;margin:6px 0 22px}.eat-next .btn{flex:1;text-align:center}
 
 /* ---------- «Що їмо»: рядок на вечір ---------- */
-.eat-list{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.eat-list{list-style:none;margin:0 0 16px;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
 .eat-row{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:var(--r-lg);box-shadow:0 1px 0 var(--line);padding:6px 6px 6px 8px}
 .eat-row.fresh{animation:su-pop .45s cubic-bezier(.3,1.4,.5,1) both}
 .eat-open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:none;padding:4px;text-align:left;color:var(--ink);font:inherit;cursor:pointer}
@@ -1214,7 +1215,7 @@ a.eat-open small{color:var(--muted)}
 .dock .tico .cartN{top:-7px;right:-12px;box-shadow:0 0 0 2px var(--bg)}
 
 /* «Вже є вдома»: купувати не треба — закреслено */
-.mlist .brow[data-have] .rmain b{text-decoration:line-through;text-decoration-thickness:2px;color:var(--muted)}
+.mlist .brow[data-have] .rmain b{color:var(--muted)}
 
 /* Оплата: одна велика кнопка, запасний варіант — посиланням */
 .paybtns .paygo{flex:1;justify-content:center;font-size:18px;padding:16px 18px}
@@ -1664,10 +1665,19 @@ html.sk-wait .wrap{opacity:1}
 .feed-more{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .feed-more .sk,.pc-sk{height:250px;border-radius:var(--r-xl)}
 @media (prefers-reduced-motion:reduce){
-  .sk,.skel i,img:not(.ok){animation:none}
+  .sk,.skel i,img:not(.ok),html.sk-wait .skel{animation:none}
   .box svg path{transition:none}
   :where(.btn,button,.l-btn,.pcard,.eat-open,.xp-card,.ck-card,.hm-deal,.hm-fridge,.hm-me,.prow,.brow,.fchip,.daychips button,.td-cart,.bgo){transition:none}
 }
 /* Згорнуті групи («Запаси», «Є вдома»): Safari не робить <details> grid-контейнером, тож проміжок задаємо відступом */
 .mlist details.group{display:block}
 .mlist details.group>.brow{margin-top:8px}
+.ui-toast.undo{display:flex;align-items:center;gap:14px;width:min(360px,calc(100% - 32px));justify-content:space-between;pointer-events:auto;text-align:left;padding:8px 8px 8px 16px}
+.ui-toast.undo button{border:0;background:none;color:var(--bg);text-decoration:underline;text-underline-offset:3px;font:700 14px/1 var(--body);padding:12px 10px;min-height:44px;cursor:pointer}
+.mlist .scart{justify-items:stretch;position:sticky;bottom:calc(92px + env(safe-area-inset-bottom,0px));z-index:5;margin-top:8px}
+.mlist .scart .btn{width:100%;justify-content:center;box-shadow:var(--sh-lift)}
+html.sk-wait[data-sk=list] .skel:not(.skel-list),html.sk-wait:not([data-sk=list]) .skel-list{display:none}
+.skel .sk-r{height:64px;border-radius:var(--r-lg)}
+/* стрілка «←» у шапці — логотип не потрібен (нічого не каже поруч зі стрілкою) */
+header.top:has(.hback) .logo{display:none}
+.ui-toast.undo span{flex:1;min-width:0}.ui-toast.undo button{flex:none}

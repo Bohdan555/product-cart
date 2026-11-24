@@ -1580,6 +1580,30 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         p.pantry_buy = [k for k in p.pantry_buy if k != key] if key in p.pantry_buy else p.pantry_buy + [key]
         return menu_done(u, p, health, "/buy")
 
+    @app.post("/menu/have")
+    async def menu_have(request: Request):
+        """«Немає» біля продукту з «Є вдома» (op=remove) і «Повернути» (op=add) — без перезавантаження сторінки."""
+        form, u, p, health, bad = await menu_form(request)
+        if bad:
+            return bad
+        key = str(form.get("key", ""))
+        if key not in menu.INGREDIENTS:
+            return HTMLResponse("Невідомий продукт.", status_code=400)
+        if form.get("op") == "add":
+            if key not in p.fridge:
+                p.fridge = sorted(set(p.fridge) | {key})
+                p.fridge_since[key] = date.today().isoformat()
+                p.fridge_at = security.iso(security.now())
+        else:
+            p.fridge = [k for k in p.fridge if k != key]
+            p.fridge_since.pop(key, None)
+            p.fridge_until.pop(key, None)
+            if not p.fridge and not p.fridge_other:
+                p.fridge_at = None
+        if u:
+            analytics.track(conn, u["id"], "fridge_removed" if form.get("op") != "add" else "fridge_restored", key=key)
+        return menu_done(u, p, health, "/buy")
+
     # ---------- перегляд кошика «Сільпо» ----------
     @app.get("/silpo/cart", response_class=HTMLResponse)
     async def silpo_cart_view(request: Request, error: str = "", changed: str = "", cleared: int = 0):
