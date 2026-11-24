@@ -18,6 +18,7 @@ document.getElementById('loc-btn').addEventListener('click', function () {
   if (!navigator.geolocation) { msg.textContent = 'Браузер не підтримує геолокацію — оберіть магазин вручну.'; return; }
   msg.textContent = 'Визначаємо, де ви…';
   navigator.geolocation.getCurrentPosition(function (pos) {
+    try { localStorage.setItem('geo-ok', '1'); } catch (e) {}
     document.getElementById('loc-lat').value = pos.coords.latitude;
     document.getElementById('loc-lon').value = pos.coords.longitude;
     document.getElementById('loc-form').submit();

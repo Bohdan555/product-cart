@@ -1097,3 +1097,9 @@ def test_nearest_store_auto_switch(client):
     assert client.post("/silpo/nearest", data={"csrf": token, "lat": "49.84", "lon": "24.03"}).json()["changed"] is False
     assert client.post("/silpo/nearest", data={"csrf": token, "lat": "41.26", "lon": "-95.86"}).json() == {"changed": False}  # далеко
     assert client.post("/silpo/nearest", data={"csrf": "bad", "lat": "49.84", "lon": "24.03"}).status_code == 400
+    # збережене місце (для «Акцій») теж оновлюється, якщо людина його колись дозволила зберігати
+    client.post("/location", data={"csrf": token, "lat": "50.45", "lon": "30.52", "consent": "1"})
+    assert client.post("/silpo/nearest", data={"csrf": token, "lat": "49.84", "lon": "24.03"}).json()["changed"] is True
+    p = json.loads(conn.execute("SELECT data FROM profiles").fetchone()["data"])
+    assert abs(p["lat"] - 49.84) < 0.01 and abs(p["lon"] - 24.03) < 0.01
+    assert "geo-sync" in client.get("/list").text                                    # перевірка місця на будь-якій сторінці

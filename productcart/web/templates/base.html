@@ -73,6 +73,28 @@ if ('serviceWorker' in navigator) {
   document.addEventListener('submit', function (e) {
     if (e.target.action && /\/(logout|login|register)$/.test(e.target.action) && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('logout');
   }, true);
+  // Найближчий «Сільпо» при відкритті застосунку на будь-якій сторінці (головна робить це сама, з підписом у шапці)
+  {% if user %}(function () {
+    if (location.pathname === '/' || !navigator.geolocation || !window.fetch) return;
+    var ok = false; try { ok = !!localStorage.getItem('geo-ok'); var last = +sessionStorage.getItem('geo-sync') || 0; if (Date.now() - last < 20 * 6e4) return; } catch (e) { return; }
+    function run() {
+      try { sessionStorage.setItem('geo-sync', String(Date.now())); } catch (e) {}
+      navigator.geolocation.getCurrentPosition(function (p) {
+        try { localStorage.setItem('geo-ok', '1'); } catch (e) {}
+        var fd = new FormData(); fd.append('csrf', '{{ user.csrf }}');
+        fd.append('lat', p.coords.latitude.toFixed(3)); fd.append('lon', p.coords.longitude.toFixed(3));
+        fetch('/silpo/nearest', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (x) {
+          if (x.changed && /^\/(list|menu|buy|silpo\/cart)/.test(location.pathname)) {
+            if (window.toast && x.store) toast('Магазин: ' + x.store.address);
+            if (window.Turbo) Turbo.visit(location.href, { action: 'replace' }); else location.reload();
+          }
+        }).catch(function () {});
+      }, function () {}, { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 });
+    }
+    if (ok) return run();
+    if (navigator.permissions && navigator.permissions.query)
+      navigator.permissions.query({ name: 'geolocation' }).then(function (st) { if (st.state === 'granted') run(); }).catch(function () {});
+  })();{% endif %}
   // екран відкрився миттєво з копії, а свіжа версія інша — тихо оновлюємо (якщо людина ще нічого не вводить)
   var openedAt = Date.now();
   navigator.serviceWorker.addEventListener('message', function (e) {

@@ -1009,6 +1009,12 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if changed:
             conn.execute("UPDATE silpo_links SET store_id=?, store_title=? WHERE user_id=?", (st["id"], st["title"][:120], u["id"]))
             analytics.track(conn, u["id"], "store_selected", chain="silpo", store_id=st["id"], auto=True)
+        # «Акції» беруть магазини навколо збереженого місця (якщо людина колись дозволила його зберігати) — оновлюємо й його
+        p, health = load_profile(u["id"])
+        if p.lat is not None and silpo.distance_km(p.lat, p.lon, lat, lon) > 0.5:
+            p.lat, p.lon, p.location_at = round(lat, 3), round(lon, 3), security.iso(security.now())
+            save_profile(u["id"], p, health)
+            changed = True
         return JSONResponse({"changed": changed, "store": st})
 
     @app.post("/silpo/disconnect")
