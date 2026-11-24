@@ -120,15 +120,17 @@ def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
         conn = c.app.state.conn
         row = conn.execute("SELECT user_id, data FROM profiles").fetchone()
         data = _json.loads(row["data"])
-        data.update(fridge=["minced", "pasta"], fridge_at=__import__("productcart.web.security", fromlist=["iso"]).iso(
+        data.update(fridge=["minced", "pasta", "kefir"], fridge_at=__import__("productcart.web.security", fromlist=["iso"]).iso(
             __import__("productcart.web.security", fromlist=["now"]).now()),
-            fridge_since={"minced": (_d.today() - _td(days=2)).isoformat(), "pasta": _d.today().isoformat()})
+            fridge_since={"minced": (_d.today() - _td(days=2)).isoformat(), "pasta": _d.today().isoformat(),
+                          "kefir": (_d.today() - _td(days=3)).isoformat()})
         conn.execute("UPDATE profiles SET data=? WHERE user_id=?", (_json.dumps(data), row["user_id"]))
         conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
         push.sent.clear()
         st = c.get("/cron/notify", headers={"authorization": "Bearer test-cron"}).json()
         xp = [m for _, m in push.sent if m["tag"] == "expiry"]
-        assert st.get("expiry") == 1 and xp and "фарш — сьогодні" in xp[0]["body"] and xp[0]["url"].startswith("/today/dishes?")
+        assert st.get("expiry") == 1 and len(xp) == 1 and xp[0]["url"].startswith("/today/dishes?")       # один зведений push
+        assert "фарш — сьогодні" in xp[0]["body"] and "кефір — післязавтра" in xp[0]["body"] and "2 продукти" in xp[0]["title"]
         conn.execute("DELETE FROM settings WHERE key='tg_cron_at'")
         push.sent.clear()
         c.get("/cron/notify", headers={"authorization": "Bearer test-cron"})

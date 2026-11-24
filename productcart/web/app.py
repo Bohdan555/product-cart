@@ -2642,13 +2642,15 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
             return ok
 
         p, health = load_profile(uid)
-        soon = menu.expiring(p.fridge_since, p.fridge, within=1, until=p.fridge_until) if p.tg_expiry and p.fridge and has_push else []
+        # один зведений push на всі продукти, яким лишилось ≤ 2 днів (сьогодні / завтра / за 2 дні)
+        soon = menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until) if p.tg_expiry and p.fridge and has_push else []
         xk = "x:" + date.today().isoformat()
         if soon and not conn.execute("SELECT 1 FROM tg_sent WHERE user_id=? AND key=?", (uid, xk)).fetchone():
             names = ", ".join(f"{menu.INGREDIENTS[k][0].lower()} — {menu.when_label(d)}" for k, d in soon)
             url = f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}"
+            title = f"⏳ Скоро зіпсується: {len(soon)} {plural(len(soon), 'продукт', 'продукти', 'продуктів')}"
             if await deliver(f"⏳ Варто використати: {names}.\nПідібрали страви з того, що є вдома.",
-                             ("Що приготувати", base_url + url), "⏳ Скоро зіпсується", names, url, "expiry",
+                             ("Що приготувати", base_url + url), title, names, url, "expiry",
                              telegram=False):      # лише push на телефон
                 conn.execute("INSERT INTO tg_sent (user_id, key, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
                              (uid, xk, security.iso(security.now())))

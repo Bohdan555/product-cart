@@ -1014,7 +1014,7 @@ def expiring(since: dict[str, str], have, today: date | None = None, within: int
 
 
 def when_label(left: int) -> str:
-    return "сьогодні" if left <= 0 else "завтра" if left == 1 else f"за {left} дн."
+    return "сьогодні" if left <= 0 else "завтра" if left == 1 else "післязавтра" if left == 2 else f"за {left} дн."
 
 
 # ---------- «Що приготувати сьогодні»: одна страва з того, що є ----------
