@@ -1134,7 +1134,10 @@ def today(offers: list[Offer], profile: Profile, have, max_minutes: int = 60, n:
     # смаки з анкети важать як один продукт докупки: улюблену страву покажемо, навіть якщо треба докупити ще щось
     # `soon` — те, що скоро зіпсується: страва, яка його використовує, важить як на 1,5 продукту докупки менше
     soon = set(soon) & have
-    opts.sort(key=lambda o: (len(o.lines) - len(o.have) - min(1.5, 0.5 * ctx.taste(o.dish.recipe))
+    # що готували останні 2 тижні («Готую») — не повторюємо: такі страви йдуть у кінець черги
+    recent = {c.get("id") for c in (getattr(profile, "cooking", None) or [])}
+    opts.sort(key=lambda o: (o.dish.id in recent,
+                             len(o.lines) - len(o.have) - min(1.5, 0.5 * ctx.taste(o.dish.recipe))
                              - 1.5 * len(soon & set(o.dish.recipe.ingredients)), -len(o.have),
                              -ctx.score(o.dish.recipe, []) * 0.05 + o.buy_cost / 100))
     out, proteins = [], set()

@@ -1706,3 +1706,46 @@ header.top:has(.hback) .logo{display:none}
 .cm-nav{display:grid;grid-template-columns:1fr 2fr;gap:10px}
 .cm-nav .btn{min-height:56px;font-size:18px;justify-content:center}
 @media (prefers-reduced-motion:reduce){.cm-body.in,.cm-chip.done{animation:none}.cm-bar i{transition:none}}
+/* ---------- «Що приготувати»: одна картка, свайп вліво — не моє, вправо — готую ---------- */
+.sw-deck{display:grid;margin:4px 0 12px;position:relative}
+.sw-card{grid-area:1/1;width:100%;max-width:none;flex:none;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab;
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),opacity .22s ease;box-shadow:var(--sh-lift);z-index:2}
+.sw-card.next{z-index:1;transform:translateY(12px) scale(.95)!important;opacity:.7;pointer-events:none;box-shadow:none}
+.sw-card.drag{transition:none;cursor:grabbing}
+.sw-card.out-l{transform:translateX(-130%) rotate(-14deg)!important;opacity:0}
+.sw-card.out-r{transform:translateX(130%) rotate(14deg)!important;opacity:0}
+.sw-card.nudge{animation:sw-nudge 1.1s ease-in-out}
+@keyframes sw-nudge{25%{transform:translateX(-26px) rotate(-2deg)}60%{transform:translateX(18px) rotate(1.5deg)}}
+.sw-card .td-ph img{pointer-events:none}
+.sw-stamp{position:absolute;top:14px;z-index:3;padding:8px 12px;border:3px solid;border-radius:var(--r-sm);font:800 20px/1 var(--display);
+  background:rgba(255,255,255,.9);opacity:0;pointer-events:none}
+.sw-stamp.no{right:14px;color:#b3261e;transform:rotate(10deg);opacity:var(--no,0)}
+.sw-stamp.yes{left:14px;color:#1d6b3a;transform:rotate(-10deg);opacity:var(--yes,0)}
+.sw-end{grid-area:1/1;display:grid;gap:12px;justify-items:start}
+.sw-acts{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 4px 20px}
+.sw-b{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;border:0;cursor:pointer;text-decoration:none;font:700 24px/1 var(--body);box-shadow:var(--sh-soft)}
+.sw-b.no{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.sw-b.yes{background:var(--ink);color:var(--bg)}
+.sw-b.yes svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.6}
+.sw-hint{flex:1;text-align:center;color:var(--muted);font-size:14px}
+@media (prefers-reduced-motion:reduce){.sw-card{transition:none}.sw-card.nudge{animation:none}}
+.sw-card .td-ph{aspect-ratio:16/10}.sw-card{gap:8px;padding:14px}.sw-card .td-need{min-height:0;-webkit-line-clamp:2}.sw-acts{margin-top:4px}
+.sw-h1{font-size:24px;margin-bottom:10px}
+.sw-card .td-ph{aspect-ratio:2/1}
+.sw-acts{position:sticky;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:5;pointer-events:none}
+.sw-acts .sw-b{pointer-events:auto}
+.sw-acts .sw-hint{background:color-mix(in srgb,var(--bg) 85%,transparent);border-radius:999px;padding:6px 10px;flex:0 1 auto}
+.sw-stamp{font-size:44px;line-height:1;padding:6px 10px;border-width:3px}
+.sw-b{font-size:30px}
+.sw-b.yes{background:var(--card);border:1px solid var(--line);color:inherit}
+.sw-card{padding-bottom:88px}            /* низ картки — під кнопками 🥲 / 😋, щоб вони не закривали текст */
+.sw-acts{margin:-84px 22px 24px;justify-content:space-between}
+.sw-card{padding-bottom:14px}
+.sw-card .td-ph{overflow:visible}
+.sw-card .td-ph>img{border-radius:var(--r-lg)}
+.sw-card .sw-b{position:absolute;bottom:-26px;z-index:4;width:56px;height:56px;font-size:28px}
+.sw-card .sw-b.no{left:12px}.sw-card .sw-b.yes{right:12px}
+.sw-card .t{margin-top:20px;padding:0 64px}
+.sw-card.next .sw-b{visibility:hidden}
+.sw-card .t{margin-top:34px;padding:0}
+.sw-card .td-ph>img{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;object-fit:cover}

@@ -4,7 +4,7 @@
 {% block htail %}<span class="td-dots hdots" aria-label="Крок 3 з 3"><i class="on"></i><i class="on"></i><i class="on"></i></span>{% endblock %}
 {% block body %}
 {% set PAL = ["p-citrus", "p-tomato", "p-basil", "p-plum", "p-sky", "p-berry"] %}
-<h1 class="xh">Ось що <span class="hl">можна приготувати</span></h1>
+<h1 class="xh sw-h1">Що <span class="hl">приготувати</span></h1>
 <nav class="td-meals" aria-label="Що готуємо">
   {% for k, label in meals.items() %}<a href="/today/dishes?{{ qs }}&amp;meal={{ k }}" data-turbo-action="replace"{% if k == meal %} class="on" aria-current="true"{% endif %}>{{ ic({'breakfast': 'sun', 'dinner': 'pan', 'salad': 'leaf'}[k], 'sm') }} {{ label }}</a>{% endfor %}
 </nav>
@@ -14,12 +14,13 @@
 {% if not opts %}
 <div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
 {% else %}
-{% macro card(o, i) %}{% set d = o.dish %}{% set total = d.recipe.ingredients|length %}{% set got = o.have|length %}
-  <article class="td-dish" data-dish="{{ d.id }}" style="--c:var(--{{ PAL[i % 6] }})">
+{% macro card(o, i) %}{% set d = o.dish %}{% set got = o.have|length %}
+  <article class="td-dish sw-card" data-dish="{{ d.id }}" data-href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}" style="--c:var(--{{ PAL[i % 6] }})"{% if i > 1 %} hidden{% endif %}>
     <div class="td-ph">
-      <span class="td-rank" aria-hidden="true"></span>
-      {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i %}loading="lazy"{% endif %}>{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
-      <button type="button" class="td-swap" aria-label="Інша страва замість «{{ d.title }}»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>Інша</button>
+      {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 1 %}loading="lazy"{% endif %} draggable="false">{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+      <span class="sw-stamp no" aria-hidden="true">🥲</span><span class="sw-stamp yes" aria-hidden="true">😋</span>
+      <button type="button" class="sw-b no" aria-label="Не подобається — більше не показувати">🥲</button>
+      <a class="sw-b yes" href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}" aria-label="Готую: {{ d.title }}">😋</a>
     </div>
     <b class="t">{{ d.title }}</b>
     <div class="td-meta">
@@ -31,72 +32,78 @@
     {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}</p>
     {% else %}<p class="td-need">Нічого не треба купувати</p>{% endif %}
     <div class="td-price"><span>порція{% set kc = kcal(d.recipe) %}{% if kc %} · <span class="kcal">≈ {{ kc }} ккал</span>{% endif %}</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
-    <a class="btn" href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}">Готую це</a>
   </article>
 {% endmacro %}
-{% set nshow = opts[:3]|length %}
-<div class="td-reel" id="tdReel">
-  {% for o in opts[:3] %}{{ card(o, loop.index0) }}{% endfor %}
+<div class="sw-deck" id="swDeck" data-csrf="{{ user.csrf if user else '' }}" aria-live="polite">
+  {% for o in opts %}{{ card(o, loop.index0) }}{% endfor %}
+  <div class="sw-end card" id="swEnd" hidden><b>Це всі страви для цього набору</b><a class="btn" href="/today?{{ qs }}">Змінити продукти чи час</a></div>
 </div>
-{% if nshow > 1 %}<div class="td-dots-nav" id="tdDots" role="tablist" aria-label="Страви">{% for o in opts[:3] %}<button type="button" role="tab" aria-label="Страва {{ loop.index }} з {{ nshow }}"{% if loop.first %} aria-selected="true"{% endif %}></button>{% endfor %}</div>
 <script>try { localStorage.setItem('saw-dishes', '1'); } catch (e) {}</script>
 <script>
 (function () {
-  var reel = document.getElementById('tdReel'), dots = document.getElementById('tdDots'); if (!reel || !dots) return;
-  var bs = dots.querySelectorAll('button');
-  function cards() { return reel.querySelectorAll('.td-dish'); }
-  function sync() {
-    var cs = cards(), x = reel.scrollLeft, best = 0, d = 1e9;
-    cs.forEach(function (c, i) { var dd = Math.abs(c.offsetLeft - reel.offsetLeft - x); if (dd < d) { d = dd; best = i; } });
-    if (reel.scrollLeft + reel.clientWidth >= reel.scrollWidth - 4) best = cs.length - 1;
-    bs.forEach(function (b, i) { b.setAttribute('aria-selected', i === best); });
+  var deck = document.getElementById('swDeck'); if (!deck || deck.dataset.bound) return; deck.dataset.bound = '1';
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, gone = [];
+  function cards() { return [].slice.call(deck.querySelectorAll('.sw-card')); }
+  function top() { return cards()[0]; }
+  function layout() {
+    var cs = cards();
+    cs.forEach(function (c, i) { c.hidden = i > 1; c.classList.toggle('next', i === 1); c.style.transform = ''; c.setAttribute('aria-hidden', i ? 'true' : 'false'); });
+    if (cs[1]) { var im = cs[1].querySelector('img'); if (im) im.removeAttribute('loading'); }
+    document.getElementById('swEnd').hidden = cs.length > 0;
   }
-  reel.addEventListener('scroll', function () { clearTimeout(reel._t); reel._t = setTimeout(sync, 60); }, { passive: true });
+  function vote(id, v) {
+    var fd = new FormData(); fd.append('csrf', deck.dataset.csrf); fd.append('id', id); fd.append('vote', v);
+    return fetch('/recipe/vote', { method: 'POST', body: fd, credentials: 'same-origin' }).catch(function () {});
+  }
+  function undoToast(card) {
+    var t = document.getElementById('undoToast');
+    if (!t) { t = document.createElement('div'); t.id = 'undoToast'; t.className = 'ui-toast undo'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.innerHTML = ''; var s = document.createElement('span'); s.textContent = 'Більше не покажемо'; t.appendChild(s);
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Повернути'; t.appendChild(b);
+    b.onclick = function () { t.classList.remove('on'); vote(card.dataset.dish, ''); card.classList.remove('out-l'); deck.insertBefore(card, deck.firstChild); layout(); };
+    t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('on'); }, 4000);
+  }
+  function out(dir) {
+    var c = top(); if (!c) return;
+    if (window.haptic) haptic(12);
+    if (dir > 0) { c.classList.add('out-r'); if (window.Turbo) Turbo.visit(c.dataset.href); else location.href = c.dataset.href; return; }
+    c.classList.add('out-l');
+    vote(c.dataset.dish, 'down');
+    setTimeout(function () { c.remove(); c.style.transform = ''; layout(); undoToast(c); }, reduce ? 0 : 220);
+  }
+  deck.addEventListener('click', function (e) {
+    var b = e.target.closest('.sw-b'); if (!b || !top() || !top().contains(b)) return;
+    e.preventDefault(); out(b.classList.contains('yes') ? 1 : -1);
+  });
+  // перетягування пальцем: картка нахиляється й показує «Не моє» / «Готую»
+  var x0 = null, y0 = 0, dx = 0, drag = false;
+  deck.addEventListener('pointerdown', function (e) {
+    var c = top(); if (!c || !c.contains(e.target) || e.target.closest('.sw-b')) return;
+    x0 = e.clientX; y0 = e.clientY; dx = 0; drag = false;
+  });
+  deck.addEventListener('pointermove', function (e) {
+    if (x0 === null) return; var c = top(); dx = e.clientX - x0;
+    if (!drag && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - y0)) { drag = true; c.classList.add('drag'); try { c.setPointerCapture(e.pointerId); } catch (err) {} }
+    if (!drag) return;
+    c.style.transform = 'translateX(' + dx + 'px) rotate(' + dx / 18 + 'deg)';
+    c.style.setProperty('--no', Math.max(0, Math.min(1, -dx / 90))); c.style.setProperty('--yes', Math.max(0, Math.min(1, dx / 90)));
+  });
+  function end() {
+    if (x0 === null) return; var c = top(); x0 = null; if (!c) return;
+    c.classList.remove('drag'); c.style.removeProperty('--no'); c.style.removeProperty('--yes');
+    if (drag && Math.abs(dx) > 90) out(dx > 0 ? 1 : -1); else if (drag) c.style.transform = '';
+    else if (Math.abs(dx) < 8) { /* дотик без руху — відкриваємо рецепт */ out(1); }
+    drag = false;
+  }
+  deck.addEventListener('pointerup', end); deck.addEventListener('pointercancel', function () { var c = top(); x0 = null; drag = false; if (c) { c.classList.remove('drag'); c.style.transform = ''; } });
+  // перший раз — легкий «натяк» гортанням, щоб було видно, що картку можна свайпнути
   try {
-    if (!sessionStorage.getItem('td-nudge') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      sessionStorage.setItem('td-nudge', '1');
-      setTimeout(function () { reel.scrollTo({ left: 56, behavior: 'smooth' }); setTimeout(function () { reel.scrollTo({ left: 0, behavior: 'smooth' }); }, 650); }, 700);
+    if (!localStorage.getItem('sw-nudge') && !reduce) {
+      localStorage.setItem('sw-nudge', '1');
+      var c = top(); if (c) setTimeout(function () { c.classList.add('nudge'); setTimeout(function () { c.classList.remove('nudge'); }, 1200); }, 600);
     }
   } catch (e) {}
-  bs.forEach(function (b, i) { b.onclick = function () { var c = cards()[i]; if (c) reel.scrollTo({ left: c.offsetLeft - reel.offsetLeft, behavior: 'smooth' }); }; });
-})();
-</script>{% endif %}
-{# решта варіантів — одразу на сторінці: «Інша» підміняє картку миттєво, без запиту #}
-<template id="tdPool">{% for o in opts[3:] %}{{ card(o, loop.index0 + 3) }}{% endfor %}</template>
-<script>
-(function () {
-  var reel = document.getElementById('tdReel'), pool = document.getElementById('tdPool');
-  if (!reel || !pool || reel.dataset.bound) return; reel.dataset.bound = '1';
-  var queue = [].slice.call(pool.content.children), shown = 0, busy = false;
-  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // фото наступних страв — заздалегідь, щоб при заміні нічого не довантажувалось на очах
-  function preload() { queue.forEach(function (a) { var im = a.querySelector('img'); if (im) { var x = new Image(); x.src = im.getAttribute('src'); } }); }
-  if ('requestIdleCallback' in window) requestIdleCallback(preload, { timeout: 1500 }); else setTimeout(preload, 800);
-  function ready(fresh) {   // чекаємо, поки фото декодується (не довше 250 мс)
-    var im = fresh.querySelector('img'); if (!im || !im.decode) return Promise.resolve();
-    im.removeAttribute('loading');
-    return Promise.race([im.decode().catch(function () {}), new Promise(function (r) { setTimeout(r, 250); })]);
-  }
-  reel.addEventListener('click', function (e) {
-    var b = e.target.closest('.td-swap'); if (!b || busy) return;
-    var card = b.closest('.td-dish'), next = queue.shift();
-    if (!next) { if (window.toast) toast('Це всі варіанти для цього набору продуктів'); return; }
-    busy = true;
-    var fresh = next.cloneNode(true), keep = card.cloneNode(true);
-    queue.push(keep);                           // показана страва — в кінець черги: по колу лише після всіх
-    if (window.haptic) haptic(10);
-    // картка лишається на місці й тієї ж висоти — міняється лише вміст: гасне → новий проявляється
-    card.style.minHeight = card.offsetHeight + 'px';
-    card.classList.add('td-fade');
-    Promise.all([ready(fresh), new Promise(function (r) { setTimeout(r, reduce ? 0 : 150); })]).then(function () {
-      card.innerHTML = fresh.innerHTML;
-      card.dataset.dish = fresh.dataset.dish;
-      card.style.setProperty('--c', fresh.style.getPropertyValue('--c'));
-      requestAnimationFrame(function () { requestAnimationFrame(function () { card.classList.remove('td-fade'); busy = false; }); });
-      shown++;
-      if (shown === queue.length) { if (window.toast) toast('Далі — по другому колу'); shown = 0; }
-    });
-  });
+  layout();
 })();
 </script>
 {% endif %}

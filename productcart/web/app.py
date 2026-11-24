@@ -340,6 +340,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return p
 
     def keep_guest(resp, p: Profile):
+        p.dish_dislikes = p.dish_dislikes[:60]      # гість — у cookie (≤ 4 КБ): пам'ятаємо останні 60 «не моє»
         data = json.dumps({k: getattr(p, k) for k in GUEST_KEYS}, ensure_ascii=False)
         resp.set_cookie(GUEST_COOKIE, box.seal(data), max_age=30 * 86400, httponly=True, samesite="lax", secure=secure)
         return resp
@@ -1497,7 +1498,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if vote > 0:
             p.dish_likes = ([rid] + p.dish_likes)[:30]
         elif vote < 0:
-            p.dish_dislikes = ([rid] + p.dish_dislikes)[:30]
+            p.dish_dislikes = ([rid] + p.dish_dislikes)[:400]     # свайпи «не моє» — пам'ятаємо надовго
 
     def record_vote(voter: str, rid: str, vote: int) -> None:
         conn.execute("DELETE FROM recipe_votes WHERE voter=? AND recipe_id=?", (voter, rid))
@@ -2935,7 +2936,7 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
     if has("dish_likes"):
         p.dish_likes = [x for x in lst("dish_likes") if x in recipe_ids][:30]
     if has("dish_dislikes"):
-        p.dish_dislikes = [x for x in lst("dish_dislikes") if x in recipe_ids][:30]
+        p.dish_dislikes = [x for x in lst("dish_dislikes") if x in recipe_ids][:400]
     if not has("diets") and not has("health_consent"):
         diets, consent = list(prev.diets), bool(prev.diets)
     if p.dish_dislikes != prev.dish_dislikes:   # нелюбі страви не мають лишитись у збереженому меню
