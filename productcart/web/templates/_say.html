@@ -79,18 +79,24 @@ window.initSay = function (cfg) {
     }
     return null;
   }
+  var ADJ = /(ий|ій|ова|ева|ована|ена|ана|ний|на|ні|ові|ька|ська|ке|ене|ане)$/;   // закінчення прикметників
   function parsePhrase(text) {
     var keys = [], others = [];
     var t = norm(text).replace(/[.!?;:]/g, ',').replace(/\d+([.,]\d+)?/g, ' ');
     t.split(/,|\s(?:і|й|та|а також|а|ще)\s/).forEach(function (part) {
-      var w = norm(part).split(' ').filter(function (x) { return x && STOP.indexOf(x) < 0; }), i = 0, unk = [];
+      var w = norm(part).split(' ').filter(function (x) { return x && STOP.indexOf(x) < 0; }), i = 0, unk = [], after = false;
+      // прикметник одразу після продукту («квасоля консервована», «сир твердий») — частина назви, а не окремий продукт
+      function flushUnk() {
+        if (unk.length && !(after && unk.length <= 2 && unk.every(function (x) { return ADJ.test(x); }))) others.push(unk.join(' '));
+        unk = [];
+      }
       while (i < w.length) {
         var hit = null, len = 0;
         for (var n = Math.min(3, w.length - i); n >= 1; n--) { var k = gramKey(w.slice(i, i + n)); if (k) { hit = k; len = n; break; } }
-        if (hit) { if (unk.length) { others.push(unk.join(' ')); unk = []; } if (keys.indexOf(hit) < 0) keys.push(hit); i += len; }
+        if (hit) { flushUnk(); if (keys.indexOf(hit) < 0) keys.push(hit); i += len; after = true; }
         else { unk.push(w[i]); i++; }
       }
-      if (unk.length) others.push(unk.join(' '));
+      flushUnk();
     });
     return { keys: keys, others: others };
   }
