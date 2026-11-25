@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .. import matcher, menu, planner
-from ..catalog import TAG_LABELS, enrich, first_word
+from ..catalog import TAG_LABELS, enrich, first_word, is_food
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
@@ -518,7 +518,9 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         offers = cached_offers(link["store_id"], STALE_TTL) if link and link["store_id"] else None
         # «Гарячі акції» — лише з власного підключеного «Сільпо» (службове підключення — тільки для цін рецептів)
         is_demo = not offers
-        deals = [] if is_demo else sorted((o for o in offers if o.discount_pct), key=lambda o: -(o.discount_pct or 0))[:8]
+        # «Гарячі акції» на головній — лише продукти харчування (без посуду, побутової хімії, техніки)
+        deals = [] if is_demo else sorted((o for o in offers if o.discount_pct and is_food(o)),
+                                          key=lambda o: -(o.discount_pct or 0))[:8]
         meal = default_meal()
         ip = ip_place(request)
         near_ip = near_stores(ip[0], ip[1], n=1) if ip else []
