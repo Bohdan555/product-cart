@@ -697,7 +697,7 @@ def test_today_flow_guest_and_user(client):
     assert "Що є" in page and 'id="hvIn"' in page and 'id="hvMic"' in page and "Часто є вдома" not in page and 'href="/register"' in page
     r = client.get("/today/dishes", params={"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2", "meal": "dinner"})
     assert r.status_code == 200 and "Омлет з перцем і сиром" in r.text and "✓ Є все" in r.text and "Демо-ціни" in r.text
-    assert r.text.count('class="td-dish sw-card"') >= 6 and 'class="sw-b no"' in r.text and 'class="sw-b yes"' in r.text   # одна картка зі свайпом
+    assert r.text.count('class="td-dish sw-card') >= 6 and 'class="sw-b no"' in r.text and 'class="sw-b yes"' in r.text   # одна картка зі свайпом
     assert "Сніданок" in r.text and "Салат" in r.text and "meal=breakfast" in r.text
     assert 'data-k="multicooker"' in client.get("/today").text
     mw = client.get("/today/dishes", params={"have": "eggs", "t": "60", "n": "2", "meal": "breakfast", "k": "microwave"}).text
@@ -707,7 +707,7 @@ def test_today_flow_guest_and_user(client):
     sal = client.get("/today/dishes", params={"have": "cucumber,tomato", "t": "30", "n": "2", "meal": "salad"}).text
     assert re.search(r'class="on" aria-current="true">[^<]*<svg[^>]*>.*?</svg> Салат', sal) and "/today/dish/s-" in sal
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
-    assert re.search(r'aria-current="true">[^<]*<svg[^>]*>.*?</svg> Сніданок', bf) and bf.count('class="td-dish sw-card"') > 3
+    assert re.search(r'aria-current="true">[^<]*<svg[^>]*>.*?</svg> Сніданок', bf) and bf.count('class="td-dish sw-card') > 3
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
     assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
     assert 'id="cmOpen"' in d and 'id="cmData"' in d and "Готувати покроково" in d      # режим «Готую»
@@ -1113,7 +1113,7 @@ def test_nearest_store_auto_switch(client):
 def test_swipe_dislike_and_no_repeats(client):
     token = register(client)
     q = {"have": "eggs,cheese,pepper,onion", "t": "30", "n": "2", "meal": "dinner"}
-    first = re.findall(r'class="td-dish sw-card" data-dish="([^"]+)"', client.get("/today/dishes", params=q).text)
+    first = re.findall(r'class="td-dish sw-card[^"]*" data-dish="([^"]+)"', client.get("/today/dishes", params=q).text)
     assert len(first) > 3
     # свайп вліво = «не моє» → більше не показуємо; «Повернути» = голос знімаємо
     assert client.post("/recipe/vote", data={"csrf": token, "id": first[0], "vote": "down"}).json()["vote"] == "down"

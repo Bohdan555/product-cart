@@ -12,24 +12,24 @@
     {% else %}<a href="/register" id="hmLocA"><b id="hmLocT">Демо-ціни</b><small id="hmLocS">Увійдіть, щоб бачити свій магазин</small></a>{% endif %}
     <a class="hm-me" href="/me" aria-label="Профіль">{{ ic("user") }}</a>
   </div>
-  <h1 class="hm-h">Що готуємо сьогодні?</h1>
-  <a class="hm-search" href="/today"><span class="hm-sico" aria-hidden="true">{{ ic("search", "sm") }}</span><span>Курка, рис, яйця…</span><b aria-hidden="true">{{ ic("mic") }}</b></a>
+  <h1 class="hm-h">Готуємо</h1>
+  <a class="hm-search" href="/today"><span class="hm-sico" aria-hidden="true">{{ ic("search", "sm") }}</span><span>Що є вдома? Курка, рис…</span><b aria-hidden="true">{{ ic("mic") }}</b></a>
   <div class="hm-geo" id="hmGeo" hidden>
     <div class="hm-geo-t"><b id="hmGeoT">Показати найближчий «Сільпо»?</b><small id="hmGeoS">Місце не зберігаємо.</small></div>
     <div class="hm-geo-b" id="hmGeoB"><button type="button" class="hm-geo-go" id="hmGeoGo">{{ ic("pin", "ii") }}Знайти поруч</button><button type="button" class="hm-geo-no" id="hmGeoNo">Не зараз</button></div>
   </div>
 </section>
 
-<nav class="hm-main" aria-label="Головне">
-  <a href="/today"><i>{{ ic("pan") }}</i><b>Що приготувати сьогодні</b><small>Скажіть, що є вдома — підберемо 3 страви</small></a>
-  <a href="/week"><i>{{ ic("calendar") }}</i><b>План на тиждень</b><small>Меню з акцій і готовий список покупок</small></a>
-</nav>
-{% if user %}
-<a class="hm-fridge" href="/pantry">
-  <i aria-hidden="true">{{ ic("fridge") }}</i><b>Холодильник</b>
-  <span>{% set fn = p_fridge_n %}{% if soon %}{{ soon[0][1]|lower }} · {{ soon[0][3] }}{% elif fn %}{{ fn }} {{ plural(fn, 'продукт', 'продукти', 'продуктів') }}{% else %}додати продукти{% endif %} →</span>
+<a class="hm-hero-card" href="/today">
+  <img src="/static/dishes/kotlety.jpg" alt="" fetchpriority="high">
+  <span class="hm-hc-t"><small>З того, що є вдома</small><b>Що приготувати сьогодні</b></span>
+  <span class="hm-hc-b">Підібрати страву</span>
 </a>
-{% endif %}
+<nav class="hm-group" aria-label="Головне">
+  <a href="/week">{{ ic("calendar") }}<span><b>План на тиждень</b><small>Меню з акцій і список покупок</small></span><i aria-hidden="true">›</i></a>
+  {% if user %}<a href="/pantry">{{ ic("fridge") }}<span><b>Холодильник</b><small>{% set fn = p_fridge_n %}{% if soon %}{{ soon[0][1]|lower }} · {{ soon[0][3] }}{% elif fn %}{{ fn }} {{ plural(fn, 'продукт', 'продукти', 'продуктів') }}{% else %}додати продукти{% endif %}</small></span><i aria-hidden="true">›</i></a>
+  <a href="/dishes">{{ ic("book") }}<span><b>Мої страви</b><small>Свої рецепти й з інтернету</small></span><i aria-hidden="true">›</i></a>{% endif %}
+</nav>
 {% if soon %}
 <a class="xp-card" href="{{ soon_url }}">
   <span class="xp-ic" aria-hidden="true">{{ ic("clock") }}</span>

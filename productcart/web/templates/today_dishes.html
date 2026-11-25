@@ -15,7 +15,7 @@
 <div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
 {% else %}
 {% macro card(o, i) %}{% set d = o.dish %}{% set got = o.have|length %}
-  <article class="td-dish sw-card" data-dish="{{ d.id }}" data-href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}" style="--c:var(--{{ PAL[i % 6] }})"{% if i > 1 %} hidden{% endif %}>
+  <article class="td-dish sw-card{% if d.id not in photos %} nophoto{% endif %}" data-dish="{{ d.id }}" data-href="/today/dish/{{ d.id }}?{{ qs }}&amp;meal={{ meal }}" style="--c:var(--{{ PAL[i % 6] }})"{% if i > 1 %} hidden{% endif %}>
     <div class="td-ph">
       {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 1 %}loading="lazy"{% endif %} draggable="false">{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
       <span class="sw-stamp no" aria-hidden="true">🥲</span><span class="sw-stamp yes" aria-hidden="true">😋</span>

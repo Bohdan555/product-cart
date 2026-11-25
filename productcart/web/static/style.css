@@ -1749,3 +1749,170 @@ header.top:has(.hback) .logo{display:none}
 .sw-card.next .sw-b{visibility:hidden}
 .sw-card .t{margin-top:34px;padding:0}
 .sw-card .td-ph>img{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;object-fit:cover}
+
+/* =====================================================================================================
+   «Liquid Glass» — дизайн за Apple Human Interface Guidelines (iOS 26). Шар поверх попередніх стилів.
+   Принципи: ієрархія (великий заголовок → зміст → одна головна дія), гармонія (концентричні заокруглення,
+   сітка 8 pt, поля 16 pt), послідовність (стандартні патерни: таб-бар, сегментований контрол, згруповані
+   списки), скло лише для елементів керування над змістом, зміст — на весь простір.
+   ===================================================================================================== */
+:root{--r-xs:10px;--r-sm:14px;--r-md:20px;--r-lg:26px;--r-xl:32px;
+  --bg:#F4F2EE;--card:#FFFFFF;--ink:#111111;--muted:#5E5C62;--line:rgba(40,40,45,.12);--chip:rgba(120,120,128,.12);--soft:rgba(120,120,128,.09);
+  --accent:#1D3B2F;--accent-ink:#FFFFFF;--tint:#1D3B2F;--sticker:#C9A45C;--sticker-ink:#111;--ok:#2B7A4B;--warn:#B4541A;
+  --glass:rgba(255,255,255,.58);--glass-strong:rgba(255,255,255,.78);--glass-edge:rgba(255,255,255,.9);
+  --sh-soft:0 8px 24px -12px rgba(0,0,0,.22);--sh-lift:0 24px 50px -20px rgba(0,0,0,.32);--shadow:rgba(0,0,0,.18);
+  --p-tomato:#F7EFE6;--p-citrus:#F7F1E1;--p-basil:#ECF2EA;--p-plum:#F2ECF1;--p-berry:#F6ECEE;--p-sky:#EAF0F4}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#000000;--card:#1C1C1E;--ink:#F5F5F7;--muted:#A1A1A8;--line:rgba(255,255,255,.12);--chip:rgba(120,120,128,.28);--soft:rgba(120,120,128,.2);
+  --accent:#D4B37A;--accent-ink:#141210;--tint:#D4B37A;--sticker:#D4B37A;--sticker-ink:#141210;--ok:#5FCB8A;--warn:#F2A35F;
+  --glass:rgba(40,40,44,.55);--glass-strong:rgba(44,44,48,.8);--glass-edge:rgba(255,255,255,.14);
+  --sh-soft:0 8px 24px -12px rgba(0,0,0,.7);--sh-lift:0 24px 50px -20px rgba(0,0,0,.8);
+  --p-tomato:#241E1A;--p-citrus:#24211A;--p-basil:#1B221D;--p-plum:#231D22;--p-berry:#251C1F;--p-sky:#1B2026}}
+body{background:var(--bg);font-size:17px;letter-spacing:-.01em}
+.glass,.dock nav,.td-back,.hback,.hm-me,.ui-toast,.consent-bar{-webkit-backdrop-filter:blur(24px) saturate(190%);backdrop-filter:blur(24px) saturate(190%)}
+
+/* ---- Типографіка: Large Title 34 · Title2 22 · Title3 20 · Headline 17 · Subheadline 15 · Footnote 13 ---- */
+.xh{font:700 34px/1.2 var(--display);letter-spacing:-.022em;margin:4px 0 14px}
+.xh .hl{color:inherit}
+h2,.td-h,.hm-sec h2,.ph{font-family:var(--display);letter-spacing:-.015em}
+.td-h{font-size:20px;font-weight:600}
+.hint,.fee-note,small{letter-spacing:0}
+
+/* ---- Таб-бар: плаваюча скляна капсула над змістом ---- */
+.dock{padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+.dock nav{background:var(--glass);border:0;border-radius:999px;padding:6px;gap:2px;
+  box-shadow:0 12px 32px -12px rgba(0,0,0,.3),inset 0 1px 0 var(--glass-edge),inset 0 0 0 .5px var(--glass-edge),0 0 0 .5px rgba(0,0,0,.06)}
+.dock a{border-radius:999px;font-size:11px;font-weight:600;padding:8px 4px 7px;gap:3px;color:var(--muted)}
+.dock a.on{background:color-mix(in srgb,var(--tint) 12%,transparent);color:var(--tint)}
+.dock a.on .ico{--ic:transparent}
+.dock a.dcart,.dock a.dcart.on{background:transparent;color:var(--muted);box-shadow:none;flex-direction:column;font:600 11px/1 var(--body);gap:3px;padding:8px 4px 7px}
+.dock a.dcart.on{background:color-mix(in srgb,var(--tint) 12%,transparent);color:var(--tint)}
+.dock .cartN{background:#FF3B30;color:#fff}
+
+/* ---- Кнопки: капсули; головна — заливка фірмовим, другорядна — скло/сірий ---- */
+.btn{border-radius:999px;min-height:50px;padding:14px 22px;font:600 17px/1.2 var(--body);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.small{min-height:36px;padding:8px 16px;font-size:15px}
+.btn.alt{background:var(--chip);color:var(--ink)}
+.card{border:0;border-radius:var(--r-lg);box-shadow:var(--sh-soft)}
+
+/* ---- «Назад» і круглі кнопки в шапці — скляні ---- */
+.td-back,.hback{width:44px;height:44px;background:var(--glass-strong);color:var(--ink);box-shadow:0 0 0 .5px rgba(0,0,0,.06),inset 0 1px 0 var(--glass-edge)}
+
+/* ---- Головна ---- */
+.hm-hero{background:none;color:var(--ink);border-radius:0;margin:-16px 0 0;padding:calc(6px + env(safe-area-inset-top,0px)) 0 0}
+.hm-loc b{font-size:15px;font-weight:500;color:var(--muted)}.hm-loc small{font-size:13px;color:var(--muted);opacity:1}
+.hm-pin .ico{stroke:var(--sticker);width:18px;height:18px}
+.hm-me{background:var(--glass-strong);color:var(--ink);box-shadow:0 0 0 .5px rgba(0,0,0,.06),inset 0 1px 0 var(--glass-edge)}
+.hm-h{color:var(--ink);font:700 34px/1.2 var(--display);letter-spacing:-.022em;margin:6px 0 12px}
+.hm-search{background:var(--card);color:var(--muted);border-radius:999px;min-height:48px;padding:6px 6px 6px 16px;font-size:17px;box-shadow:0 0 0 .5px var(--line)}
+.hm-search b{width:36px;height:36px;background:var(--chip)}.hm-search b .ico{stroke:var(--ink);width:20px;height:20px}
+.hm-hero-card{position:relative;display:block;height:300px;margin:18px 0 0;border-radius:var(--r-xl);overflow:hidden;text-decoration:none;color:#fff;box-shadow:var(--sh-soft);isolation:isolate}
+.hm-hero-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;padding:0;border-radius:0;background:none}
+.hm-hero-card::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.66))}
+.hm-hc-t{position:absolute;left:20px;right:20px;bottom:78px}
+.hm-hc-t small{display:block;font:600 13px/1.2 var(--body);text-transform:uppercase;letter-spacing:.05em;opacity:.85;margin-bottom:4px}
+.hm-hc-t b{font:700 26px/1.15 var(--display);letter-spacing:-.02em}
+.hm-hc-b{position:absolute;left:14px;right:14px;bottom:14px;height:50px;display:grid;place-items:center;border-radius:999px;font:600 17px var(--body);
+  color:#111;background:rgba(255,255,255,.74);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.95)}
+.hm-hero-card:active{transform:scale(.985)}
+.hm-group{margin:16px 0 0;background:var(--card);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 0 0 .5px var(--line)}
+.hm-group a{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 16px;color:var(--ink);text-decoration:none;position:relative}
+.hm-group a+a::before{content:"";position:absolute;left:54px;right:0;top:0;height:.5px;background:var(--line)}
+.hm-group .ico{width:24px;height:24px;flex:none;--ic:transparent;stroke:var(--tint)}
+.hm-group span{flex:1;min-width:0;display:grid;gap:1px}.hm-group b{font:500 17px/1.3 var(--body)}.hm-group small{font-size:15px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-group i{font-style:normal;font-size:24px;color:color-mix(in srgb,var(--muted) 60%,transparent)}
+.hm-group a:active{background:var(--soft)}
+.xp-card{border:0;border-radius:var(--r-lg);box-shadow:0 0 0 .5px var(--line);margin-top:16px!important}
+.ck-card{border-radius:var(--r-lg)!important}
+.hm-sec h2{font-size:22px;font-weight:700}
+.hm-deal{border-radius:var(--r-lg)}
+
+/* ---- Сегментований контрол (сніданок / обід / салат, вкладки меню) ---- */
+.td-meals{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;padding:3px;border-radius:999px;background:var(--chip);margin:0 0 14px}
+.td-meals a{justify-content:center;border-radius:999px;background:none;padding:8px 6px;font-size:14px;font-weight:500;min-height:36px}
+.td-meals a.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+.td-badge{border-radius:999px}
+.td-pill{border-radius:999px}
+
+/* ---- Картка страви: фото на всю картку, текст поверх, скляні кнопки 🥲 / 😋 ---- */
+.sw-card{padding:0;border-radius:var(--r-xl);overflow:hidden;min-height:520px;background:#222;color:#fff;box-shadow:var(--sh-lift);isolation:isolate;justify-content:flex-end}
+.sw-card .td-ph{position:absolute;inset:0;aspect-ratio:auto;border-radius:0;overflow:hidden;z-index:-1}
+.sw-card .td-ph::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.82))}
+.sw-card .td-ph>img{border-radius:0}
+.sw-card .td-ph .e{font-size:120px}
+.sw-card>:not(.td-ph){position:relative;z-index:1;margin-left:20px;margin-right:20px}
+.sw-card .t{margin-top:0;font:700 26px/1.15 var(--display);letter-spacing:-.02em;color:#fff;min-height:0}
+.sw-card .td-meta .td-pill{background:rgba(255,255,255,.2);color:#fff;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.sw-card .td-meta .td-pill.ok,.sw-card .td-buy.ok{background:rgba(120,220,160,.32);color:#fff}
+.sw-card .td-meta .ico{--ic:transparent;stroke:#fff}
+.sw-card .td-need{color:rgba(255,255,255,.82);min-height:0}.sw-card .td-need b{color:#fff}
+.sw-card .td-price{color:rgba(255,255,255,.82);margin-bottom:96px}.sw-card .td-price b{color:#fff;font-size:22px}
+.sw-card .kcal{color:inherit}
+.sw-card .sw-b{position:absolute;top:auto;bottom:18px;left:auto;right:auto;z-index:2;width:64px;height:64px;font-size:30px;
+  background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 10px 26px -10px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.95);border:0}
+.sw-card .sw-b.no{left:20px}.sw-card .sw-b.yes{right:20px}
+.sw-card.next{opacity:.55}
+.sw-stamp{background:rgba(255,255,255,.85)}
+
+/* ---- Список покупок: згруповані рядки як у «Нагадуваннях» ---- */
+.mlist .group{gap:0}
+.mlist .gh{padding:18px 4px 8px}
+.mlist .gh b{font:700 22px/1.2 var(--display);letter-spacing:-.015em}
+.mlist .brow{border-radius:0;background:var(--card);box-shadow:none;min-height:60px;position:relative}
+.mlist .gh+.brow,.mlist summary+.brow{border-radius:var(--r-lg) var(--r-lg) 0 0}
+.mlist .brow:last-child{border-radius:0 0 var(--r-lg) var(--r-lg)}
+.mlist .gh+.brow:last-child,.mlist summary+.brow:last-child{border-radius:var(--r-lg)}
+.mlist .brow+.brow::before{content:"";position:absolute;left:66px;right:0;top:0;height:.5px;background:var(--line)}
+.mlist details.group>.brow{margin-top:0}
+.mlist .brow .box{border-radius:50%;width:26px;height:26px;border:1.6px solid color-mix(in srgb,var(--ink) 30%,transparent);background:none}
+.brow:has(input:checked) .box{background:var(--tint);border-color:var(--tint)}
+.mlist .brow:has(input:checked) .rmain b{text-decoration:line-through;text-decoration-thickness:1.5px}
+.buyprog{border:0;border-radius:var(--r-lg);box-shadow:0 0 0 .5px var(--line)}
+.progress{border-radius:999px;background:var(--chip)}.progress i{border-radius:999px;background:var(--tint)}
+.mlist .scart .btn{border-radius:999px;background:var(--tint);color:var(--accent-ink);box-shadow:0 12px 28px -12px var(--tint)}
+.copy{border-radius:999px}
+
+/* ---- Банер згоди: компактний скляний рядок над таб-баром, а не пів екрана ---- */
+.consent-bar{background:var(--glass-strong);border:0;border-radius:var(--r-lg);padding:12px 12px 12px 16px;display:flex;align-items:center;gap:10px;
+  box-shadow:0 12px 32px -12px rgba(0,0,0,.3),inset 0 1px 0 var(--glass-edge);bottom:calc(98px + env(safe-area-inset-bottom,0px))}
+.consent-bar p{font-size:13px;line-height:1.35;flex:1}
+.consent-bar div{flex:none;gap:6px}.consent-bar .btn{min-height:36px;padding:8px 14px;font-size:15px;flex:none}
+
+/* ---- Підказки, діалоги, нижні аркуші ---- */
+.ui-toast{background:var(--glass-strong);color:var(--ink);border-radius:999px;box-shadow:0 12px 32px -12px rgba(0,0,0,.35),inset 0 1px 0 var(--glass-edge)}
+.ui-toast.undo button{color:var(--tint)}
+dialog{border-radius:var(--r-xl)}
+.pn-sheet,.ms-sheet{border-radius:var(--r-xl) var(--r-xl) 0 0}
+.cm-x,.cm-tog{background:var(--chip)}
+.cm-timer{border-radius:999px;background:var(--tint);color:var(--accent-ink)}
+.cm-nav .btn{border-radius:999px}
+@media (prefers-reduced-transparency:reduce){
+  .dock nav,.td-back,.hback,.hm-me,.ui-toast,.consent-bar,.hm-hc-b,.sw-card .sw-b{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+.sw-card .td-price{margin-top:4px}
+.sw-card>.t{margin-top:auto}
+/* страва без фото: пастельний фон і велике емодзі вгорі, текст темний */
+.sw-card.nophoto{background:var(--c,var(--p-citrus));color:var(--ink)}
+.sw-card.nophoto .td-ph{display:grid;place-items:start center;padding-top:56px}
+.sw-card.nophoto .td-ph::after{display:none}
+.sw-card.nophoto .td-ph .e{font-size:150px;filter:drop-shadow(0 18px 24px rgba(0,0,0,.18))}
+.sw-card.nophoto .t,.sw-card.nophoto .td-need b,.sw-card.nophoto .td-price b{color:var(--ink)}
+.sw-card.nophoto .td-need,.sw-card.nophoto .td-price{color:var(--muted)}
+.sw-card.nophoto .td-meta .td-pill{background:var(--glass-strong);color:var(--ink)}
+.sw-card.nophoto .td-meta .ico{stroke:var(--ink)}
+.sw-card.nophoto .td-meta .td-pill.ok{background:color-mix(in srgb,var(--ok) 18%,var(--card));color:var(--ok)}
+/* кроки тижня ① ② ③ — теж сегментований контрол */
+.wk{display:grid!important;grid-template-columns:repeat(3,1fr);gap:0!important;padding:3px;border-radius:999px;background:var(--chip);margin:0 0 14px!important}
+.wk a{justify-content:center;border-radius:999px!important;background:none!important;color:var(--ink)!important;font-size:14px!important;font-weight:500!important;min-height:36px;padding:6px 4px!important;box-shadow:none!important}
+.wk a i{background:var(--chip)!important;color:var(--ink)!important}
+.wk a[aria-current]{background:var(--card)!important;font-weight:600!important;box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)!important}
+.wk a[aria-current] i{background:var(--tint)!important;color:var(--accent-ink)!important}
+/* картка страви вміщається на екран разом із кнопками: висота від вікна, а не фіксована */
+.sw-h1{font:700 28px/1.2 var(--display);margin:0 0 10px}
+.sw-card{min-height:0;height:max(400px,calc(100dvh - 292px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)))}
+.sw-card .td-price{margin-bottom:92px}
+.sw-card.nophoto .td-ph{padding-top:28px}.sw-card.nophoto .td-ph .e{font-size:120px}
+.sw-card{height:max(360px,calc(100dvh - 350px - env(safe-area-inset-bottom,0px)))}
+.sw-card.nophoto .td-ph{padding-top:18px}.sw-card.nophoto .td-ph .e{font-size:min(110px,14dvh)}
+.sw-card .td-price{margin-bottom:88px}
+body:has(.sw-deck) footer{display:none}   /* екран-картка на весь зріст: підвал прихований (посилання є в «Профілі») */
