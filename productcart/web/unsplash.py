@@ -86,6 +86,35 @@ from ..recipes_ua import PHOTO_QUERIES as _UA  # noqa: E402
 QUERIES.update(_UA)
 from ..tastes import PHOTO_QUERIES as _TASTES  # noqa: E402 — фото карток свайп-анкети смаків
 QUERIES.update(_TASTES)
+# Перевибір невдалих фото (сирі продукти, люди, не та страва, дублі): конкретніший запит «готова страва на тарілці».
+# Зміна запиту — сигнал перешукати фото (usable() звіряє збережений запит).
+QUERIES.update({
+    "deruny": "potato pancakes latkes sour cream plate", "fish-cream": "baked fish fillet cream sauce rice plate",
+    "chicken-julienne": "chicken mushroom julienne cocotte cheese", "chicken-liver-cream": "chicken liver stroganoff buckwheat plate",
+    "pelmeni-bake": "baked dumplings melted cheese casserole", "meat-potato-zrazy": "stuffed potato patties fried plate",
+    "sausage-potato-bake": "sausages roasted potatoes baking dish", "fish-bake-cheese": "baked fish fillet tomato cheese dish",
+    "tuna-salad": "tuna corn egg salad bowl", "green-borscht": "sorrel soup boiled egg bowl",
+    "pea-soup": "split pea soup smoked meat bowl", "mushroom-buckwheat-soup": "mushroom soup bowl rustic",
+    "cauliflower-batter": "fried cauliflower florets crispy batter", "varenyky-onion": "pierogi fried onions sour cream",
+    "brynza-pasta": "pasta cherry tomatoes feta cheese plate", "buckwheat-milk": "buckwheat porridge bowl butter",
+    "b-semolina": "semolina porridge bowl butter berries", "b-rice-milk": "rice pudding bowl cinnamon",
+    "b-cottage-berries": "cottage cheese bowl fresh berries", "s-tomato-cucumber": "tomato cucumber salad sour cream dill bowl",
+    "s-crab": "crab stick salad corn mayonnaise bowl", "s-beet-garlic": "beetroot salad garlic cheese bowl",
+    "s-buckwheat-warm": "warm buckwheat salad mushrooms plate", "s-korean-carrot": "korean spicy carrot salad",
+    "s-apple-carrot": "grated carrot apple salad bowl", "s-ham-cheese": "ham cheese cucumber salad bowl",
+    "s-cabbage-peas": "cabbage salad green peas egg bowl", "chicken-rolls": "stuffed chicken breast rolls cheese",
+    "chicken-bulgur-soup": "chicken vegetable soup bowl bulgur", "turkey-buckwheat": "buckwheat mushrooms meat plate",
+    "minced-potato-bake": "shepherds pie slice mashed potato minced meat", "pelmeni-soup": "dumplings in broth bowl dill",
+    "fish-tomato-rice": "fish fillet tomato sauce rice plate", "potato-mushroom-cakes": "potato cakes stuffed mushrooms fried",
+    "mackerel-potato-bake": "baked mackerel potatoes lemon tray", "herring-potato": "herring fillet boiled potatoes dill onion plate",
+    "bacon-potato": "fried potatoes bacon onions skillet", "quinoa-veg": "quinoa chickpea roasted vegetables bowl",
+    "couscous-chicken": "couscous chicken vegetables plate", "lentil-dal": "red lentil dal coconut bowl rice",
+    "puff-pizza": "puff pastry pizza ham cheese", "b-cottage-banana": "cottage cheese banana bowl breakfast",
+    "b-mushroom-toast": "mushroom toast melted cheese", "b-spinach-omelette": "spinach omelette plate",
+    "s-cucumber-sourcream": "cucumber salad sour cream dill bowl", "s-turkey-greens": "turkey breast salad greens tomatoes plate",
+    "s-herring-coat": "layered beet herring salad shuba", "s-quinoa": "quinoa salad cucumber herbs bowl",
+    "s-green-beans-egg": "green beans egg salad plate",
+})
 from ..recipes_bs import PHOTO_QUERIES as _BS  # noqa: E402
 QUERIES.update(_BS)
 
@@ -123,12 +152,14 @@ def usable(d: str, p: dict) -> bool:
 
 
 def pick(results: list[dict], used: set = frozenset()) -> dict | None:
-    for r in results:
-        if r.get("id") in used:
-            continue     # одне фото — одній страві
-        if r.get("urls", {}).get("raw") and not r.get("premium") and not r.get("plus"):
-            return r
-    return None
+    """Найкраще з видачі: не преміум, ще не використане (одне фото — одній страві), горизонтальне,
+    і з найбільшою кількістю вподобань — так стабільно виходять якісні, «апетитні» знімки, а не перший-ліпший."""
+    ok = [r for r in results if r.get("id") not in used and r.get("urls", {}).get("raw")
+          and not r.get("premium") and not r.get("plus")]
+    if not ok:
+        return None
+    wide = [r for r in ok if (r.get("width") or 4) >= (r.get("height") or 3)] or ok
+    return max(wide, key=lambda r: r.get("likes") or 0)
 
 
 def fetch_one(client: httpx.Client, query: str, used: set = frozenset()) -> dict | None:
