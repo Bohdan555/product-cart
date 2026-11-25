@@ -971,16 +971,14 @@ def test_tastes_diets_one_page(client):
     """Смаки, дієти, щотижневі покупки й знижки — одна сторінка «Смаки й харчування»."""
     token = register(client)
     page = client.get("/profile").text
-    assert "Смаки й" in page and 'id="prTastes"' in page and 'name="diets"' in page and 'id="regulars"' in page
+    assert "Смаки й" in page and 'href="/tastes?next=/profile"' in page and 'name="diets"' in page and 'id="regulars"' in page
     me = client.get("/me").text
     assert "Смаки й харчування" in me and "Дієти й анкета" not in me
     r = client.post("/profile", data={"csrf": token, "_f": ["likes", "dislikes", "diets", "regulars", "min_discount"],
                                       "likes": ["fish", "eggs"], "dislikes": ["pork"], "regulars": "кава", "min_discount": "15"})
     assert r.status_code == 303
     page = client.get("/profile").text
-    assert 'data-tag="fish" data-hide="1"' in page and 'data-state="like"' in page and 'data-state="hide"' in page
-    client.post("/profile", data={"csrf": token, "_f": ["likes", "dislikes"]})          # усе скинули
-    assert 'data-state="like"' not in client.get("/profile").text
+    assert 'name="likes" value="fish"' in page and 'name="dislikes" value="pork"' in page    # старі смаки-теги зберігаються
 
 
 def test_posthog_server_events_and_consent(tmp_path, monkeypatch):
@@ -1122,3 +1120,22 @@ def test_swipe_dislike_and_no_repeats(client):
     client.post("/today/cooked", data={"csrf": token, "id": first[0], "n": "2"})
     again = re.findall(r'data-dish="([^"]+)"', client.get("/today/dishes", params=q).text)
     assert again[0] != first[0] and (first[0] not in again or again.index(first[0]) > len(again) // 2)
+
+
+def test_tastes_swipe_saves_and_filters(client):
+    """Свайп-анкета: 😋 — страви з продуктом вище, 🥲 — страв з ним не пропонуємо; гість теж може."""
+    from productcart import menu, tastes
+    page = client.get("/tastes").text
+    assert page.count('class="td-dish sw-card ts-card') == len(tastes.CARDS) and 'data-a="skip"' in page
+    token = register(client)
+    assert "Що вам смакує?" in client.get("/").text                     # на головній — запрошення, поки не свайпав
+    r = client.post("/tastes", data={"csrf": token, "like": ["chicken", "potato"], "no": ["liver", "fish"], "skip": ["tofu"]})
+    assert r.json()["ok"]
+    assert "Що вам смакує?" not in client.get("/").text and "не їм: 4" in client.get("/profile").text
+    q = {"have": "eggs,onion", "t": "60", "n": "2", "meal": "dinner"}
+    ids = re.findall(r'data-dish="([^"]+)"', client.get("/today/dishes", params=q).text)
+    assert ids and not any({"liver", "fish", "mackerel", "herring"} & set(menu.RECIPE_BY_ID[i].ingredients) for i in ids if i in menu.RECIPE_BY_ID)
+    # передумав: печінку тепер «смакує»
+    client.post("/tastes", data={"csrf": token, "like": ["liver"]})
+    assert "не їм: 3" in client.get("/profile").text
+    assert client.post("/tastes", data={"csrf": "bad", "like": ["liver"]}).status_code == 400

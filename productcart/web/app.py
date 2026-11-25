@@ -28,6 +28,7 @@ from fastapi.templating import Jinja2Templates
 
 from .. import matcher, menu, planner
 from ..catalog import TAG_LABELS, enrich, first_word, is_food
+from .. import tastes
 from ..models import DIET_LABELS, DIETS, Offer, Profile
 from ..render import CHAIN_NAMES, uah
 from ..sources import demo, silpo, silpo_cart
@@ -57,7 +58,8 @@ MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "
 # людина вказує лише тоді, коли підбирає страви. Сторінка /pantry лишається доступною за адресою.
 PANTRY_ON = False
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
-              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking", "kitchen", "taste_done")
+              "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking", "kitchen", "taste_done",
+              "food_likes", "food_dislikes", "tastes_seen")
 # Конструктор меню: що можна любити / виключити (теги інгредієнтів)
 SETUP_TASTES = [("meat", "🍗", "М'ясо й птиця"), ("fish", "🐟", "Риба й морепродукти"), ("vegetables", "🥦", "Овочі"),
                 ("grains", "🌾", "Крупи й гарніри"), ("dairy", "🧀", "Молочне"), ("eggs", "🍳", "Яйця"),
@@ -70,7 +72,7 @@ TASTE_PROTEINS = ["курка", "риба", "фарш", "свинина", "ов�
 
 def taste_known(p: Profile) -> bool:
     """Чи вже знаємо смаки: пройшов анкету, пропустив її або вже щось позначав раніше."""
-    return bool(p.taste_done or p.likes or p.dislikes or p.dish_likes)
+    return bool(p.taste_done or p.likes or p.dislikes or p.dish_likes or p.tastes_seen)
 
 
 
@@ -530,6 +532,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         soon = menu.expiring(p.fridge_since, p.fridge, within=1, until=p.fridge_until) if u else []
         soon_url = (f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}" if soon else None)
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
+                      taste_ask=not p.tastes_seen,
                       soon=[(k, menu.INGREDIENTS[k][0], menu.PANTRY_WORDS.get(k, ("", "🥫"))[1],
                              ("" if p.fridge_until.get(k) else "≈ ") + menu.when_label(d))     # ≈ — приблизно, за видом продукту
                             for k, d in soon], soon_url=soon_url, p_fridge_n=len(p.fridge) + len(p.fridge_other),
@@ -687,6 +690,45 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return resp
 
     # ---------- профіль ----------
+    # ---------- свайп-анкета смаків: продукти 😋 / 🥲 / «не знаю» ----------
+    @app.get("/tastes", response_class=HTMLResponse)
+    def tastes_page(request: Request):
+        u = user_of(request)
+        p = load_profile(u["id"])[0] if u else guest_profile(request)
+        photos = menu_photos()
+        cards = [{"id": cid, "title": t, "emoji": e, "photo": photos.get(tastes.photo_key(cid)),
+                  "state": ("like" if set(keys) & set(p.food_likes) else "no" if set(keys) & set(p.food_dislikes) else "")}
+                 for cid, t, e, keys, _ in tastes.CARDS]
+        nxt = request.query_params.get("next") or "/profile"
+        if not nxt.startswith("/") or nxt.startswith("//"):
+            nxt = "/profile"
+        return render(request, "tastes.html", u, cards=cards, next_url=nxt, back_url=nxt)
+
+    @app.post("/tastes")
+    async def tastes_save(request: Request):
+        """Відповіді анкети: like=<id картки>, no=<id>, skip=<id> (можна кілька). JSON — сторінка сама переходить далі."""
+        form, u, p, health, bad = await menu_form(request)
+        if bad:
+            return JSONResponse({"error": "Оновіть сторінку"}, status_code=400)
+        like = [c for c in form.getlist("like") if c in tastes.BY_ID]
+        no = [c for c in form.getlist("no") if c in tastes.BY_ID]
+        skip = [c for c in form.getlist("skip") if c in tastes.BY_ID]
+        seen = like + no + skip
+        # оцінені зараз картки переписують попередні відповіді для своїх продуктів
+        touched = set(tastes.keys_of(seen))
+        p.food_likes = [k for k in p.food_likes if k not in touched] + tastes.keys_of(like)
+        p.food_dislikes = [k for k in p.food_dislikes if k not in touched] + tastes.keys_of(no)
+        p.tastes_seen = list(dict.fromkeys(p.tastes_seen + seen))
+        p.taste_done = True
+        p.menu, p.menu_skip = [], []                  # меню перебудуємо під смаки
+        if u:
+            analytics.track(conn, u["id"], "tastes_saved", like=len(like), no=len(no), skip=len(skip))
+        resp = JSONResponse({"ok": True, "likes": len(p.food_likes), "no": len(p.food_dislikes)})
+        if u:
+            save_profile(u["id"], p, health)
+            return resp
+        return keep_guest(resp, p)
+
     @app.get("/profile", response_class=HTMLResponse)
     def profile_form(request: Request, welcome: int = 0):
         u, bad = need_user(request)
@@ -3001,7 +3043,7 @@ def menu_credits() -> dict:
 
 
 NEAR_MAX_KM = 50
-PRODUCT_PHOTO_KEYS = ["p:" + k for k in unsplash.PRODUCT_QUERIES]
+PRODUCT_PHOTO_KEYS = [tastes.photo_key(c[0]) for c in tastes.CARDS] + ["p:" + k for k in unsplash.PRODUCT_QUERIES]
 photo_job: contextvars.ContextVar[list | None] = contextvars.ContextVar("photo_job", default=None)
 
 def local_photos() -> dict[str, str]:

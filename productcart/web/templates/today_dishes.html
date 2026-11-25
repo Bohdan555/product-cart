@@ -66,7 +66,7 @@
   function out(dir) {
     var c = top(); if (!c) return;
     if (window.haptic) haptic(12);
-    if (dir > 0) { c.classList.add('out-r'); if (window.Turbo) Turbo.visit(c.dataset.href); else location.href = c.dataset.href; return; }
+    if (dir > 0) { vote(c.dataset.dish, 'up'); c.classList.add('out-r'); if (window.Turbo) Turbo.visit(c.dataset.href); else location.href = c.dataset.href; return; }
     c.classList.add('out-l');
     vote(c.dataset.dish, 'down');
     setTimeout(function () { c.remove(); c.style.transform = ''; layout(); undoToast(c); }, reduce ? 0 : 220);

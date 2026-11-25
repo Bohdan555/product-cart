@@ -25,6 +25,7 @@
   <span class="hm-hc-t"><small>З того, що є вдома</small><b>Що приготувати сьогодні</b></span>
   <span class="hm-hc-b">Підібрати страву</span>
 </a>
+{% if taste_ask %}<a class="pr-taste hm-taste" href="/tastes?next=/"><i aria-hidden="true">😋</i><span><b>Що вам смакує?</b><small>Свайпніть продукти — пів хвилини</small></span><em aria-hidden="true">›</em></a>{% endif %}
 <nav class="hm-group" aria-label="Головне">
   <a href="/week">{{ ic("calendar") }}<span><b>План на тиждень</b><small>Меню з акцій і список покупок</small></span><i aria-hidden="true">›</i></a>
   {% if user %}  <a href="/dishes">{{ ic("book") }}<span><b>Мої страви</b><small>Свої рецепти й з інтернету</small></span><i aria-hidden="true">›</i></a>{% endif %}

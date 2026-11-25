@@ -704,7 +704,8 @@ def cook_hint(rec: Recipe, kitchen) -> str | None:
 
 def allowed(rec: Recipe, profile: Profile, max_minutes: int) -> bool:
     return (rec.minutes <= max_minutes and not (recipe_tags(rec) & profile.excluded_tags())
-            and rec.id not in profile.dish_dislikes and can_cook(rec, getattr(profile, "kitchen", None)))
+            and rec.id not in profile.dish_dislikes and can_cook(rec, getattr(profile, "kitchen", None))
+            and not (set(rec.ingredients) & set(getattr(profile, "food_dislikes", None) or ())))   # «не їм» зі свайпів
 
 
 def _cost(key: str, need: float, src: Source) -> tuple[int, float, float, float, float]:
@@ -744,6 +745,7 @@ class _Ctx:
         self.sources = source_map(offers)
         self.likes = set(profile.likes)
         self.dish_likes = set(profile.dish_likes)
+        self.food_likes = set(getattr(profile, "food_likes", None) or ())
         self.avoid = set(profile.menu_prev)   # страви минулого тижня — штраф, щоб меню мінялось
         self.week = date.today().isocalendar()[:2]
         self.regular_stems = [w[:-1] if len(w) > 4 else w for r in profile.regulars for w in _tokens(r)]
@@ -783,7 +785,8 @@ class _Ctx:
     def taste(self, r: Recipe) -> float:
         """Наскільки страва під смаки з анкети: улюблені продукти, вподобана страва, схожа на вподобану."""
         return (len(recipe_tags(r) & self.likes) + (2.0 if r.id in self.dish_likes else 0)
-                + (0.5 if r.protein in self.like_proteins and r.id not in self.dish_likes else 0))
+                + (0.5 if r.protein in self.like_proteins and r.id not in self.dish_likes else 0)
+                + min(2.0, 1.0 * len(set(r.ingredients) & self.food_likes)))     # 😋 продукти зі свайп-анкети
 
     def jitter(self, r: Recipe) -> float:
         """Невелика «випадковість», що змінюється щотижня: за тих самих акцій меню не повторюється тиждень у тиждень."""

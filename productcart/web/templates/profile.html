@@ -23,15 +23,10 @@
   {% endif %}
 
   <h2 class="ph">Що до смаку?</h2>
-  <p class="hint" style="margin:-4px 0 10px">❤️ люблю · 🚫 не їм</p>
-  {% set tile_tags = tastes|map(attribute=0)|list %}
-  <div class="su-tastes pr-tastes" id="prTastes">
-    {% for t, e, label in tastes %}<button type="button" data-tag="{{ t }}" data-hide="{{ 1 if t in hideable else 0 }}" style="--c:var(--p-{{ ['citrus','sky','basil','berry','tomato','plum','citrus'][loop.index0] }})"
-      data-state="{{ 'like' if t in p.likes else ('hide' if t in p.dislikes and t in hideable else '') }}" aria-label="{{ label }}"><span class="e" aria-hidden="true">{{ e }}</span><b>{{ label }}</b><i class="st" aria-hidden="true"></i></button>{% endfor %}
-  </div>
-  {% for t in p.likes if t not in tile_tags %}<input type="hidden" name="likes" value="{{ t }}">{% endfor %}
-  {% for t in p.dislikes if t not in tile_tags %}<input type="hidden" name="dislikes" value="{{ t }}">{% endfor %}
-  <span id="prTasteIn"></span>
+  <a class="pr-taste" href="/tastes?next=/profile"><i aria-hidden="true">😋</i><span><b>{{ 'Змінити смаки' if p.tastes_seen else 'Свайпнути продукти' }}</b>
+    <small>{% if p.tastes_seen %}смакує: {{ p.food_likes|length }} · не їм: {{ p.food_dislikes|length }}{% else %}26 продуктів · пів хвилини{% endif %}</small></span><em aria-hidden="true">›</em></a>
+  {% for t in p.likes %}<input type="hidden" name="likes" value="{{ t }}">{% endfor %}
+  {% for t in p.dislikes %}<input type="hidden" name="dislikes" value="{{ t }}">{% endfor %}
 
   <h2 class="ph">Обмеження в харчуванні</h2>
   <div class="an-chips" id="diets">
@@ -66,25 +61,6 @@
   var form = document.getElementById('anketa'); if (!form) return;
   // згода потрібна, лише коли вибрано обмеження
   var consentBox = document.getElementById('consentBox');
-  // смаки: «люблю» → «не їм» (лише для м'яса/риби/свинини) → нейтрально; у форму — приховані поля
-  var tIn = document.getElementById('prTasteIn');
-  function tastes() {
-    tIn.innerHTML = '';
-    form.querySelectorAll('#prTastes [data-tag]').forEach(function (b) {
-      var st = b.dataset.state; b.setAttribute('aria-pressed', st ? 'true' : 'false');
-      b.setAttribute('aria-description', st === 'like' ? 'люблю' : st === 'hide' ? 'не їм' : '');
-      if (!st) return;
-      var i = document.createElement('input'); i.type = 'hidden'; i.name = st === 'like' ? 'likes' : 'dislikes'; i.value = b.dataset.tag; tIn.appendChild(i);
-    });
-  }
-  form.querySelectorAll('#prTastes [data-tag]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var s = b.dataset.state, canHide = b.dataset.hide === '1';
-      b.dataset.state = s === '' ? 'like' : (s === 'like' && canHide ? 'hide' : '');
-      tastes(); if (window.prSave) prSave();
-    });
-  });
-  tastes();
   function diets() { consentBox.hidden = !form.querySelector('#diets input:checked'); }
   form.querySelectorAll('#diets input').forEach(function (i) { i.addEventListener('change', diets); });
   function consentOk() {

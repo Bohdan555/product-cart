@@ -115,6 +115,9 @@ class Profile:
     cooking: list[dict] = field(default_factory=list)      # «Готую»: збережені рецепти {id, n, at, src}, найновіші першими
     dish_likes: list[str] = field(default_factory=list)    # id рецептів, які людина позначила «смачно»
     dish_dislikes: list[str] = field(default_factory=list) # «не моє» — у меню не пропонуємо
+    food_likes: list[str] = field(default_factory=list)    # продукти (ключі інгредієнтів), які смакують — зі свайп-анкети
+    food_dislikes: list[str] = field(default_factory=list) # продукти, яких не їсть — страв з ними не пропонуємо
+    tastes_seen: list[str] = field(default_factory=list)   # які картки анкети людина вже оцінила (id з tastes.CARDS)
     taste_done: bool = False                               # пройшов анкету смаків (або пропустив) — більше не питаємо
     my_dishes: list[dict] = field(default_factory=list)    # власні страви: {id, title, emoji, minutes, ing, extra, steps}
     # Сповіщення в Telegram

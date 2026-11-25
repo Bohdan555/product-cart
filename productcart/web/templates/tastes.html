@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Що вам смакує — Кошик з акцій{% endblock %}
+{% block body %}
+<div class="ts-top"><h1 class="xh sw-h1">Що вам смакує?</h1><a class="ts-skip" href="{{ next_url }}">Пізніше</a></div>
+<p class="ts-sub">Свайпніть продукти — підберемо страви, які вам сподобаються</p>
+<div class="ts-bar" aria-hidden="true"><i id="tsBar"></i></div>
+<div class="sw-deck ts-deck" id="tsDeck" data-csrf="{{ user.csrf if user else '' }}" aria-live="polite">
+  {% for c in cards|sort(attribute='state') %}
+  <article class="td-dish sw-card ts-card{% if not c.photo %} nophoto{% endif %}" data-id="{{ c.id }}" style="--c:var(--{{ ['p-citrus','p-tomato','p-basil','p-plum','p-sky','p-berry'][loop.index0 % 6] }})"{% if loop.index0 > 1 %} hidden{% endif %}>
+    <div class="td-ph">
+      {% if c.photo %}<img src="{{ c.photo }}" alt="" {% if loop.index0 > 1 %}loading="lazy"{% endif %} draggable="false">{% else %}<span class="e" aria-hidden="true">{{ c.emoji }}</span>{% endif %}
+      <span class="sw-stamp no" aria-hidden="true">🥲</span><span class="sw-stamp yes" aria-hidden="true">😋</span>
+    </div>
+    <b class="t">{{ c.title }}</b>
+    <p class="ts-n"></p>
+  </article>
+  {% endfor %}
+  <div class="sw-end ts-end card" id="tsEnd" hidden>
+    <b>Дякуємо! Тепер знаємо ваш смак</b>
+    <p class="hint" id="tsSum"></p>
+    <a class="btn" href="{{ next_url }}">Готово</a>
+  </div>
+</div>
+<div class="ts-acts" id="tsActs">
+  <button type="button" class="ts-b no" data-a="no" aria-label="Не їм">🥲</button>
+  <button type="button" class="ts-b skip" data-a="skip">Не знаю</button>
+  <button type="button" class="ts-b yes" data-a="like" aria-label="Смакує">😋</button>
+</div>
+<script>
+(function () {
+  var deck = document.getElementById('tsDeck'); if (!deck || deck.dataset.bound) return; deck.dataset.bound = '1';
+  var total = deck.querySelectorAll('.ts-card').length, done = 0, n = { like: 0, no: 0 };
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function cards() { return [].slice.call(deck.querySelectorAll('.ts-card')); }
+  function top() { return cards()[0]; }
+  function layout() {
+    var cs = cards();
+    cs.forEach(function (c, i) { c.hidden = i > 1; c.classList.toggle('next', i === 1); c.style.transform = ''; c.setAttribute('aria-hidden', i ? 'true' : 'false');
+      c.querySelector('.ts-n').textContent = (done + 1) + ' з ' + total; });
+    if (cs[1]) { var im = cs[1].querySelector('img'); if (im) im.removeAttribute('loading'); }
+    document.getElementById('tsBar').style.width = (done / total * 100) + '%';
+    if (!cs.length) {
+      document.getElementById('tsEnd').hidden = false; document.getElementById('tsActs').hidden = true;
+      document.getElementById('tsSum').textContent = '😋 смакує: ' + n.like + ' · 🥲 не їм: ' + n.no;
+      if (window.celebrate && !reduce) celebrate();
+    }
+  }
+  function save(id, a) {     // кожну відповідь зберігаємо одразу — можна піти будь-коли
+    var fd = new FormData(); fd.append('csrf', deck.dataset.csrf); fd.append(a, id);
+    fetch('/tastes', { method: 'POST', body: fd, credentials: 'same-origin' }).catch(function () {});
+  }
+  function answer(a) {
+    var c = top(); if (!c) return;
+    if (window.haptic) haptic(10);
+    save(c.dataset.id, a); if (n[a] !== undefined) n[a]++; done++;
+    c.classList.add(a === 'like' ? 'out-r' : a === 'no' ? 'out-l' : 'out-u');
+    setTimeout(function () { c.remove(); layout(); }, reduce ? 0 : 200);
+  }
+  document.getElementById('tsActs').addEventListener('click', function (e) { var b = e.target.closest('[data-a]'); if (b) answer(b.dataset.a); });
+  var x0 = null, y0 = 0, dx = 0, drag = false;
+  deck.addEventListener('pointerdown', function (e) { var c = top(); if (!c || !c.contains(e.target)) return; x0 = e.clientX; y0 = e.clientY; dx = 0; drag = false; });
+  deck.addEventListener('pointermove', function (e) {
+    if (x0 === null) return; var c = top(); dx = e.clientX - x0;
+    if (!drag && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - y0)) { drag = true; c.classList.add('drag'); try { c.setPointerCapture(e.pointerId); } catch (err) {} }
+    if (!drag) return;
+    c.style.transform = 'translateX(' + dx + 'px) rotate(' + dx / 18 + 'deg)';
+    c.style.setProperty('--no', Math.max(0, Math.min(1, -dx / 90))); c.style.setProperty('--yes', Math.max(0, Math.min(1, dx / 90)));
+  });
+  function end() {
+    if (x0 === null) return; var c = top(); x0 = null; if (!c) return;
+    c.classList.remove('drag'); c.style.removeProperty('--no'); c.style.removeProperty('--yes');
+    if (drag && Math.abs(dx) > 90) answer(dx > 0 ? 'like' : 'no'); else c.style.transform = '';
+    drag = false;
+  }
+  deck.addEventListener('pointerup', end); deck.addEventListener('pointercancel', function () { x0 = null; drag = false; var c = top(); if (c) { c.classList.remove('drag'); c.style.transform = ''; } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight') answer('like'); else if (e.key === 'ArrowLeft') answer('no'); else if (e.key === 'ArrowDown') answer('skip'); });
+  // фото наступних карток — заздалегідь, щоб гортання було миттєвим
+  var pre = function () { deck.querySelectorAll('img[loading=lazy]').forEach(function (im) { var x = new Image(); x.src = im.src; }); };
+  if ('requestIdleCallback' in window) requestIdleCallback(pre, { timeout: 1500 }); else setTimeout(pre, 800);
+  layout();
+})();
+</script>
+{% endblock %}

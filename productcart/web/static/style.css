@@ -1961,3 +1961,37 @@ label{font-size:15px}
 
 /* нижня панель — 3 вкладки (Готуємо · Кошик · Профіль); «Акції» й «Холодильник» прибрані з навігації */
 .dock nav{grid-template-columns:repeat(3,1fr)}
+
+/* ---------- Свайп-анкета смаків ---------- */
+.ts-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ts-skip{font:500 17px var(--body);color:var(--tint);text-decoration:none;padding:10px 0}
+.ts-sub{margin:-4px 0 12px;color:var(--muted);font-size:15px}
+.ts-bar{height:4px;border-radius:999px;background:var(--chip);margin:0 0 14px;overflow:hidden}
+.ts-bar i{display:block;height:100%;width:0;background:var(--tint);border-radius:inherit;transition:width .25s ease}
+.ts-card{height:max(340px,calc(100dvh - 380px - env(safe-area-inset-bottom,0px)))}
+.ts-card .t{font-size:30px;margin-bottom:2px}
+.ts-card .ts-n{margin:0 20px 22px;color:rgba(255,255,255,.8);font-size:15px}
+.ts-card.nophoto .ts-n{color:var(--muted)}
+.ts-card.nophoto .td-ph{place-items:center;padding:0 0 80px}
+.ts-card.nophoto .td-ph .e{font-size:min(140px,18dvh)}
+.sw-card.out-u{transform:translateY(-40px) scale(.9)!important;opacity:0}
+.ts-acts{display:flex;align-items:center;justify-content:center;gap:22px;margin:14px 0 8px}
+.ts-b{border:0;cursor:pointer;display:grid;place-items:center;border-radius:999px;background:var(--card);color:var(--ink);box-shadow:var(--sh-soft),0 0 0 .5px var(--line)}
+.ts-b.no,.ts-b.yes{width:72px;height:72px;font-size:34px}
+.ts-b.skip{height:48px;padding:0 18px;font:600 15px var(--body);color:var(--muted)}
+.ts-b:active{transform:scale(.94)}
+.ts-end{grid-area:1/1;align-content:center;justify-items:center;text-align:center;min-height:300px}
+.ts-end b{font:700 22px/1.2 var(--display)}
+body:has(.ts-deck) footer{display:none}
+/* Профіль: блок смаків — підсумок і вхід у свайп */
+.pr-taste{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:var(--r-lg);background:var(--card);box-shadow:0 0 0 .5px var(--line);color:var(--ink);text-decoration:none}
+.pr-taste>span{flex:1;min-width:0;display:grid;gap:2px}.pr-taste b{font:600 17px var(--body)}.pr-taste small{color:var(--muted);font-size:15px}
+.pr-taste i{font-style:normal;font-size:30px}.pr-taste em{font-style:normal;font-size:24px;color:var(--muted)}
+
+/* ---------- Фото страв і продуктів: однакова «соковита» обробка ----------
+   Один кадр (заповнення без полів), трохи більше насиченості, контрасту й тепла — щоб різні фото Unsplash
+   виглядали як одна серія. */
+.td-ph img,.hm-hero-card img,.td-hero img,.eat-open img,.tile img,#menuroot .day .tile img,.phrow img{
+  filter:saturate(1.18) contrast(1.06) brightness(1.03) sepia(.06)}
+@media (prefers-color-scheme:dark){.td-ph img,.hm-hero-card img,.td-hero img,.eat-open img{filter:saturate(1.15) contrast(1.05) brightness(.97) sepia(.05)}}
+.hm-taste{margin-top:16px}

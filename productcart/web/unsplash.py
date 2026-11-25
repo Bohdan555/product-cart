@@ -84,6 +84,8 @@ from ..recipes_extra import PHOTO_QUERIES as _EXTRA  # noqa: E402
 QUERIES.update(_EXTRA)
 from ..recipes_ua import PHOTO_QUERIES as _UA  # noqa: E402
 QUERIES.update(_UA)
+from ..tastes import PHOTO_QUERIES as _TASTES  # noqa: E402 — фото карток свайп-анкети смаків
+QUERIES.update(_TASTES)
 from ..recipes_bs import PHOTO_QUERIES as _BS  # noqa: E402
 QUERIES.update(_BS)
 
