@@ -18,8 +18,7 @@
     <span><b>{{ ic("bell", "ii") }}Цікаві акції</b><small>великі знижки на те, що ви купуєте</small></span></label>
   <label class="nrow"><input type="checkbox" name="tg_weekly" value="1" {% if p.tg_weekly %}checked{% endif %}>
     <span><b>{{ ic("calendar", "ii") }}Меню на тиждень</b><small>щопонеділка зранку</small></span></label>
-  <label class="nrow"><input type="checkbox" name="tg_expiry" value="1" {% if p.tg_expiry %}checked{% endif %}>
-    <span><b>{{ ic("clock", "ii") }}Скоро зіпсується</b><small>push на телефон вранці</small></span></label>
+<input type="hidden" name="tg_expiry" value="{{ 1 if p.tg_expiry else '' }}">
   <noscript><button type="submit" class="btn">Зберегти</button></noscript>
 </form>
 <h2 class="ph">Або в Telegram</h2>

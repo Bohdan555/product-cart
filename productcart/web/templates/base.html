@@ -149,7 +149,6 @@ document.addEventListener('turbo:before-prefetch', function (e) {
   {% if user %}
   <nav class="top">
     <a class="tabbed" href="/">Готуємо</a>
-    <a class="tabbed" href="/list">Акції</a>
     <a class="tabbed" href="/me">Профіль</a>
   </nav>
   {% else %}
@@ -167,9 +166,8 @@ document.addEventListener('turbo:before-prefetch', function (e) {
 </div>
 {% set path = request.url.path %}
 {% set sect = 'deals' if path.startswith(('/list', '/go')) else 'cart' if path.startswith('/silpo/cart') else ('me' if path == '/me' or path.startswith(('/profile', '/notify', '/silpo', '/login', '/register', '/dishes', '/privacy', '/photos')) else 'cook') %}
-<div class="tabs dock" id="tabs-{{ 'u' if user else 'g' }}" data-turbo-permanent><nav aria-label="Розділи">
+<div class="tabs dock" id="tabs3-{{ 'u' if user else 'g' }}" data-turbo-permanent><nav aria-label="Розділи">
   <a href="/" data-sect="cook"{% if sect == 'cook' %} class="on" aria-current="page"{% endif %}>{{ ic("pan") }}Готуємо</a>
-  <a href="/list" data-sect="deals"{% if sect == 'deals' %} class="on" aria-current="page"{% endif %}>{{ ic("tag") }}Акції</a>
   <a href="/silpo/cart" data-sect="cart"{% if sect == 'cart' %} class="on" aria-current="page"{% endif %}><span class="tico">{{ ic("cart") }}<b class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b></span>Кошик</a>
   <a href="/me" data-sect="me"{% if sect == 'me' %} class="on" aria-current="page"{% endif %}>{{ ic("user") }}Профіль</a>
 </nav></div><script>

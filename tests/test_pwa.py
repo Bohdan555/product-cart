@@ -86,6 +86,8 @@ class FakePush:
 
 
 def test_subscribe_notify_and_cleanup(tmp_path, monkeypatch):
+    import productcart.web.app as A
+    monkeypatch.setattr(A, "PANTRY_ON", True)          # push «скоро зіпсується» — частина «Холодильника»
     push = FakePush()
     app = create_app(db_path=str(tmp_path / "t.db"), app_secret=SECRET, base_url="http://test",
                      gateway=FakeGateway(), push_sender=push)

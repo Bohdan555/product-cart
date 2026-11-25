@@ -53,6 +53,9 @@ cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None
 warm_soon: contextvars.ContextVar = contextvars.ContextVar("warm_soon", default=None)  # магазин, який варто оновити
 cur_ip: contextvars.ContextVar = contextvars.ContextVar("cur_ip", default=None)     # (lat, lon) за мережею, з заголовків Vercel
 MEALS = {"dinner": "Обід / вечеря", "breakfast": "Сніданок", "salad": "Салат"}
+# «Холодильник» (окрема сторінка запасів, push і значок «скоро зіпсується») поки вимкнений: продукти вдома
+# людина вказує лише тоді, коли підбирає страви. Сторінка /pantry лишається доступною за адресою.
+PANTRY_ON = False
 GUEST_KEYS = ("household", "dinners", "max_minutes", "menu", "menu_skip", "pantry_buy", "menu_week", "menu_prev",
               "dish_likes", "menu_days", "menu_budget", "likes", "dislikes", "cooking", "kitchen", "taste_done")
 # Конструктор меню: що можна любити / виключити (теги інгредієнтів)
@@ -2327,7 +2330,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         if u is None:
             return JSONResponse({"n": 0}, headers={"Cache-Control": "no-store"})
         p, _ = load_profile(u["id"])
-        n = len(menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until)) if p.tg_expiry and p.fridge else 0
+        n = len(menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until)) if PANTRY_ON and p.tg_expiry and p.fridge else 0
         return JSONResponse({"n": n}, headers={"Cache-Control": "no-store"})
 
     @app.post("/fridge/scan")
@@ -2693,7 +2696,8 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
 
         p, health = load_profile(uid)
         # один зведений push на всі продукти, яким лишилось ≤ 2 днів (сьогодні / завтра / за 2 дні)
-        soon = menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until) if p.tg_expiry and p.fridge and has_push else []
+        soon = menu.expiring(p.fridge_since, p.fridge, within=2, until=p.fridge_until) \
+            if PANTRY_ON and p.tg_expiry and p.fridge and has_push else []
         xk = "x:" + date.today().isoformat()
         if soon and not conn.execute("SELECT 1 FROM tg_sent WHERE user_id=? AND key=?", (uid, xk)).fetchone():
             names = ", ".join(f"{menu.INGREDIENTS[k][0].lower()} — {'' if p.fridge_until.get(k) else '≈ '}{menu.when_label(d)}"

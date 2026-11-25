@@ -27,17 +27,8 @@
 </a>
 <nav class="hm-group" aria-label="Головне">
   <a href="/week">{{ ic("calendar") }}<span><b>План на тиждень</b><small>Меню з акцій і список покупок</small></span><i aria-hidden="true">›</i></a>
-  {% if user %}<a href="/pantry">{{ ic("fridge") }}<span><b>Холодильник</b><small>{% set fn = p_fridge_n %}{% if soon %}{{ soon[0][1]|lower }} · {{ soon[0][3] }}{% elif fn %}{{ fn }} {{ plural(fn, 'продукт', 'продукти', 'продуктів') }}{% else %}додати продукти{% endif %}</small></span><i aria-hidden="true">›</i></a>
-  <a href="/dishes">{{ ic("book") }}<span><b>Мої страви</b><small>Свої рецепти й з інтернету</small></span><i aria-hidden="true">›</i></a>{% endif %}
+  {% if user %}  <a href="/dishes">{{ ic("book") }}<span><b>Мої страви</b><small>Свої рецепти й з інтернету</small></span><i aria-hidden="true">›</i></a>{% endif %}
 </nav>
-{% if soon %}
-<a class="xp-card" href="{{ soon_url }}">
-  <span class="xp-ic" aria-hidden="true">{{ ic("clock") }}</span>
-  <span class="xp-t"><b>Варто використати</b>
-    <span class="xp-list">{% for k, name, emo, when in soon %}<span class="xp-chip{% if when.endswith('сьогодні') %} hot{% endif %}"><i aria-hidden="true">{{ emo }}</i>{{ name|lower }} · {{ when }}</span>{% endfor %}</span>
-    <small>Що приготувати з цього →</small></span>
-</a>
-{% endif %}
 {% if cooking %}
 <a class="ck-card" href="/cook">
   <span class="ck-thumbs" aria-hidden="true">{% for it in cooking %}<i>{{ it.recipe.emoji }}</i>{% endfor %}</span>
@@ -45,18 +36,6 @@
 </a>
 {% endif %}
 
-{% if deals %}
-<div class="hm-sec"><h2>Гарячі акції{% if not is_demo %} поруч{% endif %}</h2><a href="/list">Усі →</a></div>
-<div class="hm-row" role="list">
-  {% for o in deals %}{% set v = visual(o) %}
-  <a class="hm-deal" role="listitem" href="/list" style="--c:var(--{{ v.pastel }})">
-    <span class="hm-dim">{% if o.image %}<img src="{{ o.image }}" alt=""{% if "images.unsplash.com" in o.image %} class="stock"{% endif %} loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}<span class="hm-emo" aria-hidden="true">{{ v.emoji }}</span><s>−{{ o.discount_pct|round|int }}%</s></span>
-    <span class="hm-dn">{{ o.name }}</span>
-    <span class="hm-dp"><b>{{ uah(o.price) }}</b>{% if o.old_price %}<s>{{ uah(o.old_price) }}</s>{% endif %}</span>
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
 
 <script>
 /* Найближчий «Сільпо». Дозвіл на геолокацію просимо лише після пояснення й натискання «Знайти поруч»;

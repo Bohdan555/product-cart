@@ -1958,3 +1958,6 @@ label{font-size:15px}
 .tile3,.tile2{border:0;background:var(--card);border-radius:var(--r-lg);box-shadow:0 0 0 .5px var(--line)}
 .tile3:has(input:checked),.tile2:has(input:checked){box-shadow:0 0 0 2px var(--tint)}
 .hv-box,.say-box{border:0;border-radius:var(--r-lg)}
+
+/* нижня панель — 3 вкладки (Готуємо · Кошик · Профіль); «Акції» й «Холодильник» прибрані з навігації */
+.dock nav{grid-template-columns:repeat(3,1fr)}

@@ -125,7 +125,9 @@ def test_skips_models_blocked_on_free_tier(monkeypatch):
     fridge._model_cache.clear()
 
 
-def test_receipt_scan_dates_and_badge(tmp_path):
+def test_receipt_scan_dates_and_badge(tmp_path, monkeypatch):
+    import productcart.web.app as A
+    monkeypatch.setattr(A, "PANTRY_ON", True)          # значок на іконці — частина «Холодильника» (зараз вимкненого)
     from datetime import date, timedelta
     bought = (date.today() - timedelta(days=1)).isoformat()
     kinds = []
