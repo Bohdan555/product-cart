@@ -1916,3 +1916,45 @@ dialog{border-radius:var(--r-xl)}
 .sw-card.nophoto .td-ph{padding-top:18px}.sw-card.nophoto .td-ph .e{font-size:min(110px,14dvh)}
 .sw-card .td-price{margin-bottom:88px}
 body:has(.sw-deck) footer{display:none}   /* екран-картка на весь зріст: підвал прихований (посилання є в «Профілі») */
+
+/* ---------- Liquid Glass, частина 2: решта екранів ---------- */
+/* Шапка: без маленького логотипа (заголовок екрана сам каже, де ми); лишається лише «назад» */
+header.top .logo{display:none}
+header.top:not(:has(.hback)):not(:has(.hdots)){padding:4px 0 0;min-height:0}
+/* Поля вводу як в iOS: сіра заливка без рамки, 17 pt, висота ≥ 44 */
+input[type=text],input[type=url],input[type=email],input[type=password],input[type=number],input[type=search],input[type=tel],textarea,select{
+  border:0;background:var(--chip);border-radius:var(--r-sm);padding:12px 14px;min-height:48px;font-size:17px;color:var(--ink)}
+textarea{min-height:96px}
+select{appearance:none;-webkit-appearance:none;padding-right:36px;
+  background:var(--chip) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 9l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 14px center}
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--tint);outline-offset:0}
+label{font-size:15px}
+/* Перемикачі як в iOS у «Сповіщеннях» */
+.nrow{display:flex;align-items:center;gap:12px;min-height:56px}
+.nrow>span{flex:1;order:0}
+.nrow input[type=checkbox]{order:1;appearance:none;-webkit-appearance:none;flex:none;width:51px;height:31px;border-radius:999px;background:var(--chip);position:relative;margin:0;cursor:pointer;transition:background .2s}
+.nrow input[type=checkbox]::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform .2s cubic-bezier(.3,.7,.4,1)}
+.nrow input[type=checkbox]:checked{background:#34C759}
+.nrow input[type=checkbox]:checked::after{transform:translateX(20px)}
+.nrow b{font:500 17px/1.3 var(--body)}.nrow small{font-size:15px;color:var(--muted)}
+.nset .nrow+.nrow{border-top:.5px solid var(--line)}
+@media (prefers-reduced-motion:reduce){.nrow input[type=checkbox],.nrow input[type=checkbox]::after{transition:none}}
+/* Шапка рецепта: фото на всю ширину, назва білим поверх (як картка страви) */
+.td-hero{position:relative;display:block;min-height:260px;padding:0;border-radius:var(--r-xl);overflow:hidden;background:var(--p-citrus);isolation:isolate;box-shadow:var(--sh-soft)}
+.td-hero img{position:absolute;inset:0;width:100%;height:100%;border-radius:0;object-fit:cover;z-index:-2}
+.td-hero:has(img)::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.72))}
+.td-hero>div{position:absolute;left:18px;right:18px;bottom:16px}
+.td-hero:has(img) .xh{color:#fff}
+.td-hero .xh{font:700 28px/1.15 var(--display);letter-spacing:-.02em;margin:0 0 8px}
+.td-hero:has(img) .td-pill{background:rgba(255,255,255,.22);color:#fff;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.td-hero:has(img) .td-pill .ico{--ic:transparent;stroke:#fff}
+.td-hero>.e{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:110px}
+/* Згруповані списки в «Профілі» й «Холодильнику»: заголовки секцій як в iOS */
+.me-lite .ph,.pn-g{font:600 13px/1.3 var(--body);text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:24px 16px 8px}
+.pn-list{background:var(--card);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 0 0 .5px var(--line)}
+.pn-row{min-height:52px}
+.pn-cam{background:var(--chip);border:0}
+/* Плитки «смаків», пресети, анкета */
+.tile3,.tile2{border:0;background:var(--card);border-radius:var(--r-lg);box-shadow:0 0 0 .5px var(--line)}
+.tile3:has(input:checked),.tile2:has(input:checked){box-shadow:0 0 0 2px var(--tint)}
+.hv-box,.say-box{border:0;border-radius:var(--r-lg)}
