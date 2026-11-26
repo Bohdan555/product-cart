@@ -255,3 +255,8 @@ def test_ready_meals_with_ingredient_in_composition_dont_match():
     assert not menu.matches_ingredient("Заправка Торчин овочева з морквою, цибулею 180г", "carrot")
     assert not menu.matches_ingredient("Баклажани «Ніжин» в аджиці 450г", "eggplant")
     assert menu.matches_ingredient("Філе куряче охолоджене 1 кг", "chicken_fillet") and menu.matches_ingredient("Ніжне філе курчати", "chicken_fillet")
+
+
+def test_canned_salmon_is_not_fresh_salmon():
+    assert not menu.matches_ingredient("Лосось Riga Extra атлантич в олії з лимоном 120г", "salmon")
+    assert not menu.matches_ingredient("Лосось Riga Extra атлантич в олії з лимоном 120г", "lemon")
