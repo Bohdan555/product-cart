@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import threading
 from datetime import datetime, timedelta, timezone
@@ -91,23 +92,23 @@ QUERIES.update(_TASTES)
 QUERIES.update({
     "deruny": "potato pancakes latkes sour cream plate", "fish-cream": "baked fish fillet cream sauce rice plate",
     "chicken-julienne": "chicken mushroom julienne cocotte cheese", "chicken-liver-cream": "chicken liver stroganoff buckwheat plate",
-    "pelmeni-bake": "baked dumplings melted cheese casserole", "meat-potato-zrazy": "stuffed potato patties fried plate",
+    "pelmeni-bake": "baked dumplings melted cheese casserole", "meat-potato-zrazy": "fried potato croquettes plate",
     "sausage-potato-bake": "sausages roasted potatoes baking dish", "fish-bake-cheese": "baked fish fillet tomato cheese dish",
-    "tuna-salad": "tuna corn egg salad bowl", "green-borscht": "sorrel soup boiled egg bowl",
-    "pea-soup": "split pea soup smoked meat bowl", "mushroom-buckwheat-soup": "mushroom soup bowl rustic",
+    "tuna-salad": "tuna corn egg salad bowl", "green-borscht": "green sorrel soup with egg bowl",
+    "pea-soup": "split pea soup smoked meat bowl", "mushroom-buckwheat-soup": "mushroom soup bowl sour cream dill",
     "cauliflower-batter": "fried cauliflower florets crispy batter", "varenyky-onion": "pierogi fried onions sour cream",
-    "brynza-pasta": "pasta cherry tomatoes feta cheese plate", "buckwheat-milk": "buckwheat porridge bowl butter",
-    "b-semolina": "semolina porridge bowl butter berries", "b-rice-milk": "rice pudding bowl cinnamon",
-    "b-cottage-berries": "cottage cheese bowl fresh berries", "s-tomato-cucumber": "tomato cucumber salad sour cream dill bowl",
-    "s-crab": "crab stick salad corn mayonnaise bowl", "s-beet-garlic": "beetroot salad garlic cheese bowl",
-    "s-buckwheat-warm": "warm buckwheat salad mushrooms plate", "s-korean-carrot": "korean spicy carrot salad",
-    "s-apple-carrot": "grated carrot apple salad bowl", "s-ham-cheese": "ham cheese cucumber salad bowl",
-    "s-cabbage-peas": "cabbage salad green peas egg bowl", "chicken-rolls": "stuffed chicken breast rolls cheese",
-    "chicken-bulgur-soup": "chicken vegetable soup bowl bulgur", "turkey-buckwheat": "buckwheat mushrooms meat plate",
+    "brynza-pasta": "pasta cherry tomatoes feta cheese plate", "buckwheat-milk": "buckwheat porridge with milk bowl",
+    "b-semolina": "semolina porridge bowl with berries", "b-rice-milk": "creamy rice pudding bowl cinnamon apple",
+    "b-cottage-berries": "cottage cheese with berries breakfast bowl", "s-tomato-cucumber": "tomato cucumber salad bowl dill",
+    "s-crab": "crab salad bowl with corn and egg", "s-beet-garlic": "beet salad with cheese and walnuts plate",
+    "s-buckwheat-warm": "buckwheat salad bowl vegetables", "s-korean-carrot": "korean carrot salad bowl",
+    "s-apple-carrot": "carrot apple salad in bowl", "s-ham-cheese": "ham and cheese salad plate",
+    "s-cabbage-peas": "coleslaw salad bowl", "chicken-rolls": "stuffed chicken breast rolls cheese",
+    "chicken-bulgur-soup": "chicken vegetable soup bowl bulgur", "turkey-buckwheat": "buckwheat with meat and mushrooms plate",
     "minced-potato-bake": "shepherds pie slice mashed potato minced meat", "pelmeni-soup": "dumplings in broth bowl dill",
     "fish-tomato-rice": "fish fillet tomato sauce rice plate", "potato-mushroom-cakes": "potato cakes stuffed mushrooms fried",
-    "mackerel-potato-bake": "baked mackerel potatoes lemon tray", "herring-potato": "herring fillet boiled potatoes dill onion plate",
-    "bacon-potato": "fried potatoes bacon onions skillet", "quinoa-veg": "quinoa chickpea roasted vegetables bowl",
+    "mackerel-potato-bake": "baked mackerel with potatoes on plate", "herring-potato": "herring with boiled potatoes and onion plate",
+    "bacon-potato": "fried potatoes with bacon plate", "quinoa-veg": "quinoa chickpea roasted vegetables bowl",
     "couscous-chicken": "couscous chicken vegetables plate", "lentil-dal": "red lentil dal coconut bowl rice",
     "puff-pizza": "puff pastry pizza ham cheese", "b-cottage-banana": "cottage cheese banana bowl breakfast",
     "b-mushroom-toast": "mushroom toast melted cheese", "b-spinach-omelette": "spinach omelette plate",
@@ -151,22 +152,45 @@ def usable(d: str, p: dict) -> bool:
     return p.get("q") == QUERIES.get(d) if "q" in p else d not in REDO
 
 
-def pick(results: list[dict], used: set = frozenset()) -> dict | None:
+DISH_WORDS = {"plate", "bowl", "dish", "served", "meal", "dinner", "lunch", "breakfast", "soup", "salad", "cooked",
+              "baked", "fried", "roasted", "grilled", "homemade", "porridge", "stew", "casserole", "pan", "skillet"}
+RAW_WORDS = {"raw", "ingredients", "ingredient", "market", "uncooked", "whole", "harvest", "garden", "grocery",
+             "groceries", "field", "farm", "shop", "store", "flatlay", "packaging", "container", "containers"}
+
+
+def _words(t: str) -> set[str]:
+    return {w.strip(".,;:!?()\"'").lower() for w in (t or "").split()} - {""}
+
+
+def score(r: dict, query: str, rank: int) -> float:
+    """Бал фото: збіг опису із запитом, «готова страва», а не сирі продукти; порядок видачі й вподобання — лише трохи."""
+    text = _words(" ".join([r.get("alt_description") or "", r.get("description") or "",
+                            " ".join(t.get("title", "") for t in r.get("tags") or [] if isinstance(t, dict))]))
+    q = _words(query)
+    s = 4.0 * len(q & text) / max(1, len(q))
+    s += 1.5 if text & DISH_WORDS else 0
+    s -= 3.0 if text & RAW_WORDS else 0
+    s -= 0.35 * rank
+    s += 0.4 * math.log10((r.get("likes") or 0) + 1)
+    return s
+
+
+def pick(results: list[dict], used: set = frozenset(), query: str = "") -> dict | None:
     """Найкраще з видачі: не преміум, ще не використане (одне фото — одній страві), горизонтальне,
-    і з найбільшою кількістю вподобань — так стабільно виходять якісні, «апетитні» знімки, а не перший-ліпший."""
-    ok = [r for r in results if r.get("id") not in used and r.get("urls", {}).get("raw")
+    і найближче до запиту як готова страва (не сирі продукти); вподобання — лише як підказка якості."""
+    ok = [(i, r) for i, r in enumerate(results) if r.get("id") not in used and r.get("urls", {}).get("raw")
           and not r.get("premium") and not r.get("plus")]
     if not ok:
         return None
-    wide = [r for r in ok if (r.get("width") or 4) >= (r.get("height") or 3)] or ok
-    return max(wide, key=lambda r: r.get("likes") or 0)
+    wide = [(i, r) for i, r in ok if (r.get("width") or 4) >= (r.get("height") or 3)] or ok
+    return max(wide, key=lambda t: score(t[1], query, t[0]))[1]
 
 
 def fetch_one(client: httpx.Client, query: str, used: set = frozenset()) -> dict | None:
     r = client.get(f"{API}/search/photos", params={"query": query, "per_page": 10, "orientation": "landscape",
                                                    "content_filter": "high"})
     r.raise_for_status()
-    p = pick(r.json().get("results") or [], used)
+    p = pick(r.json().get("results") or [], used, query)
     if not p:
         return None
     dl = p.get("links", {}).get("download_location")
