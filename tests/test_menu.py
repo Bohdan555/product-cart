@@ -234,3 +234,11 @@ def test_source_map_skips_pet_food_and_ready_meals():
     src = menu.source_map(offers)
     assert src["potato"].offer and src["potato"].offer.product_id == "3"
     assert not src["chicken_fillet"].offer and not src["chicken_thigh"].offer
+
+
+def test_source_map_skips_household_and_tiny_spice_packs():
+    from productcart.models import Offer
+    mk = lambda i, n, pr, q: Offer(product_id=i, store_id="s", name=n, price=pr, chain="demo-x", category="", pack_qty=q, pack_unit="g")
+    src = menu.source_map([mk("1", "Засіб для миття посуду Wash&Free лимон-м'ята 500г", 5, 500),
+                           mk("2", "Перець червоний солодкий 20г", 3, 20), mk("3", "Печінка тріски 121г", 5, 121)])
+    assert not src["lemon"].offer and not src["pepper"].offer and not src["liver"].offer

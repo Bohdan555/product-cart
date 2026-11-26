@@ -12,7 +12,7 @@ from datetime import date, timedelta
 import re
 from dataclasses import dataclass, field, replace
 
-from .catalog import TAG_LABELS
+from .catalog import TAG_LABELS, is_food
 from .models import DIETS, Offer, Profile
 
 # ключ: (назва, одиниця g|ml|pcs, стандартна упаковка, орієнтовна ціна за кг|л|шт, швидкопсувне,
@@ -22,7 +22,7 @@ INGREDIENTS: dict[str, tuple] = {
     "chicken_thigh": ("Стегно куряче", "g", 1000, 160, True, {"meat"}, [["стегн", "кур"], ["стегн", "курч"], ["гомілк", "кур"]], ["копч"]),
     "minced": ("Фарш", "g", 500, 210, True, {"meat", "pork"}, [["фарш"]], ["риб"]),
     "pork": ("Свинина", "g", 1000, 230, True, {"meat", "pork"}, [["свинин"]], ["копч", "сало", "паштет"]),
-    "liver": ("Печінка куряча", "g", 500, 130, True, {"meat"}, [["печінк"]], ["паштет"]),
+    "liver": ("Печінка куряча", "g", 500, 130, True, {"meat"}, [["печінк"]], ["паштет", "тріск", "минта", "лосос"]),
     "fish": ("Філе риби (хек, минтай)", "g", 800, 280, True, {"fish"}, [["хек"], ["минта"], ["тріск"], ["філе", "риб"]], ["копч", "солон", "консерв"]),
     "sausages": ("Сосиски", "g", 400, 250, True, {"meat", "pork"}, [["сосиск"]], []),
     "eggs": ("Яйця", "pcs", 10, 6.5, True, {"eggs"}, [["яйц"]], ["шоколад", "перепел"]),
@@ -31,7 +31,7 @@ INGREDIENTS: dict[str, tuple] = {
     "cottage": ("Сир кисломолочний", "g", 400, 180, True, {"dairy", "lactose"}, [["сир", "кисломол"], ["творог"]], ["сирок", "глазур"]),
     "cheese": ("Сир твердий", "g", 200, 450, True, {"dairy"}, [["сир", "тверд"], ["гауда"], ["сир", "голланд"], ["моцарел"]], ["плавлен"]),
     "butter": ("Масло вершкове", "g", 200, 420, True, {"dairy", "lactose"}, [["масло", "вершк"]], ["спред"]),
-    "potato": ("Картопля", "g", 2000, 25, False, {"vegetables"}, [["картопл"]], ["чипс", "пюре", "фрі", "пластів"]),
+    "potato": ("Картопля", "g", 2000, 25, False, {"vegetables"}, [["картопл"]], ["чипс", "пюре", "фрі", "пластів", "aviko", "дольк"]),
     "carrot": ("Морква", "g", 1000, 22, False, {"vegetables"}, [["морк"]], ["корейськ", "сік"]),
     "onion": ("Цибуля", "g", 1000, 22, False, {"vegetables"}, [["цибул"]], ["зелен", "смажен"]),
     "cabbage": ("Капуста білокачанна", "g", 1500, 20, False, {"vegetables"}, [["капуст"]], ["квашен", "морськ", "броколі", "цвітн", "пекін"]),
@@ -397,7 +397,7 @@ def _tokens(name: str) -> list[str]:
 # «оливки фаршировані» — не фарш, «чипси зі смаком сиру» — не сир.
 OTHER_PRODUCT = ("паштет", "соус", "чипс", "снек", "сухарик", "фарширов", "зі смаком", "смак ", "ароматиз", "корм",
                  "цукерк", "батончик", "печиво", "сироп", "для котів", "для собак", "вареник", "пельмен", "чебурек",
-                 "піца", "напівфабрикат")
+                 "піца", "напівфабрикат", "кульк", "засіб", "миття")
 
 
 def matches_ingredient(name: str, key: str) -> bool:
@@ -486,6 +486,9 @@ def source_map(offers: list[Offer]) -> dict[str, Source]:
                 continue
             if any(w in lows[i] and w not in ing[0].lower() for w in OTHER_PRODUCT):   # корм для котів — не м'ясо
                 continue
+            o = offers[i]
+            if not is_food(o) or (unit == "g" and o.pack_unit == "g" and o.pack_qty and o.pack_qty < 25):
+                continue                    # побутові товари й крихітні пачки (20 г меленого перцю — не овоч)
             ts = toks[i]
             if not any(all(any(t.startswith(stem) for t in ts) for stem in var) for var in variants):
                 continue
