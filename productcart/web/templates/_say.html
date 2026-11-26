@@ -200,42 +200,62 @@ window.initSay = function (cfg) {
     return Promise.resolve('unknown');
   }
 
+  var userStop = false;
   function listen() {
-    // Слухаємо безперервно: паузи між продуктами не обривають запис. Кожну готову фразу одразу розкладаємо на продукти
-    // (чипи з'являються наживо). Зупиняємо після ~2,5 с тиші, за 45 с або дотиком; недоговорене наприкінці теж беремо.
-    var interim = '', added = 0, said = [], silence = null, cap = null, seen = {};
-    try {
-      rec = new SR(); rec.lang = 'uk-UA'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
-    } catch (e) { inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є.'); return; }
-    function arm(ms) { clearTimeout(silence); silence = setTimeout(function () { try { rec.stop(); } catch (e) {} }, ms); }
+    // Слухаємо, поки людина говорить: паузи між продуктами не обривають запис. Телефон (Chrome на Android, Safari)
+    // часто сам завершує розпізнавання після паузи — тоді тихо перезапускаємо його. Кінець: ~4 с тиші, 60 с або дотик.
+    // Кожну готову фразу одразу розкладаємо на продукти (чипи — наживо); недоговорене наприкінці теж беремо.
+    var interim = '', added = 0, said = [], last = Date.now(), t0 = Date.now(), seen = {}, timer = null, restarts = 0;
+    userStop = false;
     function take(text) {
       text = (text || '').trim(); if (!text) return;
       said.push(text); var r = addPhrase(text); added += r.added; if (r.added && window.haptic) haptic(12);
     }
-    rec.onresult = function (e) {
-      interim = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) {
-        var t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) { if (!seen[i]) { seen[i] = 1; take(t); } }   // Android інколи повторює готові фрази
-        else interim += t;
-      }
-      hint(interim ? 'Слухаю: «' + interim.trim() + '»' : 'Слухаю… ще щось?');
-      arm(2500);
-    };
-    rec.onerror = function (e) {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture' || e.error === 'language-not-supported') { explain(e.error); return; }
-      if (e.error === 'no-speech' && said.length) return;           // просто замовкли після переліку
-      hint(e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : e.error === 'network' ? 'Розпізнаванню мови потрібен інтернет. Спробуйте ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
-    };
-    rec.onend = function () {
-      clearTimeout(silence); clearTimeout(cap);
-      listening = false; mic.classList.remove('on'); $('hvField').classList.remove('listening'); inp.value = '';
-      take(interim); interim = '';                                    // останні слова, які браузер не встиг «дописати»
+    function finish() {
+      clearInterval(timer); listening = false; rec = null;
+      mic.classList.remove('on'); $('hvField').classList.remove('listening'); inp.value = '';
       if (said.length) { hint(added ? 'Додали: ' + added + '. Натисніть 🎤, щоб додати ще' : 'Почули «' + said.join(' ') + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
-    };
-    try { rec.start(); } catch (e) { explain('start:' + (e && e.name)); return; }
+      else hint('Не почули 🙉 Натисніть 🎤 і скажіть ще раз.');
+    }
+    function session() {
+      var r;
+      try { r = new SR(); r.lang = 'uk-UA'; r.interimResults = true; r.maxAlternatives = 1; r.continuous = true; }
+      catch (e) { finish(); inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є.'); return false; }
+      seen = {};
+      r.onresult = function (e) {
+        interim = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          var t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) { if (!seen[i]) { seen[i] = 1; take(t); } }   // Android інколи повторює готові фрази
+          else interim += t;
+        }
+        last = Date.now();
+        hint(interim ? 'Слухаю: «' + interim.trim() + '»' : 'Слухаю… ще щось?');
+      };
+      r.onerror = function (e) {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture' || e.error === 'language-not-supported') { userStop = true; explain(e.error); return; }
+        if (e.error === 'network') { userStop = true; hint('Розпізнаванню мови потрібен інтернет. Спробуйте ще раз.'); }
+        // no-speech / aborted — не страшно: onend вирішить, слухати далі чи завершити
+      };
+      r.onend = function () {
+        take(interim); interim = '';                                  // останні слова, які браузер не встиг «дописати»
+        var quiet = Date.now() - last, total = Date.now() - t0;
+        if (!userStop && quiet < 4000 && total < 60000 && restarts < 30) {   // телефон обірвав сам — слухаємо далі
+          restarts++; rec = session() || null; if (rec) return;
+        }
+        finish();
+      };
+      try { r.start(); } catch (e) { explain('start:' + (e && e.name)); return false; }
+      return r;
+    }
+    rec = session(); if (!rec) return;
     listening = true; mic.classList.add('on'); $('hvField').classList.add('listening'); hint('Слухаю… скажіть, що є'); tap(15);
-    arm(7000); cap = setTimeout(function () { try { rec.stop(); } catch (e) {} }, 45000);
+    timer = setInterval(function () {            // тиша чи ліміт — зупиняємо самі
+      if (!rec) return;
+      var quiet = Date.now() - last, total = Date.now() - t0;
+      if ((said.length || interim) ? quiet > 4000 : quiet > 8000) { userStop = true; try { rec.stop(); } catch (e) {} }
+      else if (total > 60000) { userStop = true; try { rec.stop(); } catch (e) {} }
+    }, 500);
   }
 
   mic.addEventListener('click', function () {
@@ -243,7 +263,7 @@ window.initSay = function (cfg) {
       if (INAPP) { showSheet('denied'); return; }           // вбудований браузер (Telegram тощо): відкрити у звичайному
       inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є — ми розберемо.'); return;
     }
-    if (listening && rec) { rec.stop(); return; }
+    if (listening && rec) { userStop = true; rec.stop(); return; }
     micState().then(function (st) {
       var asked = false; try { asked = localStorage.getItem('pc-mic-asked') === '1'; } catch (e) {}
       if (st === 'denied') { explain('perm-denied'); return; }
