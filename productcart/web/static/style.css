@@ -2098,3 +2098,14 @@ body:has(.wk-reel) footer{display:none}
 .wk-card .wk-meta{order:-1}
 .wk-card{height:max(280px,calc(100dvh - 455px - env(safe-area-inset-bottom)))}
 .mlist .buyprog:not(.on){display:none}
+
+/* Профіль (варіант B): плитки 2×3 */
+.me-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 14px}
+.me-tile{display:flex;flex-direction:column;min-height:112px;padding:14px;border-radius:var(--r-lg);background:var(--card);box-shadow:0 0 0 .5px var(--line);color:var(--ink);text-decoration:none;min-width:0}
+.me-tile i{font-style:normal;font-size:26px;line-height:1}
+.me-tile b{margin-top:auto;font:600 17px/1.25 var(--body)}
+.me-tile small{font-size:13px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me-tile.dk{background:var(--tint);color:#fff;box-shadow:none}.me-tile.dk small{color:rgba(255,255,255,.8)}
+.me-tile:active{transform:scale(.97)}
+.pr-lbl{font:600 15px var(--body);margin:10px 0 6px}
+.pr-seg{margin-bottom:6px}

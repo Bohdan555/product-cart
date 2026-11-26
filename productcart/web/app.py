@@ -555,7 +555,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                    link=silpo_link(u["id"]) if u else None, chat=tg_chat(u["id"]) if u else None,
                    push_n=len(push_subs(u["id"])) if u else 0,
                    likes=[TAG_LABELS.get(t, t) for t in p.likes][:4], hides=[TAG_LABELS.get(t, t) for t in p.dislikes][:3],
-                   fridge_n=len(p.fridge) + len(p.fridge_other), cook_n=len(cooking_items(p)))
+                   fridge_n=len(p.fridge) + len(p.fridge_other), cook_n=len(cooking_items(p)), kitchen=menu.KITCHEN)
         return render(request, "me.html", u, **ctx)
 
     @app.post("/client-log")
@@ -2981,6 +2981,10 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
         p.name = str(form.get("name") or "Мій профіль")[:60]
     if has("household"):
         p.household = max(1, min(12, num("household", 1, int)))
+    if has("max_minutes"):
+        mm = max(15, min(180, num("max_minutes", p.max_minutes, int)))
+        if mm != p.max_minutes:
+            p.max_minutes, p.menu, p.menu_skip = mm, [], []      # інший час — інше меню
     if has("diets") or has("health_consent"):
         p.diets = diets if consent else []
     if has("kitchen"):

@@ -486,7 +486,7 @@ def test_profile_wizard_extras(tmp_path):
     with TestClient(app, follow_redirects=False) as c:
         token = register(c)
         page = c.get("/profile").text
-        assert "Обмеження в харчуванні" in page and "Що купуєте майже щотижня" in page and 'id="fillBtn"' not in page
+        assert "Обмеження в харчуванні" in page and "Сім'я й час" in page and 'id="fillBtn"' not in page
         assert c.get("/profile/silpo-hints").status_code == 409
         r = c.post("/silpo/connect", data={"csrf": token})
         state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
@@ -508,7 +508,7 @@ def test_profile_wizard_extras(tmp_path):
         c.post("/profile", data={"csrf": token, "_f": ["diets", "regulars", "min_discount"], "regulars": "кава",
                                  "min_discount": "20"})
         me = c.get("/me").text
-        assert "2 людини" in me and "Обмеження" not in me
+        assert "2 людини" in me and "немає" in me
     assert S.generic_name("Сир твердий Гауда 45%") == "сир твердий"
 
 
@@ -760,15 +760,15 @@ def test_me_profile_page(client):
     client.post("/today/cooked", data={"csrf": token, "id": "omelette"})
     client.post("/cook/done", data={"csrf": token, "id": "omelette"})
     me = client.get("/me").text
-    assert "Профіль" in me and "Приготовано" not in me and "«Сільпо» не підключено" in me
-    assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "Підключити" in me
+    assert "Профіль" in me and "Приготовано" not in me and "підключити ціни" in me
+    assert 'href="/dishes"' in me and 'href="/notify"' in me and 'action="/logout"' in me and "підключити ціни" in me
 
 
 def test_tastes_go_to_profile(client):
     """Смаки — на сторінці «Смаки й харчування»; старе посилання /taste веде туди."""
     token = register(client, "taste@b.ua")
     assert client.post("/fridge/save", data={"csrf": token, "have": ["potato"]}).headers["location"] == "/menu?fresh=1"
-    assert 'href="/profile"' in client.get("/me").text and "Смаки й харчування" in client.get("/me").text
+    assert 'href="/profile#dietsH"' in client.get("/me").text and 'href="/tastes?next=/me"' in client.get("/me").text
     assert client.get("/taste").headers["location"] == "/profile"
 
 
@@ -819,7 +819,7 @@ def test_cook_list_saves_recipes_for_guest_and_user(client):
     assert "Тут будуть ваші рецепти" in client.get("/cook").text
     token = register(client)
     client.post("/today/cooked", data={"csrf": token, "id": "plov", "n": "2"})
-    assert "Плов з куркою" in client.get("/cook").text and "1 рецепт" in client.get("/me").text
+    assert "Плов з куркою" in client.get("/cook").text
     assert "Як готувати" in client.get("/cook/borscht").text      # не з мого списку — теж відкривається
 
 
@@ -972,9 +972,9 @@ def test_tastes_diets_one_page(client):
     """Смаки, дієти, щотижневі покупки й знижки — одна сторінка «Смаки й харчування»."""
     token = register(client)
     page = client.get("/profile").text
-    assert "Смаки й" in page and 'href="/tastes?next=/profile"' in page and 'name="diets"' in page and 'id="regulars"' in page
+    assert "Харчування" in page and 'name="diets"' in page and 'name="max_minutes"' in page and 'id="regulars"' not in page
     me = client.get("/me").text
-    assert "Смаки й харчування" in me and "Дієти й анкета" not in me
+    assert "Смаки" in me and "Дієти й анкета" not in me
     r = client.post("/profile", data={"csrf": token, "_f": ["likes", "dislikes", "diets", "regulars", "min_discount"],
                                       "likes": ["fish", "eggs"], "dislikes": ["pork"], "regulars": "кава", "min_discount": "15"})
     assert r.status_code == 303
@@ -1132,11 +1132,11 @@ def test_tastes_swipe_saves_and_filters(client):
     assert "/tastes?next=/" in client.get("/").text                     # на головній — запрошення, поки не свайпав
     r = client.post("/tastes", data={"csrf": token, "like": ["chicken", "potato"], "no": ["liver", "fish"], "skip": ["tofu"]})
     assert r.json()["ok"]
-    assert "/tastes?next=/" not in client.get("/").text and "не їм: 4" in client.get("/profile").text
+    assert "/tastes?next=/" not in client.get("/").text and "смакує" in client.get("/me").text
     q = {"have": "eggs,onion", "t": "60", "n": "2", "meal": "dinner"}
     ids = re.findall(r'data-dish="([^"]+)"', client.get("/today/dishes", params=q).text)
     assert ids and not any({"liver", "fish", "mackerel", "herring"} & set(menu.RECIPE_BY_ID[i].ingredients) for i in ids if i in menu.RECIPE_BY_ID)
     # передумав: печінку тепер «смакує»
     client.post("/tastes", data={"csrf": token, "like": ["liver"]})
-    assert "не їм: 3" in client.get("/profile").text
+    assert "не їм 3" in client.get("/me").text
     assert client.post("/tastes", data={"csrf": "bad", "like": ["liver"]}).status_code == 400

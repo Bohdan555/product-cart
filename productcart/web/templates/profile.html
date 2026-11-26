@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Смаки й харчування — Кошик з акцій{% endblock %}
+{% block title %}Харчування — Кошик з акцій{% endblock %}
 {% block body %}
 {% set DIET_EMO = {"no_gluten": "🌾", "no_lactose": "🥛", "vegetarian": "🥕", "vegan": "🌱", "no_pork": "🐖",
                    "no_alcohol": "🍷", "no_sugar": "🍬"} %}
 {% set chosen_diets = picked_diets or p.diets %}
 <div class="me-lite">
-<h1 class="xh">{% if welcome %}Про <span class="hl">вас</span>{% else %}Смаки й <span class="hl">харчування</span>{% endif %}</h1>
+<h1 class="xh">{% if welcome %}Про <span class="hl">вас</span>{% else %}Харчування{% endif %}</h1>
 <p class="pr-saved" id="prSaved" aria-live="polite"></p>
 {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
 <form class="anketa" id="anketa" method="post" action="/profile" novalidate>
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
   {% if welcome %}<input type="hidden" name="welcome" value="1">{% endif %}
-  <input type="hidden" name="_f" value="diets"><input type="hidden" name="_f" value="regulars"><input type="hidden" name="_f" value="min_discount">
+  <input type="hidden" name="_f" value="diets">
   <input type="hidden" name="_f" value="kitchen"><input type="hidden" name="_f" value="likes"><input type="hidden" name="_f" value="dislikes">
 
   {% if silpo %}
@@ -22,13 +22,10 @@
   </div>
   {% endif %}
 
-  <h2 class="ph">Що до смаку?</h2>
-  <a class="pr-taste" href="/tastes?next=/profile"><i aria-hidden="true">😋</i><span><b>{{ 'Змінити смаки' if p.tastes_seen else 'Свайпнути продукти' }}</b>
-    <small>{% if p.tastes_seen %}смакує: {{ p.food_likes|length }} · не їм: {{ p.food_dislikes|length }}{% else %}26 продуктів · пів хвилини{% endif %}</small></span><em aria-hidden="true">›</em></a>
   {% for t in p.likes %}<input type="hidden" name="likes" value="{{ t }}">{% endfor %}
   {% for t in p.dislikes %}<input type="hidden" name="dislikes" value="{{ t }}">{% endfor %}
 
-  <h2 class="ph">Що є на кухні</h2>
+  <h2 class="ph" id="kitchenH">Що є на кухні</h2>
   <div class="an-chips" id="kitchen">
     {% for k, label in kitchen.items() %}
     <label class="an-chip"><input type="checkbox" name="kitchen" value="{{ k }}" {% if k in p.kitchen %}checked{% endif %}>
@@ -36,7 +33,7 @@
     {% endfor %}
   </div>
 
-  <h2 class="ph">Обмеження в харчуванні</h2>
+  <h2 class="ph" id="dietsH">Обмеження в харчуванні</h2>
   <div class="an-chips" id="diets">
     {% for d in diets %}
     <label class="an-chip"><input type="checkbox" name="diets" value="{{ d }}" {% if d in chosen_diets %}checked{% endif %}>
@@ -46,19 +43,12 @@
   <label class="consent" id="consentBox"><input type="checkbox" name="health_consent" value="1" {% if consent %}checked{% endif %}>
     <span>Дозволяю враховувати ці обмеження (дані про здоров'я) лише для підбору акцій і меню.</span></label>
 
-  <h2 class="ph">Що купуєте майже щотижня</h2>
-  <div class="taginput" data-for="regulars">
-    <input type="hidden" name="regulars" id="regulars" value="{{ p.regulars|join(', ') }}">
-    <div class="tagbox"><span class="tags-in"></span><input type="text" class="tagtyped" placeholder="напр. кава зернова" aria-label="Додати товар" enterkeyhint="done"></div>
-    <div class="sugg">{% for s in ['молоко', 'яйця', 'хліб', 'сир твердий', 'йогурт', 'масло вершкове', 'курятина', 'банани', 'кава зернова', 'сметана'] %}<button type="button" data-add="{{ s }}">+ {{ s }}</button>{% endfor %}</div>
-  </div>
-
-  <h2 class="ph">Знижки</h2>
-  <div class="slider">
-    <div class="sl-h"><label for="min_discount">Показувати від</label><output id="discOut"></output></div>
-    <input type="range" id="min_discount" name="min_discount" min="0" max="50" step="5" value="{{ p.min_discount|int }}">
-    <div class="sl-s"><span>будь-які</span><span>від 50%</span></div>
-  </div>
+  <h2 class="ph" id="family">Сім'я й час</h2>
+  <p class="pr-lbl">Нас</p>
+  <div class="ms-seg pr-seg">{% for v in (1, 2, 3, 4, 5, 6) %}<label><input type="radio" name="household" value="{{ v }}" {% if v == (p.household or 2) %}checked{% endif %}><span>{{ v }}</span></label>{% endfor %}</div>
+  <p class="pr-lbl">Час на страву</p>
+  {% set mins = 30 if p.max_minutes <= 30 else (45 if p.max_minutes <= 45 else (60 if p.max_minutes <= 60 else 90)) %}
+  <div class="ms-seg pr-seg">{% for v, t in [(30, '30 хв'), (45, '45 хв'), (60, '60 хв'), (90, '60+')] %}<label><input type="radio" name="max_minutes" value="{{ v }}" {% if v == mins %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</div>
 
   {% if welcome %}<div class="an-save"><button type="submit" class="btn">Готово</button></div>{% endif %}
 </form>
@@ -120,11 +110,13 @@
 
   // знижки
   var disc = document.getElementById('min_discount');
+  if (disc) (function () {
   function money() {
     document.getElementById('discOut').textContent = +disc.value ? 'від ' + disc.value + '%' : 'будь-які';
     disc.style.setProperty('--p', ((disc.value - disc.min) / (disc.max - disc.min) * 100) + '%');
   }
-  disc.addEventListener('input', money);
+  disc.addEventListener('input', money); money();
+  })();
 
   // «Заповнити з «Сільпо»»: обмеження й регулярні покупки з історії
   var fillBtn = document.getElementById('fillBtn');
@@ -143,7 +135,7 @@
     }).catch(function () { fillBtn.disabled = false; fillBtn.textContent = 'Заповнити з «Сільпо»'; txt.textContent = 'Не вдалося зв\'язатися з «Сільпо».'; });
   };
 
-  diets(); money();
+  diets();
   ready = true;
 })();
 </script>
