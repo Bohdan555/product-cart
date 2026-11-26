@@ -2109,3 +2109,12 @@ body:has(.wk-reel) footer{display:none}
 .me-tile:active{transform:scale(.97)}
 .pr-lbl{font:600 15px var(--body);margin:10px 0 6px}
 .pr-seg{margin-bottom:6px}
+
+/* Сповіщення: «куди» й «про що» — два згруповані списки */
+.nt-h{font:700 34px/1.15 var(--display);letter-spacing:-.022em;margin:4px 0 4px}
+.nt-tg{display:flex;align-items:center;gap:12px;padding-top:12px;border-top:.5px solid var(--line)}
+.nt-tg>span{display:grid;gap:2px;min-width:0;flex:1}.nt-tg b{display:flex;align-items:center;gap:8px;font:500 17px var(--body)}.nt-tg small{color:var(--muted);font-size:14px}
+.nt-btn{flex:none;height:36px;padding:0 16px;border-radius:18px;border:0;background:var(--tint);color:#fff;font:600 15px var(--body);display:grid;place-items:center;text-decoration:none;cursor:pointer;min-width:44px}
+.nt-btn.alt{background:var(--soft);color:var(--ink)}
+.nt-note{color:var(--muted);font-size:15px;margin:4px 4px 0}
+.nt-card.stack{gap:10px}.nt-card [data-state-msg]{margin:0;line-height:1.4}.nt-card .howto summary{min-height:0;display:inline}

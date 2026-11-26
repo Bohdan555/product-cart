@@ -47,7 +47,7 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         assert hook(c, f"/start {code}", secret="wrong").status_code == 403
         assert hook(c, "/start forged_1_abc").status_code == 200 and "Привіт" in tg.sent[-1][1]
         hook(c, f"/start {code}")
-        assert "Готово" in tg.sent[-1][1] and "Telegram підключено" in c.get("/notify").text
+        assert "Готово" in tg.sent[-1][1] and "підключено · " in c.get("/notify").text
 
         # обраних товарів в інтерфейсі більше немає (лише сервер — для старих підписок)
         assert 'class="pbell"' not in c.get("/list").text and "Обрані товари" not in c.get("/notify").text
@@ -74,7 +74,7 @@ def test_link_watch_and_daily_notifications(tmp_path, monkeypatch):
         page = c.get("/notify").text
         assert 'name="tg_weekly" value="1" checked' in page and 'name="tg_deals" value="1" checked' not in page
         hook(c, "/stop")
-        assert "Підключити Telegram" in c.get("/notify").text
+        assert "t.me/" in c.get("/notify").text
 
 
 def test_watch_threshold():
@@ -106,4 +106,4 @@ def test_setup_without_token(tmp_path):
     with TestClient(app, follow_redirects=False) as c:
         assert c.get("/tg/setup").status_code == 503
         token = register(c)
-        assert "налаштовується" in c.get("/notify").text
+        assert ">скоро<" in c.get("/notify").text

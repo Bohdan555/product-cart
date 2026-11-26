@@ -1,43 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Сповіщення — Кошик з акцій{% endblock %}
 {% block body %}
-<section class="intro">
-  <h1 class="xh"><span class="hl">Сповіщення</span></h1>
-</section>
-<div class="card stack npush" data-push>
+<h1 class="xh nt-h">Сповіщення</h1>
+
+<h2 class="ph">Куди надсилати</h2>
+<div class="card stack npush nt-card" data-push>
   <label class="nrow"><input type="checkbox" data-push-toggle>
     <span><b>{{ ic("phone", "ii") }}На цей телефон</b><small>як звичайні сповіщення</small></span></label>
   <p data-state-msg="on">{{ ic("check", "ii") }}Увімкнено на цьому пристрої{% if push_n > 1 %} · усього пристроїв: {{ push_n }}{% endif %}</p>
   <p data-state-msg="ios">На iPhone сповіщення працюють, коли Кошик додано на початковий екран: <b>Поділитися</b> → <b>«На початковий екран»</b>, потім відкрийте його звідти.</p>
   <p data-state-msg="denied">Вимкнено в браузері · <details class="howto"><summary>Як увімкнути</summary>🔒 біля адреси → Сповіщення → Дозволити</details></p>
-  <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram нижче.</p>
+  <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram.</p>
+  <div class="nt-tg">
+    <span><b>{{ ic("plane", "ii") }}Telegram</b><small>{% if chat %}підключено · <a href="https://t.me/{{ bot }}" target="_blank" rel="noopener">@{{ bot }}</a>{% elif not tg_on %}скоро{% else %}бот @{{ bot }} — натисніть «Start»{% endif %}</small></span>
+    {% if chat %}<form method="post" action="/notify" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="action" value="unlink">
+      <button type="submit" class="nt-btn alt">Відключити</button></form>
+    {% elif tg_on %}<a class="nt-btn" href="{{ start_url }}" target="_blank" rel="noopener" data-turbo="false">Підключити</a>{% endif %}
+  </div>
 </div>
-<form method="post" action="/notify" class="card stack nset" data-turbo="false">
+
+<h2 class="ph">Про що</h2>
+<form method="post" action="/notify" class="card stack nset nt-card" data-turbo="false">
   <input type="hidden" name="csrf" value="{{ user.csrf }}">
-  <label class="nrow"><input type="checkbox" name="tg_deals" value="1" {% if p.tg_deals %}checked{% endif %}>
-    <span><b>{{ ic("bell", "ii") }}Цікаві акції</b><small>великі знижки на те, що ви купуєте</small></span></label>
   <label class="nrow"><input type="checkbox" name="tg_weekly" value="1" {% if p.tg_weekly %}checked{% endif %}>
     <span><b>{{ ic("calendar", "ii") }}Меню на тиждень</b><small>щопонеділка зранку</small></span></label>
-<input type="hidden" name="tg_expiry" value="{{ 1 if p.tg_expiry else '' }}">
+  {% if silpo %}<label class="nrow"><input type="checkbox" name="tg_deals" value="1" {% if p.tg_deals %}checked{% endif %}>
+    <span><b>{{ ic("bell", "ii") }}Цікаві акції</b><small>великі знижки на те, що ви купуєте</small></span></label>
+  {% else %}<input type="hidden" name="tg_deals" value="{{ 1 if p.tg_deals else '' }}">{% endif %}
+  <input type="hidden" name="tg_expiry" value="{{ 1 if p.tg_expiry else '' }}">
   <noscript><button type="submit" class="btn">Зберегти</button></noscript>
 </form>
-<h2 class="ph">Або в Telegram</h2>
-
-<div class="card stack ntg" style="--c:var(--p-sky)">
-  {% if chat %}
-  <p class="ntg-on">{{ ic("check", "ii") }}<b>Telegram підключено</b> · бот <a href="https://t.me/{{ bot }}" target="_blank" rel="noopener">@{{ bot }}</a></p>
-  <form method="post" action="/notify" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="action" value="unlink">
-    <button type="submit" class="btn alt small">Відключити</button></form>
-  {% elif not tg_on %}
-  <p>Бот ще налаштовується — загляньте трохи згодом.</p>
-  {% else %}
-  <p><b>Отримуйте акції просто в Telegram</b></p>
-  <p><a class="btn" href="{{ start_url }}" target="_blank" rel="noopener" data-turbo="false">{{ ic("plane", "ii") }}Підключити Telegram</a></p>
-  <small class="hint">Відкриється бот @{{ bot }} — натисніть «Start». Потім оновіть цю сторінку.</small>
-  {% endif %}
-  {% if not silpo %}<div class="note warnbox">Акції надходять від «Сільпо» — <a href="/silpo">підключіть «Сільпо»</a>, щоб сповіщення працювали.</div>{% endif %}
-</div>
-
+{% if not silpo %}<p class="nt-note">Сповіщення про акції з'являться, коли <a href="/silpo">підключите «Сільпо»</a>.</p>{% endif %}
 
 <script>
 document.querySelectorAll('.nset input[type=checkbox]').forEach(function (c) {   // зберігаємо одразу
