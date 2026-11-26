@@ -248,3 +248,10 @@ def test_cod_liver_and_sauerkraut_are_not_fish_or_carrot():
     assert not menu.matches_ingredient("Печінка тріски «Премія» 121г", "fish")
     assert not menu.matches_ingredient("Капуста квашена з морквою 500г", "carrot")
     assert menu.matches_ingredient("Філе тріски заморожене 500г", "fish") and menu.matches_ingredient("Морква мита 1кг", "carrot")
+
+
+def test_ready_meals_with_ingredient_in_composition_dont_match():
+    assert not menu.matches_ingredient("Боул Рис зі смаженим курячим філе та овочами 330г", "chicken_fillet")
+    assert not menu.matches_ingredient("Заправка Торчин овочева з морквою, цибулею 180г", "carrot")
+    assert not menu.matches_ingredient("Баклажани «Ніжин» в аджиці 450г", "eggplant")
+    assert menu.matches_ingredient("Філе куряче охолоджене 1 кг", "chicken_fillet") and menu.matches_ingredient("Ніжне філе курчати", "chicken_fillet")

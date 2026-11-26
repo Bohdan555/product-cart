@@ -393,11 +393,20 @@ def _tokens(name: str) -> list[str]:
     return [t for t in re.split(r"[^\wʼ'-]+", (name or "").lower().replace("’", "'")) if t]
 
 
+HEAD = 3      # назва продукту — на початку: «Боул … з курячим філе», «Заправка … з морквою» — не курка й не морква
+
+
+def _var_hit(toks: list[str], var) -> bool:
+    """Усі основи варіанта є в назві, і принаймні одна — серед перших слів (це сам продукт, а не склад)."""
+    return (all(any(t.startswith(stem) for t in toks) for stem in var)
+            and any(t.startswith(stem) for t in toks[:HEAD] for stem in var))
+
+
 # Інший продукт, хоч і зі словом інгредієнта в назві: «паштет з вершковим маслом» — не масло,
 # «оливки фаршировані» — не фарш, «чипси зі смаком сиру» — не сир.
 OTHER_PRODUCT = ("паштет", "соус", "чипс", "снек", "сухарик", "фарширов", "зі смаком", "смак ", "ароматиз", "корм",
                  "цукерк", "батончик", "печиво", "сироп", "для котів", "для собак", "вареник", "пельмен", "чебурек",
-                 "піца", "напівфабрикат", "кульк", "засіб", "миття")
+                 "піца", "напівфабрикат", "кульк", "засіб", "миття", "аджиц", "заправк", "боул")
 
 
 def matches_ingredient(name: str, key: str) -> bool:
@@ -408,7 +417,7 @@ def matches_ingredient(name: str, key: str) -> bool:
     if any(w in low and w not in title.lower() for w in OTHER_PRODUCT):
         return False
     toks = _tokens(name)
-    return any(all(any(t.startswith(stem) for t in toks) for stem in var) for var in variants)
+    return any(_var_hit(toks, var) for var in variants)
 
 
 def recipe_tags(rec: Recipe) -> set[str]:
@@ -490,7 +499,7 @@ def source_map(offers: list[Offer]) -> dict[str, Source]:
             if not is_food(o) or (unit == "g" and o.pack_unit == "g" and o.pack_qty and o.pack_qty < 25):
                 continue                    # побутові товари й крихітні пачки (20 г меленого перцю — не овоч)
             ts = toks[i]
-            if not any(all(any(t.startswith(stem) for t in ts) for stem in var) for var in variants):
+            if not any(_var_hit(ts, var) for var in variants):
                 continue
             o = offers[i]
             up = o.unit_price()
