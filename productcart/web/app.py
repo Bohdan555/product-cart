@@ -48,7 +48,7 @@ GOOGLE_COOKIE = "pc_google"  # state і PKCE verifier незавершеного
 CART_COOKIE = "pc_cart_n"  # скільки товарів у кошику «Сільпо» (лише для значка)
 GUEST_COOKIE = "pc_guest"  # налаштування меню гостя (без реєстрації), зашифровані
 # Кнопка «←» на внутрішніх сторінках: куди повертатись (вкладки й сторінки зі своєю «←» тут не перелічені)
-BACK = {"/fridge": "/", "/pantry": "/", "/menu": "/", "/buy": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
+BACK = {"/fridge": "/", "/pantry": "/", "/menu": "/", "/cook": "/", "/profile": "/me", "/notify": "/me",
         "/silpo": "/me", "/privacy": "/me", "/photos": "/me", "/admin/stats": "/me", "/login": "/", "/register": "/"}
 cur_kit: contextvars.ContextVar = contextvars.ContextVar("cur_kit", default=None)   # прилади з поточного запиту
 warm_soon: contextvars.ContextVar = contextvars.ContextVar("warm_soon", default=None)  # магазин, який варто оновити

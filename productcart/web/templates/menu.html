@@ -117,63 +117,63 @@
 
 {% endif %}
 {% if view == 'buy' %}
-<section id="list" class="mlist">
-  <div class="list-h"><h1 class="xh">Що купити</h1><button type="button" class="copy" id="copy" aria-label="Поділитися списком">{{ ic("share") }}</button></div>
-  {% set nbuy = m.promo_lines|length + m.other_lines|length %}
-  <p class="buy-sum"><span>{{ nbuy }} {{ plural(nbuy, 'товар', 'товари', 'товарів') }} · ≈ {{ uah(m.total|round) }}</span>{% if m.saving >= 1 %}<b>−{{ uah(m.saving|round) }} з акцій</b>{% endif %}</p>
-  <div class="buyprog" aria-live="polite">
-    <div class="buyprog-h"><b id="progressTxt">Торкайтесь товарів, які вже купили</b><span id="progressLeft"></span></div>
-    <div class="progress"><i id="bar"></i></div>
-  </div>
-  {% macro row(l, price) %}
-  {% set nv = name_visual(l.name) %}<label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-emoji="{{ nv.emoji }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}" data-price="{{ price }}">
-<span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
-        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
-    <span class="rmain"><b>{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}</b>
-      <small>{{ fmt_qty(l.need, l.unit) }}</small></span>
-    {{ caller() }}
-  </label>
-  {% endmacro %}
-  {% for cat, rows in aisles %}
-  <div class="group" data-copy="{{ cat }}"><div class="gh"><b>{{ cat }}</b><small>{{ rows|length }}</small></div>
-  {% for l, promo in rows %}{% if promo %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
-    {% call row(l, uah(l.cost)) %}<span class="rprice"><b>{{ uah(l.cost) }}</b>{% if o.discount_pct or l.regular > l.cost %}<span class="rsub">{% if o.discount_pct %}<span class="disc">−{{ o.discount_pct|round|int }}%</span>{% endif %}{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</span>{% endif %}</span>
-      {% if link_url %}<a class="bgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}{% endcall %}
-  {% else %}{% call row(l, '≈ ' ~ uah(l.cost|round)) %}<span class="rprice"><b class="est">≈ {{ uah(l.cost|round) }}</b></span>{% endcall %}{% endif %}
-  {% endfor %}</div>
+<section id="list" class="mlist ct">
+  {% set nbuy = m.promo_lines|length + m.other_lines|length + m.extras|length %}
+  <h1 class="ct-h">Кошик</h1>
+  <p class="ct-sum"><span id="ctN" data-all="{{ nbuy }}">{{ nbuy }} {{ plural(nbuy, 'продукт', 'продукти', 'продуктів') }}</span>
+    <span><b id="ctTot" data-v="{{ m.total|round(2) }}">≈ {{ uah(m.total|round) }}</b>{% if m.saving >= 1 %} · <em id="ctSave" data-v="{{ m.saving|round(2) }}">−{{ uah(m.saving|round) }}</em>{% endif %}{% if is_demo %} · <a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо</a>{% endif %}</span></p>
+  <div class="ct-list" data-key="skip:{{ m.ids|join(',') }}:{{ m.people }}">
+  {% for cat, rows in aisles %}{% for l, promo in rows %}{% set disc = promo and l.regular > l.cost %}
+    <label class="ct-r"><input type="checkbox" checked autocomplete="off" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-save="{{ (l.regular - l.cost)|round(2) if disc else 0 }}">
+      <span class="ct-c" aria-hidden="true"></span><span class="ct-n">{{ l.name }}</span>
+      <span class="ct-p{% if disc %} g{% endif %}">{% if disc %}<s>{{ l.regular|round|int }}</s>{% endif %}{{ uah(l.cost|round) }}</span></label>
+  {% endfor %}{% endfor %}
+  {% for x in m.extras %}<label class="ct-r"><input type="checkbox" checked autocomplete="off" data-buy="x:{{ x }}" data-cost="0" data-save="0"><span class="ct-c" aria-hidden="true"></span><span class="ct-n">{{ x }}</span><span class="ct-p"></span></label>{% endfor %}
+  {% for l in m.pantry_lines if not l.buy %}
+    <form method="post" action="/menu/pantry" class="ct-r off" data-pantry="{{ l.key }}"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}">
+      <button type="submit" class="ct-c" aria-label="{{ l.name }}: закінчилось — купити"></button><span class="ct-n">{{ l.name }}</span><span class="ct-p">мабуть, є</span></form>
   {% endfor %}
-  {% if m.extras %}
-  <div class="group" data-copy="🧂 Для ваших страв"><div class="gh"><b>Для ваших страв</b><small>без ціни</small></div>
-  {% for x in m.extras %}{% set nv = name_visual(x) %}
-  <label class="brow"><input type="checkbox" data-buy="x:{{ x }}" data-emoji="{{ nv.emoji }}" data-text="{{ x }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
-    <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
-    <span class="rmain"><b>{{ x }}</b></span></label>
-  {% endfor %}</div>
-  {% endif %}
-  {% if m.home_lines %}
-  <details class="group home-fold" data-copy="🏠 Вже є вдома — не купуємо"><summary class="gh"><b>✓ Є вдома · {{ m.home_lines|length }}</b><small>{{ m.home_lines|map(attribute='name')|map('lower')|join(', ')|truncate(40) }}</small></summary>
-  {% for l in m.home_lines %}{% set nv = name_visual(l.name) %}
-    <div class="brow static" data-have="1" data-emoji="{{ nv.emoji }}" data-text="{{ l.name }}"><span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span><span class="rmain"><b>{{ l.name }}</b><small>для меню треба {{ fmt_qty(l.need, l.unit) }}</small></span>
-      <form method="post" action="/menu/have" data-undo="{{ l.name }} — у списку" data-undo-op="add"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}"><input type="hidden" name="op" value="remove"><button type="submit" class="switch">Немає</button></form></div>
-  {% endfor %}</details>
-  {% endif %}
-  {% if m.pantry_lines %}
-  <details class="group pantry home-fold" data-copy="🫙 Запаси вдома"{% if m.pantry_lines|selectattr('buy')|list %} open{% endif %}><summary class="gh"><b>Запаси · {{ m.pantry_lines|length }}</b><small>{{ m.pantry_lines|map(attribute='name')|map('lower')|join(', ')|truncate(40) }}</small></summary>
-  {% for l in m.pantry_lines %}
-    <div class="brow static{% if l.buy %} buying{% endif %}" {% if not l.buy %}data-have="1"{% endif %} data-text="{{ l.name }}{% if l.buy %} — {{ fmt_qty(l.need, l.unit) }}{% endif %}"><span class="rmain"><b>{{ l.name }}</b><small>{% if l.buy %}у списку вище{% else %}є вдома{% endif %}</small></span>
-      <form method="post" action="/menu/pantry"{% if not l.buy %} data-undo="{{ l.name }} — у списку"{% else %} data-undo="{{ l.name }} — не купуємо"{% endif %}><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}">
-        <button type="submit" class="switch{% if l.buy %} back{% endif %}">{{ 'Не треба' if l.buy else 'Закінчилось' }}</button></form></div>
-  {% endfor %}</details>
-  {% endif %}
-
-  {% if guest %}<a class="scart-alt" href="/register">Зробити кошик у «Сільпо» →</a>
+  {% for l in m.home_lines %}
+    <form method="post" action="/menu/have" class="ct-r off" data-home="{{ l.key }}"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}"><input type="hidden" name="op" value="remove">
+      <button type="submit" class="ct-c" aria-label="{{ l.name }}: немає вдома — купити"></button><span class="ct-n">{{ l.name }}</span><span class="ct-p">є вдома</span></form>
+  {% endfor %}
+  </div>
+  <p class="ct-hint">Зніміть галочку з того, що вже є вдома</p>
+  <div class="ct-go">
+  {% if guest %}<a class="btn" href="/register">Замовити в «Сільпо»</a>
   {% elif link and not is_demo %}
   <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
-    <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" value="">
-    <button class="btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>Зібрати кошик у «Сільпо»</button>
+    <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" id="ctSkip" value="">
+    <button class="btn" type="submit">Замовити в «Сільпо»</button>
   </form>
-  {% else %}<a class="scart-alt" href="/silpo">Зробити кошик у «Сільпо» →</a>{% endif %}
+  {% else %}<a class="btn" href="/silpo">Замовити в «Сільпо»</a>{% endif %}
+  </div>
 </section>
+<script>
+(function () {   // галочка = купуємо; зняли — «вже є», сума одразу менша. Пам'ятаємо для цього меню.
+  var box = document.querySelector('.ct-list'); if (!box || box.dataset.bound) return; box.dataset.bound = '1';
+  var KEY = box.dataset.key, skip = {};          // ключ — на самому списку (menudata ще не в DOM, коли скрипт виконується)
+  try { skip = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  var boxes = [].slice.call(box.querySelectorAll('input[data-buy]')), tot = document.getElementById('ctTot'), sv = document.getElementById('ctSave'), n = document.getElementById('ctN');
+  function plural(k) { var a = k % 10, b = k % 100; return a === 1 && b !== 11 ? 'продукт' : (a >= 2 && a <= 4 && (b < 10 || b >= 20) ? 'продукти' : 'продуктів'); }
+  function sync() {
+    var cost = +tot.dataset.v, save = sv ? +sv.dataset.v : 0, on = 0, off = [];
+    boxes.forEach(function (b) { b.closest('.ct-r').classList.toggle('off', !b.checked);
+      if (b.checked) on++; else { cost -= +b.dataset.cost || 0; save -= +b.dataset.save || 0; off.push(b.dataset.buy); } });
+    var all = +n.dataset.all;
+    n.textContent = (on === all ? all : on + ' з ' + all) + ' ' + plural(all);
+    tot.textContent = '≈ ' + Math.max(0, Math.round(cost)).toLocaleString('uk-UA').replace(/\u00a0/g, ' ') + ' ₴';
+    if (sv) sv.textContent = '−' + Math.max(0, Math.round(save)) + ' ₴';
+    var f = document.getElementById('ctSkip'); if (f) f.value = off.join(',');
+  }
+  boxes.forEach(function (b) {
+    if (skip[b.dataset.buy]) b.checked = false;
+    b.addEventListener('change', function () { if (b.checked) delete skip[b.dataset.buy]; else skip[b.dataset.buy] = 1;
+      try { localStorage.setItem(KEY, JSON.stringify(skip)); } catch (e) {} if (window.haptic) haptic(8); sync(); });
+  });
+  sync();
+})();
+</script>
 
 
 {% endif %}
@@ -214,7 +214,7 @@
     var data = document.getElementById('menudata'); if (!data) return;
     var key = data.dataset.key, saved = {};
     try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
-    var boxes = Array.prototype.slice.call(root.querySelectorAll('[data-buy]'));
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('.mlist:not(.ct) [data-buy]'));   // у «Кошику» галочки — свої (купуємо / вже є)
     function progress(user) {
       var done = boxes.filter(function (b) { return b.checked; }).length;
       if (user && boxes.length && done === boxes.length) { if (window.celebrate) window.celebrate(); if (window.toast) window.toast('Усе куплено! 🎉'); if (window.haptic) haptic(30); }
@@ -348,7 +348,8 @@
     var form = e.target, btn = e.submitter;
     if (form.hasAttribute('data-plain')) return;   // налаштування з нижнього вікна — звичайний перехід
     if (form.hasAttribute('data-noajax')) {   // кошик «Сільпо»: звичайний перехід, але з позначками «куплено»
-      form.querySelector('input[name=bought]').value = Array.prototype.filter.call(root.querySelectorAll('[data-buy]'), function (b) { return b.checked; }).map(function (b) { return b.dataset.buy; }).join(',');
+      // «Кошик»: галочка = купуємо → у «Сільпо» не йде лише те, з чого галочку зняли («вже є»)
+      form.querySelector('input[name=bought]').value = Array.prototype.filter.call(root.querySelectorAll('.ct [data-buy]'), function (b) { return !b.checked; }).map(function (b) { return b.dataset.buy; }).join(',');
       var sb = form.querySelector('button'); sb.disabled = true; sb.lastChild.textContent = 'Збираємо кошик…';
       return;
     }

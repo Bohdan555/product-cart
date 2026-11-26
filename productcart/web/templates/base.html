@@ -154,7 +154,7 @@ document.addEventListener('turbo:before-prefetch', function (e) {
   {% else %}
   <nav class="top"><a class="tabbed" href="/login">Увійти</a></nav>
   {% endif %}
-  <a class="hcart{% if request.url.path == '/silpo/cart' %} on{% endif %}" href="{{ '/silpo/cart' if user else '/register' }}" aria-label="Мій кошик у «Сільпо»{% if cart_n %}: {{ cart_n }}{% endif %}" title="Мій кошик у «Сільпо»">
+  <a class="hcart{% if request.url.path == '/silpo/cart' %} on{% endif %}" href="/buy" aria-label="Мій кошик у «Сільпо»{% if cart_n %}: {{ cart_n }}{% endif %}" title="Мій кошик у «Сільпо»">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>
     <b id="hcartN" class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b>
   </a>
@@ -165,10 +165,10 @@ document.addEventListener('turbo:before-prefetch', function (e) {
 <footer>© Кошик з акцій · <a href="/privacy">Приватність і дані</a> · <a href="/photos">Автори фото</a></footer>
 </div>
 {% set path = request.url.path %}
-{% set sect = 'deals' if path.startswith(('/list', '/go')) else 'cart' if path.startswith('/silpo/cart') else ('me' if path == '/me' or path.startswith(('/profile', '/notify', '/silpo', '/login', '/register', '/dishes', '/privacy', '/photos')) else 'cook') %}
+{% set sect = 'deals' if path.startswith(('/list', '/go')) else 'cart' if path.startswith(('/silpo/cart', '/buy')) else ('me' if path == '/me' or path.startswith(('/profile', '/notify', '/silpo', '/login', '/register', '/dishes', '/privacy', '/photos')) else 'cook') %}
 <div class="tabs dock" id="tabs3-{{ 'u' if user else 'g' }}" data-turbo-permanent><nav aria-label="Розділи">
   <a href="/" data-sect="cook"{% if sect == 'cook' %} class="on" aria-current="page"{% endif %}>{{ ic("pan") }}Готуємо</a>
-  <a href="/silpo/cart" data-sect="cart"{% if sect == 'cart' %} class="on" aria-current="page"{% endif %}><span class="tico">{{ ic("cart") }}<b class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b></span>Кошик</a>
+  <a href="/buy" data-sect="cart"{% if sect == 'cart' %} class="on" aria-current="page"{% endif %}><span class="tico">{{ ic("cart") }}<b class="cartN" {% if not cart_n %}hidden{% endif %}>{{ (cart_n if cart_n < 100 else '99+') if cart_n else '' }}</b></span>Кошик</a>
   <a href="/me" data-sect="me"{% if sect == 'me' %} class="on" aria-current="page"{% endif %}>{{ ic("user") }}Профіль</a>
 </nav></div><script>
 window.setCartCount = function (n) {   // цифра на значку кошика (шапка й нижня панель)
