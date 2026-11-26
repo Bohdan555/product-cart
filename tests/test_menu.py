@@ -242,3 +242,9 @@ def test_source_map_skips_household_and_tiny_spice_packs():
     src = menu.source_map([mk("1", "Засіб для миття посуду Wash&Free лимон-м'ята 500г", 5, 500),
                            mk("2", "Перець червоний солодкий 20г", 3, 20), mk("3", "Печінка тріски 121г", 5, 121)])
     assert not src["lemon"].offer and not src["pepper"].offer and not src["liver"].offer
+
+
+def test_cod_liver_and_sauerkraut_are_not_fish_or_carrot():
+    assert not menu.matches_ingredient("Печінка тріски «Премія» 121г", "fish")
+    assert not menu.matches_ingredient("Капуста квашена з морквою 500г", "carrot")
+    assert menu.matches_ingredient("Філе тріски заморожене 500г", "fish") and menu.matches_ingredient("Морква мита 1кг", "carrot")
