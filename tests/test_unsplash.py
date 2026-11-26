@@ -60,3 +60,7 @@ def test_pick_prefers_cooked_dish_over_raw():
 
 def test_fixed_queries_redo_old_photos():
     assert not unsplash.usable("s-crab", {"raw": "r"})   # старе фото без запиту — перешукати
+
+
+def test_fix_queries_win():
+    assert all(unsplash.QUERIES[k] == v for k, v in unsplash.FIX.items())

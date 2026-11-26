@@ -116,9 +116,9 @@ FIX = {
     "s-herring-coat": "layered beet herring salad shuba", "s-quinoa": "quinoa salad cucumber herbs bowl",
     "s-green-beans-egg": "green beans egg salad plate",
 }
-QUERIES.update(FIX)
 from ..recipes_bs import PHOTO_QUERIES as _BS  # noqa: E402
 QUERIES.update(_BS)
+QUERIES.update(FIX)   # останнім — виправлення мають перевагу над запитами з файлів рецептів
 
 # Невдалі перші підбори: перешукати (нові записи зберігають свій запит у "q").
 REDO = {"liver", "lentils", "casserole", "fish-cream", "zucchini-stew"} | set(FIX)   # старі фото без "q" — перешукати
