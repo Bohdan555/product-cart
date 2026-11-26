@@ -2041,3 +2041,23 @@ body:has(.vf) footer{display:none}
 .vf.typing .vf-h{margin-top:4px}
 .vf.typing .hv-hint{display:none}
 .vf.typing .vf-type{margin-top:20px}
+
+/* Рецепт: велике фото з назвою, мітки, одна головна дія «Готувати покроково» (липка внизу) */
+.rc-hero{position:relative;height:300px;margin:0 -16px;overflow:hidden;border-radius:0 0 var(--r-xl) var(--r-xl);color:#fff;isolation:isolate;background:var(--soft)}
+.rc-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;padding:0;border-radius:0;background:none}
+.rc-hero::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,.18),rgba(0,0,0,0) 30%,rgba(0,0,0,.66))}
+.rc-hero h1{position:absolute;left:20px;right:20px;bottom:18px;margin:0;font:700 28px/1.12 var(--display);letter-spacing:-.02em;text-wrap:balance}
+.rc-hero.nophoto{display:grid;place-items:center;color:var(--ink)}.rc-hero.nophoto::after{display:none}
+.rc-hero.nophoto .e{font-size:96px;margin-bottom:40px}
+.rc-meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.rc-meta span{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;background:var(--card);box-shadow:0 0 0 .5px var(--line);font:500 15px var(--body)}
+.rc-meta .ico{--ic:transparent;stroke:var(--tint)}
+body:has(.rc-hero) .cm-open{position:sticky;bottom:calc(96px + env(safe-area-inset-bottom));z-index:5;height:56px;font-size:17px;margin:18px 0 8px;box-shadow:0 12px 28px -12px var(--tint)}
+body:has(.rc-hero) .hback{position:fixed;z-index:6}
+.rc-vote{margin:8px 0 12px}
+body:has(.rc-hero) footer{display:none}
+.sw-card .td-need{margin-bottom:96px}
+.sw-card .td-ph>img{padding:0;background:none;width:100%;height:100%;object-fit:cover}
+.sw-deck .sw-card{min-height:0;height:max(380px,calc(100dvh - 330px - env(safe-area-inset-bottom,0px)))}
+.sw-card .td-ph{border-radius:inherit}
+.sw-deck .sw-card{height:max(320px,calc(100dvh - 372px - env(safe-area-inset-bottom,0px)))}

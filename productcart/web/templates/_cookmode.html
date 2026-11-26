@@ -2,7 +2,7 @@
    Виклик: {% from "_cookmode.html" import cookmode with context %}{{ cookmode(title, steps, ings) }}
    ings — список рядків «🥕 Морква — 150 г» (перший екран «Підготуйте»). #}
 {% macro cookmode(title, steps, ings) %}
-<button type="button" class="btn alt cm-open" id="cmOpen">{{ ic("chef", "mid") }} Готувати покроково</button>
+<button type="button" class="btn cm-open" id="cmOpen">{{ ic("chef", "mid") }} Готувати покроково</button>
 <dialog class="cm" id="cm" aria-label="Покроковий режим: {{ title }}">
   <div class="cm-top">
     <button type="button" class="cm-x" id="cmX" aria-label="Закрити">✕</button>
@@ -61,7 +61,9 @@
     if (speak) say(p.ings ? 'Підготуйте: ' + p.ings.join(', ').replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, '') : p.text);
   }
   function go(d) {
-    if (i + d >= pages.length) { close(); if (window.celebrate) celebrate(); return; }
+    if (i + d >= pages.length) { close(); if (window.celebrate) celebrate();
+      var v = document.getElementById('cmVote'); if (v) { v.hidden = false; v.scrollIntoView({ behavior: 'smooth', block: 'center' }); }   // наприкінці — «Як вам рецепт?»
+      return; }
     i = Math.max(0, Math.min(pages.length - 1, i + d)); show(); if (window.haptic) haptic(10);
   }
 

@@ -1,16 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Що можна приготувати — Кошик з акцій{% endblock %}
 {% block hback %}<a class="td-back hback" href="/today?{{ qs }}" aria-label="Назад">←</a>{% endblock %}
-{% block htail %}<span class="td-dots hdots" aria-label="Крок 3 з 3"><i class="on"></i><i class="on"></i><i class="on"></i></span>{% endblock %}
 {% block body %}
 {% set PAL = ["p-citrus", "p-tomato", "p-basil", "p-plum", "p-sky", "p-berry"] %}
 <h1 class="xh sw-h1">Що <span class="hl">приготувати</span></h1>
 <nav class="td-meals" aria-label="Що готуємо">
   {% for k, label in meals.items() %}<a href="/today/dishes?{{ qs }}&amp;meal={{ k }}" data-turbo-action="replace"{% if k == meal %} class="on" aria-current="true"{% endif %}>{{ ic({'breakfast': 'sun', 'dinner': 'pan', 'salad': 'leaf'}[k], 'sm') }} {{ label }}</a>{% endfor %}
 </nav>
-{% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни {% if not shared %}вашого {% endif %}«Сільпо» · {{ store }}</span>{% endif %}
-
-{% if opts and not is_demo %}<p class="fee-note">Ціни без сервісного збору «Сільпо».</p>{% endif %}
+{% if is_demo %}<span class="td-badge">Демо-ціни</span>{% elif store %}<span class="td-badge">Ціни «Сільпо» · {{ store }}</span>{% endif %}
 {% if not opts %}
 <div class="card stack"><p><b>За цей час нічого не встигнемо</b></p><p><a class="btn" href="/today?{{ qs }}">Змінити час</a></p></div>
 {% else %}
@@ -27,11 +24,9 @@
       {% set nb = o.lines|length %}<span class="td-pill td-buy{% if not nb %} ok{% endif %}">{% if not nb %}✓ Є все{% else %}{{ ic("cart", "sm") }} Докупити {{ nb }}{% if got %} · є {{ got }}{% endif %}{% endif %}</span>
       <span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв</span>
       {% set hint = cook_hint(d.recipe, kit) %}{% if hint %}<span class="td-pill">{{ hint }}</span>{% endif %}
-      {% if o.lines and not is_demo and o.buy_saving >= 1 %}<span class="td-pill ok">−{{ uah(o.buy_saving|round) }} в акції</span>{% endif %}
     </div>
     {% if o.lines %}<p class="td-need">Треба купити: <b>{{ o.lines|map(attribute='name')|map('lower')|join(', ') }}</b> · ≈ {{ uah(o.buy_cost|round) }}</p>
     {% else %}<p class="td-need">Нічого не треба купувати</p>{% endif %}
-    <div class="td-price"><span>порція{% set kc = kcal(d.recipe) %}{% if kc %} · <span class="kcal">≈ {{ kc }} ккал</span>{% endif %}</span><b>≈ {{ d.per_portion|round|int }} ₴</b></div>
   </article>
 {% endmacro %}
 <div class="sw-deck" id="swDeck" data-csrf="{{ user.csrf if user else '' }}" aria-live="polite">

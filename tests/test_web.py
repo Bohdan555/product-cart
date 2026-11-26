@@ -709,7 +709,7 @@ def test_today_flow_guest_and_user(client):
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
     assert re.search(r'aria-current="true">[^<]*<svg[^>]*>.*?</svg> Сніданок', bf) and bf.count('class="td-dish sw-card') > 3
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
-    assert "Омлет з перцем і сиром" in d and "є вдома" in d and "Готую!" in d
+    assert "Омлет з перцем і сиром" in d and 'class="td-home">є<' in d and "Готувати покроково" in d
     assert 'id="cmOpen"' in d and 'id="cmData"' in d and "Готувати покроково" in d      # режим «Готую»
     data = json.loads(d.split('id="cmData">')[1].split("</script>")[0])
     assert data["steps"] and any("Яйця" in x for x in data["ings"])

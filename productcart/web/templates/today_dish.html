@@ -3,10 +3,12 @@
 {% block hback %}<a class="td-back hback" href="/today/dishes?{{ qs }}{% if meal %}&amp;meal={{ meal }}{% endif %}" aria-label="Назад">←</a>{% endblock %}
 {% block body %}
 {% set d = o.dish %}
-<section class="td-hero">
+<section class="rc-hero{% if d.id not in photos %} nophoto{% endif %}">
   {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="">{% else %}<span class="e" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
-  <div><h1 class="xh">{{ d.title }}</h1>{% set kc = kcal(d.recipe) %}<span class="td-pill">{{ ic("clock", "sm") }} {{ d.minutes }} хв{% if kc %} · ≈ {{ kc }} ккал{% endif %} · {{ n }} {{ plural(n, 'порція', 'порції', 'порцій') }}</span></div>
+  <h1>{{ d.title }}</h1>
 </section>
+{% set kc = kcal(d.recipe) %}
+<div class="rc-meta"><span>{{ ic("clock", "sm") }} {{ d.minutes }} хв</span><span>{{ ic("family", "sm") }} {{ n }} {{ plural(n, 'порція', 'порції', 'порцій') }}</span>{% if kc %}<span>≈ {{ kc }} ккал</span>{% endif %}</div>
 
 <h2 class="td-h" id="prod">Продукти</h2>
 <div class="td-list">
@@ -14,7 +16,7 @@
   <div class="td-li"><span>{{ name_visual(ingredients[k][0]).emoji }} {{ ingredients[k][0] }} <small>{{ fmt_qty(q, ingredients[k][1]) }}</small></span>
     {% if line %}<span class="td-right"><span class="td-cost">{{ uah(line.cost) }}{% if line.regular > line.cost %}<s>{{ uah(line.regular) }}</s>{% endif %}</span>
       {% if k in need %}<a class="td-toggle" href="{{ toggle[k] }}#prod" aria-label="{{ ingredients[k][0] }} насправді є вдома">Є</a>{% endif %}</span>
-    {% elif k in have %}<span class="td-home">є вдома</span>
+    {% elif k in have %}<span class="td-home">є</span>
     {% else %}<span class="td-right"><span class="td-home soft">мабуть, є</span>{% if k in toggle %}<a class="td-toggle no" href="{{ toggle[k] }}#prod" aria-label="{{ ingredients[k][0] }}: немає, треба купити">Немає</a>{% endif %}</span>{% endif %}</div>
   {% endfor %}
   {% for x in d.recipe.extras %}<div class="td-li"><span>{{ name_visual(x).emoji }} {{ x }}</span><span class="td-home soft">без ціни</span></div>{% endfor %}
@@ -27,7 +29,6 @@
     <input type="hidden" name="have" value="{{ have|join(',') }}"><input type="hidden" name="n" value="{{ n }}"><input type="hidden" name="need" value="{{ need|join(',') }}">
     <button type="submit" class="btn td-cart">{{ ic("cart", "mid") }}<span>Додати {{ o.lines|length }} в кошик «Сільпо» · {{ uah(o.buy_cost|round) }}</span></button>
   </form>
-  <p class="fee-note">Без сервісного збору «Сільпо»</p>
   {% else %}
   <a class="td-gate-link" href="{{ '/silpo' if user else '/register' }}">{{ ic("store", "sm") }} Реальні ціни в «Сільпо» →</a>
   {% endif %}
@@ -40,11 +41,23 @@
 {% from "_cookmode.html" import cookmode with context %}{{ cookmode(d.title, d.recipe.steps, ns.ings) }}
 {% endif %}
 
-{% from "_vote.html" import vote with context %}{{ vote(d.id, p, user) }}
+<div class="rc-vote" id="cmVote"{% if d.recipe.steps %} hidden{% endif %}>{% from "_vote.html" import vote with context %}{{ vote(d.id, p, user) }}</div>
+{% if not d.recipe.steps %}
 <form method="post" action="/today/cooked" class="td-done-form">
   {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}
   <input type="hidden" name="id" value="{{ d.id }}"><input type="hidden" name="n" value="{{ n }}">
-  {% set cart_btn = o.lines and user and link and not is_demo %}
-  <button type="submit" class="btn{% if cart_btn %} alt{% endif %}">{{ 'Я все маю — готую!' if o.lines else 'Готую! 👩‍🍳' }}</button>
+  <button type="submit" class="btn">Готую! 👩‍🍳</button>
 </form>
+{% else %}
+<script>
+(function () {   // «Готувати покроково» — і запам'ятати, що готуємо (як «Готую!»), без переходу зі сторінки
+  var b = document.getElementById('cmOpen'); if (!b || b.dataset.bound) return; b.dataset.bound = '1';
+  b.addEventListener('click', function () {
+    if (b.dataset.sent) return; b.dataset.sent = '1';
+    var fd = new FormData(); fd.append('csrf', '{{ user.csrf if user else "" }}'); fd.append('id', '{{ d.id }}'); fd.append('n', '{{ n }}');
+    fetch('/today/cooked', { method: 'POST', body: fd, credentials: 'same-origin' }).catch(function () {});
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
