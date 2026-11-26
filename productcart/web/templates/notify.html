@@ -9,7 +9,7 @@
     <span><b>{{ ic("phone", "ii") }}На цей телефон</b><small>як звичайні сповіщення</small></span></label>
   <p data-state-msg="on">{{ ic("check", "ii") }}Увімкнено на цьому пристрої{% if push_n > 1 %} · усього пристроїв: {{ push_n }}{% endif %}</p>
   <p data-state-msg="ios">На iPhone сповіщення працюють, коли Кошик додано на початковий екран: <b>Поділитися</b> → <b>«На початковий екран»</b>, потім відкрийте його звідти.</p>
-  <p data-state-msg="denied">Вимкнено в браузері · <details class="howto"><summary>Як увімкнути</summary>🔒 біля адреси → Сповіщення → Дозволити</details></p>
+  <div data-state-msg="denied">Вимкнено в браузері · <details class="howto"><summary>Як увімкнути</summary>🔒 біля адреси → Сповіщення → Дозволити</details></div>
   <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram.</p>
   <div class="nt-tg">
     <span><b>{{ ic("plane", "ii") }}Telegram</b><small>{% if chat %}підключено · <a href="https://t.me/{{ bot }}" target="_blank" rel="noopener">@{{ bot }}</a>{% elif not tg_on %}скоро{% else %}бот @{{ bot }} — натисніть «Start»{% endif %}</small></span>
