@@ -4,18 +4,22 @@
 {% include "_stale.html" %}
 <div id="menuroot"{% if fresh %} class="fresh-in"{% endif %}>
 {% if ready and stores %}<div class="readybar"><span>✓ Готово · {{ stores[0].title }}</span><a href="/silpo">змінити</a></div>{% endif %}
-{% if view != 'buy' %}{% set step = 2 %}{% include "_week.html" %}
-<section class="eat-h">
-  <h1 class="xh">Що <span class="hl">їмо</span></h1>
+{% if view != 'buy' %}
+<section class="eat-h wk-h">
+  <h1 class="xh">Тиждень</h1>
+  <button type="button" class="wk-gear" data-sheet="msAll" aria-label="Налаштування меню">{{ ic("sliders") }}</button>
 </section>
 {% set dn = day_names %}{% set sd = sel_days|sort %}
 {% set mins = 30 if p.max_minutes <= 30 else (45 if p.max_minutes <= 45 else (60 if p.max_minutes <= 60 else 90)) %}
+<dialog class="pn-sheet ms-sheet ms-all" id="msAll"><b>Налаштування тижня</b>
 <nav class="ms-chips" aria-label="Налаштування меню">
   <button type="button" data-sheet="msPeople">{{ ic("family", "sm") }} {{ p.household }}</button>
   <button type="button" data-sheet="msDays">{{ ic("calendar", "sm") }} {% if sd == [0,1,2,3,4] %}Пн–Пт{% elif sd|length == 7 %}щодня{% else %}{% for i in sd %}{{ dn[i] }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</button>
   <button type="button" data-sheet="msTime">{{ ic("clock", "sm") }} {{ '60+' if mins == 90 else mins }} хв</button>
   <button type="button" data-sheet="msBudget">{{ ic("wallet", "sm") }} {{ (p.menu_budget|int ~ ' ₴') if p.menu_budget else 'без ліміту' }}</button>
 </nav>
+{% if user %}<a class="ms-own" href="/dishes">+ Додати свою страву</a>{% endif %}
+<div class="pn-foot"><button type="button" class="btn" data-close>Готово</button></div></dialog>
 {% macro sheet(id, title) %}<dialog class="pn-sheet ms-sheet" id="{{ id }}"><form method="post" action="/menu/settings" data-turbo="false" data-plain>
   {% if user %}<input type="hidden" name="csrf" value="{{ user.csrf }}">{% endif %}<b>{{ title }}</b>{{ caller() }}
   <div class="pn-foot"><button type="button" class="btn alt" data-close>Скасувати</button><button type="submit" class="btn">Готово</button></div></form></dialog>{% endmacro %}
@@ -49,28 +53,45 @@
 
 {% if m.dishes %}
 {% if view != 'buy' %}
-<section class="eat-save">
-  {% if m.saving >= 1 %}<div class="sv-big"><small>Економія з акцій</small><b><span data-count="{{ m.saving|round|int }}">{{ m.saving|round|int }}</span> ₴</b>{% set pn = m.promo_lines|length %}{% if pn %}<small>{{ pn }} {{ plural(pn, 'товар', 'товари', 'товарів') }} зі знижкою</small>{% endif %}</div>{% endif %}
-  <p class="eat-sum">
-    <span>{{ m.dishes|length }} {{ plural(m.dishes|length, 'вечеря', 'вечері', 'вечерь') }} · {{ m.people }} {{ plural(m.people, 'людина', 'людини', 'людей') }}</span>
-    <span>≈ <b data-count="{{ m.per_portion|round|int }}">{{ m.per_portion|round|int }}</b> ₴ порція</span>
-    {% if is_demo %}<a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо-ціни</a>{% endif %}
-  </p>
-</section>
-<ol class="eat-list">
+{% set sel = swapped|int if swapped and swapped.isdigit() else 0 %}
+<nav class="wk-days" id="wkDays" aria-label="Дні">
+  {% for d in m.dishes %}<button type="button" data-day="{{ loop.index0 }}"{% if loop.index0 == sel %} class="on" aria-current="true"{% endif %}>{{ days[loop.index0] }}</button>{% endfor %}
+</nav>
+<ol class="eat-list wk-reel" id="wkReel">
 {% for d in m.dishes %}{% set i = loop.index0 %}
-  <li class="eat-row{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}" data-dish="{{ d.id }}">
-    <button type="button" class="eat-open" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
-      {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 2 %}loading="lazy"{% endif %}>{% else %}<span class="eat-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
-      <span class="eat-t"><b>{{ d.title }}</b><small><b class="eat-dn">{{ days[i] }}</b> · {{ d.minutes }} хв{% set kc = kcal(d.recipe) %}{% if kc %} · ≈ {{ kc }} ккал{% endif %}{% if d.recipe.mine %} · моя{% endif %}</small>{% if d.home %}<small class="eat-home">✓ є вдома: {{ d.home|join(', ') }}</small>{% endif %}</span>
+  <li class="eat-row{% if swapped and swapped|int == i %} fresh{% endif %}" id="d{{ i }}" data-dish="{{ d.id }}"{% if i != sel %} hidden{% endif %}>
+    <button type="button" class="eat-open wk-card" data-open="rec{{ i }}" aria-label="Рецепт: {{ d.title }}">
+      {% if d.id in photos %}<img src="{{ photos[d.id] }}" alt="" {% if i > 1 %}loading="lazy"{% endif %}>{% else %}<span class="eat-em" aria-hidden="true">{{ d.emoji }}</span>{% endif %}
+      <span class="eat-t"><b>{{ d.title }}</b><small class="wk-meta"><b class="eat-dn">{{ day_full[i] }}</b> · {{ d.minutes }} хв · ≈ {{ (d.used / m.people)|round|int }} ₴ порція{% if d.recipe.mine %} · моя{% endif %}</small>{% if d.home %}<small class="eat-home">✓ є вдома: {{ d.home|join(', ') }}</small>{% endif %}</span>
     </button>
-    <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="i" value="{{ i }}">
-      <button type="submit" class="eat-swap" aria-label="Замінити: {{ d.title }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg></button></form>
+    <form method="post" action="/menu/swap"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="i" value="{{ i }}">
+      <button type="submit" class="eat-swap wk-swap" aria-label="Замінити: {{ d.title }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg><span>Інша</span></button></form>
   </li>
 {% endfor %}
 </ol>
-<a class="btn eat-go" href="/buy">Далі: що купити →</a>
-{% if user %}<p class="eat-own"><a href="/dishes">+ Додати свою страву</a></p>{% endif %}
+{% set nbuy = m.promo_lines|length + m.other_lines|length %}
+<a class="wk-bar" href="/buy"><span><b>Що купити · {{ nbuy }}</b><small>≈ {{ uah(m.total|round) }}{% if m.saving >= 1 %} · економія {{ uah(m.saving|round) }}{% endif %}{% if is_demo %} · демо-ціни{% endif %}</small></span><em>Список ›</em></a>
+<script>
+(function () {
+  var nav = document.getElementById('wkDays'), reel = document.getElementById('wkReel'); if (!nav || nav.dataset.bound) return; nav.dataset.bound = '1';
+  var KEY = 'wk-day';
+  function pick(i, save) {
+    nav.querySelectorAll('button').forEach(function (b) { var on = +b.dataset.day === i; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
+    reel.querySelectorAll('.eat-row').forEach(function (r, k) { r.hidden = k !== i; });
+    if (save) try { sessionStorage.setItem(KEY, i); } catch (e) {}
+  }
+  nav.addEventListener('click', function (e) { var b = e.target.closest('[data-day]'); if (!b) return; pick(+b.dataset.day, true); if (window.haptic) haptic(8); });
+  // свайп по страві — сусідній день
+  var x0 = null;
+  reel.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  reel.addEventListener('touchend', function (e) {
+    if (x0 === null) return; var dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) < 50) return;
+    var n = reel.querySelectorAll('.eat-row').length, cur = +(nav.querySelector('.on') || { dataset: { day: 0 } }).dataset.day;
+    pick(Math.max(0, Math.min(n - 1, cur + (dx < 0 ? 1 : -1))), true);
+  });
+  {% if not swapped %}try { var s = sessionStorage.getItem(KEY); if (s !== null && +s < reel.children.length) pick(+s); } catch (e) {}{% endif %}
+})();
+</script>
 
 {% for d in m.dishes %}{% set i = loop.index0 %}
 <dialog class="rsheet" id="rec{{ i }}" aria-labelledby="rt{{ i }}">
@@ -97,13 +118,13 @@
 {% endif %}
 {% if view == 'buy' %}
 <section id="list" class="mlist">
-  {% set step = 3 %}{% include "_week.html" %}
-  <div class="list-h"><h1 class="xh">Що <span class="hl">купити</span></h1><button type="button" class="copy" id="copy">Скопіювати список</button></div>
+  <div class="list-h"><h1 class="xh">Що купити</h1><button type="button" class="copy" id="copy" aria-label="Поділитися списком">{{ ic("share") }}</button></div>
+  {% set nbuy = m.promo_lines|length + m.other_lines|length %}
+  <p class="buy-sum"><span>{{ nbuy }} {{ plural(nbuy, 'товар', 'товари', 'товарів') }} · ≈ {{ uah(m.total|round) }}</span>{% if m.saving >= 1 %}<b>−{{ uah(m.saving|round) }} з акцій</b>{% endif %}</p>
   <div class="buyprog" aria-live="polite">
     <div class="buyprog-h"><b id="progressTxt">Торкайтесь товарів, які вже купили</b><span id="progressLeft"></span></div>
     <div class="progress"><i id="bar"></i></div>
   </div>
-  {% if not is_demo %}<p class="fee-note" style="margin:-4px 0 12px">Без сервісного збору «Сільпо»</p>{% endif %}
   {% macro row(l, price) %}
   {% set nv = name_visual(l.name) %}<label class="brow"><input type="checkbox" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-emoji="{{ nv.emoji }}" data-text="{{ l.source.offer.name if l.is_promo else l.name }}{% if l.packs > 1 %} × {{ l.packs }}{% endif %}" data-price="{{ price }}">
 <span class="ic" style="--c:var(--{{ nv.pastel }})" aria-hidden="true">{{ nv.emoji }}</span>
@@ -113,17 +134,14 @@
     {{ caller() }}
   </label>
   {% endmacro %}
-  {% if m.promo_lines %}
-  <div class="group" data-copy="🏷 В акції"><div class="gh"><b>В акції</b></div>
-  {% for l in m.promo_lines %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
+  {% for cat, rows in aisles %}
+  <div class="group" data-copy="{{ cat }}"><div class="gh"><b>{{ cat }}</b><small>{{ rows|length }}</small></div>
+  {% for l, promo in rows %}{% if promo %}{% set o = l.source.offer %}{% set link_url = click_url(o) %}
     {% call row(l, uah(l.cost)) %}<span class="rprice"><b>{{ uah(l.cost) }}</b>{% if o.discount_pct or l.regular > l.cost %}<span class="rsub">{% if o.discount_pct %}<span class="disc">−{{ o.discount_pct|round|int }}%</span>{% endif %}{% if l.regular > l.cost %}<s>{{ uah(l.regular) }}</s>{% endif %}</span>{% endif %}</span>
       {% if link_url %}<a class="bgo" href="{{ link_url }}" target="_blank" rel="noopener" aria-label="Відкрити товар у «Сільпо»">→</a>{% endif %}{% endcall %}
+  {% else %}{% call row(l, '≈ ' ~ uah(l.cost|round)) %}<span class="rprice"><b class="est">≈ {{ uah(l.cost|round) }}</b></span>{% endcall %}{% endif %}
   {% endfor %}</div>
-  {% endif %}
-  {% if m.other_lines %}
-  <div class="group" data-copy="🛒 Без акції"><div class="gh"><b>Без акції</b></div>
-  {% for l in m.other_lines %}{% call row(l, '≈ ' ~ uah(l.cost|round)) %}<span class="rprice"><b class="est">≈ {{ uah(l.cost|round) }}</b></span>{% endcall %}{% endfor %}</div>
-  {% endif %}
+  {% endfor %}
   {% if m.extras %}
   <div class="group" data-copy="🧂 Для ваших страв"><div class="gh"><b>Для ваших страв</b><small>без ціни</small></div>
   {% for x in m.extras %}{% set nv = name_visual(x) %}

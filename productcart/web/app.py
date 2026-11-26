@@ -81,6 +81,7 @@ def day_labels(p: Profile) -> list[str]:
     """Підписи днів меню: вибрані в конструкторі (Пн, Ср, Пт) або підряд з понеділка."""
     days = sorted(set(d for d in p.menu_days if 0 <= d <= 6))
     return [menu.DAYS[d] for d in days] if days and len(days) == p.dinners else menu.DAYS
+DAY_FULL = {"Пн": "Понеділок", "Вт": "Вівторок", "Ср": "Середа", "Чт": "Четвер", "Пт": "П'ятниця", "Сб": "Субота", "Нд": "Неділя"}
 OFFERS_TTL = timedelta(hours=6)
 FRIDGE_PER_DAY = 15            # фото на людину за добу: кожне розпізнавання коштує грошей
 ERROR_PAGE = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -573,7 +574,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
     def week_start(request: Request):
         """План на тиждень починається з «що є вдома» (крок ①); далі меню (②) і покупки (③).
         Смаки питаємо, коли вперше складаємо меню (конструктор /menu/setup)."""
-        return go("/fridge")
+        return go("/menu")
 
     @app.get("/register", response_class=HTMLResponse)
     def register_form(request: Request):
@@ -1384,12 +1385,13 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
                         stores=len(stores), dishes=len(m.dishes), promo_lines=len(m.promo_lines), total=m.total,
                         saving=m.saving, guest=not u)
         resp = render(request, "menu.html", u, p=p, m=m, is_demo=is_demo, link=link, notice=notice, stores=stores,
-                      days=day_labels(p), fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
+                      days=day_labels(p), day_full=[DAY_FULL.get(x, x) for x in day_labels(p)],
+                      fmt_qty=menu.fmt_qty, ingredients=menu.INGREDIENTS, guest=not u,
                       stale=bool(u) and offers_stale.get(), ready=bool(request.query_params.get("ready")),
                       photos=menu_photos(), swapped=request.query_params.get("swapped"),
                       fresh=bool(request.query_params.get("fresh")),
                       view="buy" if view == "buy" else "eat", day_names=menu.DAYS,
-                      sel_days=p.menu_days or list(range(p.dinners)))
+                      sel_days=p.menu_days or list(range(p.dinners)), aisles=aisles_of(m))
         return keep_guest(resp, p) if (changed and not u) else resp
 
     async def menu_form(request: Request):
@@ -2917,6 +2919,18 @@ def _visual_hit(low: str, first: str, stems, label: str) -> bool:
     if label in FRESH_CATS:
         return any(first.startswith(st.strip()) for st in stems)
     return any(st in low for st in stems)
+
+
+AISLES = ["М'ясо", "Риба й морепродукти", "Овочі", "Фрукти", "Молочне", "Яйця", "Хліб і макарони", "Крупи",
+          "Бакалія", "Солодке", "Напої", "Кава", "Чай", "Інше"]
+
+
+def aisles_of(m) -> list[tuple[str, list]]:
+    """Список покупок за відділами магазину: [(відділ, [(рядок, в акції?)])] — акційні першими у відділі."""
+    out: dict[str, list] = {}
+    for l, promo in [(l, True) for l in m.promo_lines] + [(l, False) for l in m.other_lines]:
+        out.setdefault(name_visual(l.name)["cat"], []).append((l, promo))
+    return sorted(out.items(), key=lambda kv: AISLES.index(kv[0]) if kv[0] in AISLES else len(AISLES))
 
 
 def name_visual(name: str) -> dict:

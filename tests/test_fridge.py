@@ -60,7 +60,7 @@ def test_scan_save_and_menu_uses_home_food(tmp_path):
         assert c.post("/menu/have", data={"csrf": token, "key": "bogus"}).status_code == 400
         c.post("/fridge/save", data={"csrf": token})
         m = c.get("/menu").text
-        assert "✓ Є вдома" not in c.get("/buy").text and 'href="/fridge"><i>1</i>Що є' in m
+        assert "✓ Є вдома" not in c.get("/buy").text
 
 
 def test_not_configured_and_errors(tmp_path, monkeypatch):

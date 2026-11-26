@@ -35,6 +35,8 @@ ICONS = {
     "microwave": '<rect x="2.5" y="5" width="19" height="14" rx="3" class="f"/><rect x="2.5" y="5" width="19" height="14" rx="3"/><rect x="5.5" y="8" width="9" height="8" rx="1.5"/><path d="M18 9h.01M18 12h.01M17 16h2"/>',
     "blender": '<path d="M7 3.5h10l-1.6 10H8.6z" class="f"/><path d="M7 3.5h10l-1.6 10H8.6zM10 9.5l2 1.5 2-1.5"/><rect x="6.5" y="15" width="11" height="6" rx="2"/><path d="M12 13.5V15M11 18h2"/>',
     "keyboard": '<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/>',
+    "share": '<path d="M12 3v12M7.5 7.5 12 3l4.5 4.5"/><path d="M6 11H5a1.5 1.5 0 0 0-1.5 1.5v6A2.5 2.5 0 0 0 6 21h12a2.5 2.5 0 0 0 2.5-2.5v-6A1.5 1.5 0 0 0 19 11h-1"/>',
+    "sliders": '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
     "mic": '<rect x="8.5" y="3" width="7" height="11.5" rx="3.5" class="f"/><rect x="8.5" y="3" width="7" height="11.5" rx="3.5"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>',
     "pin": '<path d="M12 21s6.5-5.6 6.5-11a6.5 6.5 0 0 0-13 0c0 5.4 6.5 11 6.5 11z" class="f"/><path d="M12 21s6.5-5.6 6.5-11a6.5 6.5 0 0 0-13 0c0 5.4 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
     "phone": '<rect x="6.5" y="2.5" width="11" height="19" rx="3" class="f"/><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 18.5h3"/>',

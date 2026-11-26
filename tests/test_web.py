@@ -217,15 +217,15 @@ def test_nearby_stores_within_radius(client):
 def test_menu_page_and_settings(client):
     token = register(client)
     r = client.get("/menu")
-    assert r.status_code == 200 and "Що <span" in r.text and "демо-ціни" in r.text and 'href="/buy"' in r.text
+    assert r.status_code == 200 and "Тиждень" in r.text and "демо-ціни" in r.text and 'href="/buy"' in r.text
     assert r.text.count('<li class="eat-row') == 5 and "Як готувати" in r.text and 'id="list"' not in r.text
-    assert 'id="list"' in client.get("/buy").text and "<i>3</i>Що купити" in client.get("/buy").text
+    assert 'id="list"' in client.get("/buy").text and "Що купити" in client.get("/buy").text
     assert client.post("/menu/settings", data={"csrf": "bad", "dinners": "3"}).status_code == 400
     assert client.post("/menu/settings", data={"csrf": token, "dinners": "3"}).status_code == 303
     assert client.post("/menu/settings", data={"csrf": token, "max_minutes": "30"}).status_code == 303
     assert client.post("/menu/settings", data={"csrf": token, "people": "2"}).status_code == 303
     html = client.get("/menu").text
-    assert html.count('<li class="eat-row') == 3 and "3 вечері · 2 людини" in html
+    assert html.count('<li class="eat-row') == 3 and 'id="wkDays"' in html
     titles = re.findall(r'<span class="eat-t"><b>([^<]+)</b>', html)
     r = client.post("/menu/swap", data={"csrf": token, "i": "1"})
     assert r.status_code == 303 and r.headers["location"] == "/menu?swapped=1#d1"
@@ -247,7 +247,7 @@ def test_landing_and_guest_menu(client):
     r = client.get("/")
     assert r.status_code == 200 and 'href="/today"' in r.text and 'href="/week"' in r.text
     assert "прототип" not in r.text and 'href="/me"' in r.text
-    assert client.get("/week").headers["location"] == "/fridge"
+    assert client.get("/week").headers["location"] == "/menu"
     assert client.get("/today").status_code == 200
     # гість відкриває меню без реєстрації, на демо-цінах
     r = client.get("/menu")
@@ -269,7 +269,7 @@ def test_landing_and_guest_menu(client):
     register(client)
     assert "pc_guest" not in client.cookies
     assert 'href="/register">Увійти' not in client.get("/menu").text
-    assert "5 людей" in client.get("/menu").text
+    assert '<output>5</output>' in client.get("/menu").text
 
 
 def test_static_is_cacheable(client):
@@ -310,7 +310,7 @@ def test_google_signup_login_and_guards(tmp_path):
         c.post("/menu/settings", data={"people": "4"})           # гість налаштував меню
         r = google_login(c)
         assert r.status_code == 303 and r.headers["location"] == "/start"
-        assert "4 людини" in c.get("/menu").text                  # налаштування гостя збереглись
+        assert 'value="4"' in c.get("/menu").text                  # налаштування гостя збереглись
         c.cookies.clear()
         assert google_login(c).headers["location"] == "/list"      # повторний вхід — той самий профіль
         c.cookies.clear()
@@ -681,7 +681,7 @@ def test_menu_chips_settings_guest_and_user(client):
     r = client.post("/menu/settings", data={"people": "3", "days": "0,2,4", "max_minutes": "30", "budget": "0"})
     assert r.headers["location"] == "/menu"
     m = client.get("/menu").text
-    assert '<b class="eat-dn">Ср</b>' in m and "Пн, Ср, Пт" in m and "30 хв" in m        # гість — у cookie
+    assert '<b class="eat-dn">Середа</b>' in m and "Пн, Ср, Пт" in m and "30 хв" in m        # гість — у cookie
     token = register(client)
     client.post("/menu/settings", data={"csrf": token, "people": "4", "days": "5,6", "max_minutes": "90", "budget": "1500"})
     p = client.app.state.conn.execute("SELECT data FROM profiles").fetchone()["data"]
