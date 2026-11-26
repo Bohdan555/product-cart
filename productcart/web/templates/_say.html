@@ -201,26 +201,41 @@ window.initSay = function (cfg) {
   }
 
   function listen() {
-    var heard = '';
+    // Слухаємо безперервно: паузи між продуктами не обривають запис. Кожну готову фразу одразу розкладаємо на продукти
+    // (чипи з'являються наживо). Зупиняємо після ~2,5 с тиші, за 45 с або дотиком; недоговорене наприкінці теж беремо.
+    var interim = '', added = 0, said = [], silence = null, cap = null, seen = {};
     try {
-      rec = new SR(); rec.lang = 'uk-UA'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+      rec = new SR(); rec.lang = 'uk-UA'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
     } catch (e) { inp.focus(); hint('Натисніть 🎤 на клавіатурі телефона й скажіть, що є.'); return; }
+    function arm(ms) { clearTimeout(silence); silence = setTimeout(function () { try { rec.stop(); } catch (e) {} }, ms); }
+    function take(text) {
+      text = (text || '').trim(); if (!text) return;
+      said.push(text); var r = addPhrase(text); added += r.added; if (r.added && window.haptic) haptic(12);
+    }
     rec.onresult = function (e) {
-      var interim = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) heard += e.results[i][0].transcript + ' '; else interim += e.results[i][0].transcript; }
-      inp.value = (heard + interim).trim();
+      interim = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) { if (!seen[i]) { seen[i] = 1; take(t); } }   // Android інколи повторює готові фрази
+        else interim += t;
+      }
+      hint(interim ? 'Слухаю: «' + interim.trim() + '»' : 'Слухаю… ще щось?');
+      arm(2500);
     };
     rec.onerror = function (e) {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture' || e.error === 'language-not-supported') { explain(e.error); return; }
+      if (e.error === 'no-speech' && said.length) return;           // просто замовкли після переліку
       hint(e.error === 'no-speech' ? 'Не почули 🙉 Натисніть 🎤 і скажіть ще раз.' : e.error === 'network' ? 'Розпізнаванню мови потрібен інтернет. Спробуйте ще раз.' : 'Не вдалося розпізнати. Спробуйте ще раз або напишіть.');
     };
     rec.onend = function () {
-      listening = false; mic.classList.remove('on'); $('hvField').classList.remove('listening');
-      var txt = (heard || inp.value).trim(); inp.value = '';
-      if (txt) { var r = addPhrase(txt); hint(r.added ? '«' + txt + '» → додали ' + r.added : 'Почули «' + txt + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
+      clearTimeout(silence); clearTimeout(cap);
+      listening = false; mic.classList.remove('on'); $('hvField').classList.remove('listening'); inp.value = '';
+      take(interim); interim = '';                                    // останні слова, які браузер не встиг «дописати»
+      if (said.length) { hint(added ? 'Додали: ' + added + '. Натисніть 🎤, щоб додати ще' : 'Почули «' + said.join(' ') + '», але не знайшли продуктів. Спробуйте ще раз.'); if (window.haptic) haptic(20); }
     };
     try { rec.start(); } catch (e) { explain('start:' + (e && e.name)); return; }
     listening = true; mic.classList.add('on'); $('hvField').classList.add('listening'); hint('Слухаю… скажіть, що є'); tap(15);
+    arm(7000); cap = setTimeout(function () { try { rec.stop(); } catch (e) {} }, 45000);
   }
 
   mic.addEventListener('click', function () {
