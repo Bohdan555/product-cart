@@ -20,7 +20,7 @@ CARDS: list[tuple[str, str, str, tuple[str, ...], str]] = [
     ("sausages", "Сосиски й шинка", "🌭", ("sausages", "ham"), "grilled sausages plate"),
     ("eggs", "Яйця", "🍳", ("eggs",), "sunny side up eggs skillet"),
     ("cheese", "Сир твердий", "🧀", ("cheese", "brynza"), "cheese platter sliced cheese grapes"),
-    ("cottage", "Кисломолочний сир", "🥞", ("cottage",), "cottage cheese bowl fresh berries honey"),
+    ("cottage", "Кисломолочний сир", "🥞", ("cottage",), "cottage cheese with honey walnuts bowl"),
     ("mushrooms", "Гриби", "🍄", ("mushrooms",), "fried mushrooms garlic butter pan"),
     ("beans", "Бобові", "🫘", ("beans", "lentils", "chickpeas", "green_beans"), "chili beans bowl served"),
     ("buckwheat", "Гречка", "🌾", ("buckwheat",), "buckwheat with mushrooms bowl"),
