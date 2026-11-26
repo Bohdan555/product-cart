@@ -1,34 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Кошик з акцій — що приготувати з того, що є, і з акцій «Сільпо»{% endblock %}
 {% block body %}
-<section class="hm-hero">
-{% set mode = "store" if (link and link.store_id) else ("pick" if link else ("nolink" if user else "guest")) %}
-  <div class="hm-loc" id="hmLoc" data-mode="{{ mode }}" data-store="{{ link.store_id if link and link.store_id else '' }}">
-    <span class="hm-pin" aria-hidden="true">{{ ic("pin") }}</span>
-    {% if mode == "store" %}<a href="/silpo" id="hmLocA"><b id="hmLocT">{{ link.store_title }}</b><small id="hmLocS">Акції цього магазину</small></a>
-    {% elif near %}<a href="{{ '/register' if mode == 'guest' else '/silpo' }}" id="hmLocA"><b id="hmLocT">Сільпо, {{ near.address }}</b><small id="hmLocS">≈ {{ near.km }} км · {{ {"guest": "увійдіть, щоб бачити його акції", "nolink": "підключіть, щоб бачити його акції", "pick": "обрати цей магазин"}[mode] }}</small></a>
-    {% elif mode == "pick" %}<a href="/silpo" id="hmLocA"><b id="hmLocT">Оберіть свій магазин</b><small id="hmLocS">Шукаємо найближчі…</small></a>
-    {% elif mode == "nolink" %}<a href="/silpo" id="hmLocA"><b id="hmLocT">Підключіть «Сільпо»</b><small id="hmLocS">Зараз — демо-ціни</small></a>
-    {% else %}<a href="/register" id="hmLocA"><b id="hmLocT">Демо-ціни</b><small id="hmLocS">Увійдіть, щоб бачити свій магазин</small></a>{% endif %}
-    <a class="hm-me" href="/me" aria-label="Профіль">{{ ic("user") }}</a>
-  </div>
-  <h1 class="hm-h">Готуємо</h1>
-  <a class="hm-search" href="/today"><span class="hm-sico" aria-hidden="true">{{ ic("search", "sm") }}</span><span>Що є вдома? Курка, рис…</span><b aria-hidden="true">{{ ic("mic") }}</b></a>
-  <div class="hm-geo" id="hmGeo" hidden>
-    <div class="hm-geo-t"><b id="hmGeoT">Показати найближчий «Сільпо»?</b><small id="hmGeoS">Місце не зберігаємо.</small></div>
-    <div class="hm-geo-b" id="hmGeoB"><button type="button" class="hm-geo-go" id="hmGeoGo">{{ ic("pin", "ii") }}Знайти поруч</button><button type="button" class="hm-geo-no" id="hmGeoNo">Не зараз</button></div>
-  </div>
-</section>
-
+<h1 class="hm-h">Готуємо</h1>
+<p class="hm-sub">Підберемо страву з того, що є вдома</p>
+{% set brk = meal == "breakfast" %}
 <a class="hm-hero-card" href="/today">
-  <img src="/static/dishes/kotlety.jpg" alt="" fetchpriority="high">
-  <span class="hm-hc-t"><small>З того, що є вдома</small><b>Що приготувати сьогодні</b></span>
+  <img src="{{ hero }}" alt="" fetchpriority="high">
+  <span class="hm-hc-t"><small>Сьогодні</small><b>Що приготувати {{ "на сніданок" if brk else "на вечерю" }}?</b></span>
   <span class="hm-hc-b">Підібрати страву</span>
 </a>
-{% if taste_ask %}<a class="pr-taste hm-taste" href="/tastes?next=/"><i aria-hidden="true">😋</i><span><b>Що вам смакує?</b><small>Свайпніть продукти — пів хвилини</small></span><em aria-hidden="true">›</em></a>{% endif %}
-<nav class="hm-group" aria-label="Головне">
-  <a href="/week">{{ ic("calendar") }}<span><b>План на тиждень</b><small>Меню з акцій і список покупок</small></span><i aria-hidden="true">›</i></a>
-  {% if user %}  <a href="/dishes">{{ ic("book") }}<span><b>Мої страви</b><small>Свої рецепти й з інтернету</small></span><i aria-hidden="true">›</i></a>{% endif %}
+<nav class="hm-tiles" aria-label="Ще">
+  <a href="/week"><i aria-hidden="true">{{ ic("calendar") }}</i><b>Тиждень</b><small>Меню й покупки</small></a>
+  {% if user and not taste_ask %}<a href="/dishes"><i aria-hidden="true">{{ ic("book") }}</i><b>Мої страви</b><small>Свої рецепти</small></a>
+  {% else %}<a href="/tastes?next=/"><i aria-hidden="true">😋</i><b>Смаки</b><small>Пів хвилини</small></a>{% endif %}
 </nav>
 {% if cooking %}
 <a class="ck-card" href="/cook">
@@ -36,89 +20,4 @@
   <span class="ck-t"><b>Готуєте: {{ cooking|map(attribute='recipe')|map(attribute='title')|join(', ')|truncate(48) }}</b><small>рецепти збережено →</small></span>
 </a>
 {% endif %}
-
-
-<script>
-/* Найближчий «Сільпо». Дозвіл на геолокацію просимо лише після пояснення й натискання «Знайти поруч»;
-   якщо дозвіл уже є — визначаємо мовчки. Координати округлюємо (~100 м) і не зберігаємо. */
-(function () {
-  var box = document.getElementById('hmLoc'), card = document.getElementById('hmGeo');
-  if (!box || !card || !window.fetch) return;
-  var $ = function (id) { return document.getElementById(id); };
-  var T = $('hmLocT'), S = $('hmLocS'), A = $('hmLocA');
-  var mode = box.dataset.mode, mine = box.dataset.store, KEY = 'near-v1', LATER = 'geo-later', NO = 'geo-no', OK = 'geo-ok';
-  var tail = { guest: 'увійдіть, щоб бачити його акції', nolink: 'підключіть, щоб бачити його акції', pick: 'обрати цей магазин' };
-  var ls = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
-  var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  function km(x) { return String(x).replace('.', ','); }
-  function render(d) {
-    var s = d && d.stores && d.stores[0];
-    if (!s) { return false; }
-    var pick = '/silpo?lat=' + d.lat + '&lon=' + d.lon;
-    if (mode === 'store' || mode === 'pick') {
-      if (s.id === mine) S.textContent = 'Найближчий · ' + km(s.km) + ' км';
-      else switchTo(d);          // відкрили застосунок не там — одразу перемикаємо на найближчий
-    } else {
-      T.textContent = 'Сільпо, ' + s.address;
-      S.textContent = km(s.km) + ' км від вас · ' + tail[mode];
-      A.href = mode === 'guest' ? '/register' : pick;
-    }
-    return true;
-  }
-  function switchTo(d) {
-    var csrf = document.querySelector('meta[name=csrf]'); if (!csrf) return;
-    var fd = new FormData(); fd.append('csrf', csrf.content); fd.append('lat', d.lat); fd.append('lon', d.lon);
-    fetch('/silpo/nearest', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (x) {
-      if (!x.store) return;
-      mine = x.store.id; box.dataset.store = mine; mode = 'store';
-      T.textContent = 'Сільпо, ' + x.store.address; S.textContent = 'Найближчий · ' + km(x.store.km) + ' км'; A.href = '/silpo';
-      if (window.bump) bump(box);
-      if (x.changed) { if (window.toast) toast('Магазин: ' + x.store.address); setTimeout(function () { location.reload(); }, 900); }   // акції нового магазину
-    }).catch(function () {});
-  }
-  function hide() { card.hidden = true; }
-  function show(title, text, buttons) {
-    $('hmGeoT').textContent = title; $('hmGeoS').textContent = text;
-    $('hmGeoB').hidden = !buttons; card.hidden = false;
-  }
-  function denied() {
-    ls.set(NO, '1');
-    show('Геолокацію вимкнено', IOS ? 'Увімкнути: Параметри → Конфіденційність → Служби локації → Safari → «Під час використання». Або оберіть магазин вручну в профілі.'
-      : 'Увімкнути: значок 🔒 біля адреси сайту → Дозволи → Місцезнаходження. Або оберіть магазин вручну в профілі.', false);
-    setTimeout(hide, 9000);
-  }
-  function locate(quiet) {
-    if (!navigator.geolocation) { if (!quiet) show('Не вдалося визначити місце', 'Цей браузер не вміє геолокацію — оберіть магазин вручну.', false); return; }
-    if (!quiet) { $('hmGeoGo').disabled = true; $('hmGeoGo').lastChild.textContent = 'Шукаємо…'; }
-    navigator.geolocation.getCurrentPosition(function (p) {
-      ls.set(OK, '1');                     // дозвіл є — наступного разу питаємо місце одразу
-      fetch('/near?lat=' + p.coords.latitude.toFixed(3) + '&lon=' + p.coords.longitude.toFixed(3), { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); }).then(function (d) {
-          d._t = Date.now(); try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
-          if (render(d)) { hide(); if (window.bump) bump(box); }
-          else show('Поруч «Сільпо» не знайшли', 'У радіусі 50 км немає магазинів. Оберіть магазин вручну в профілі.', false);
-        }).catch(hide);
-    }, function (e) {
-      if (e && e.code === 1) { try { localStorage.removeItem(OK); } catch (x) {} if (!quiet) denied(); }
-      else if (!quiet) show('Не вдалося визначити місце', 'Спробуйте ще раз на вулиці або оберіть магазин вручну.', true);
-      if ($('hmGeoGo')) { $('hmGeoGo').disabled = false; $('hmGeoGo').lastChild.textContent = 'Знайти поруч'; }
-    }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 });
-  }
-  $('hmGeoGo').onclick = function () { locate(false); };
-  $('hmGeoNo').onclick = function () { ls.set(LATER, String(Date.now())); hide(); };
-  try { var c = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (c && Date.now() - (c._t || 0) < 20 * 6e4 && render(c)) return; } catch (e) {}   // місце — не старше 20 хв
-  var later = +ls.get(LATER) || 0, snoozed = Date.now() - later < 7 * 864e5, refused = !!ls.get(NO);
-  // спершу користь, потім прохання: питаємо про місце лише після першої добірки страв
-  // з підключеним «Сільпо» — питаємо одразу (щоб магазин був найближчий); іншим — після першої добірки страв
-  var linked = mode === 'store' || mode === 'pick';
-  function ask() { if (!refused && (linked || (!snoozed && ls.get('saw-dishes')))) card.hidden = false; }
-  // Safari (iPhone) не каже, що дозвіл уже дано, — якщо місце вже раз визначали, просто питаємо його знову
-  if (ls.get(OK)) { locate(true); return; }
-  if (navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
-      if (st.state === 'granted') locate(true); else if (st.state === 'prompt') ask();
-    }).catch(ask);
-  } else ask();
-})();
-</script>
 {% endblock %}

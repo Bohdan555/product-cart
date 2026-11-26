@@ -854,7 +854,7 @@ def test_near_stores_gps_and_ip(client):
     assert far["stores"] == []
     assert client.get("/near", params={"lat": 999, "lon": 0}).status_code == 400
     home = client.get("/", headers=ip).text
-    assert "Сільпо, пл. Ринок, 1" in home and 'id="hmLoc"' in home and "увійдіть, щоб бачити його акції" in home
+    assert 'id="hmLoc"' not in home and "Підібрати страву" in home     # головна — одна дія; магазин обирають у меню
 
 
 
@@ -1128,10 +1128,10 @@ def test_tastes_swipe_saves_and_filters(client):
     page = client.get("/tastes").text
     assert page.count('class="td-dish sw-card ts-card') == len(tastes.CARDS) and 'data-a="skip"' in page
     token = register(client)
-    assert "Що вам смакує?" in client.get("/").text                     # на головній — запрошення, поки не свайпав
+    assert "/tastes?next=/" in client.get("/").text                     # на головній — запрошення, поки не свайпав
     r = client.post("/tastes", data={"csrf": token, "like": ["chicken", "potato"], "no": ["liver", "fish"], "skip": ["tofu"]})
     assert r.json()["ok"]
-    assert "Що вам смакує?" not in client.get("/").text and "не їм: 4" in client.get("/profile").text
+    assert "/tastes?next=/" not in client.get("/").text and "не їм: 4" in client.get("/profile").text
     q = {"have": "eggs,onion", "t": "60", "n": "2", "meal": "dinner"}
     ids = re.findall(r'data-dish="([^"]+)"', client.get("/today/dishes", params=q).text)
     assert ids and not any({"liver", "fish", "mackerel", "herring"} & set(menu.RECIPE_BY_ID[i].ingredients) for i in ids if i in menu.RECIPE_BY_ID)

@@ -527,12 +527,16 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         deals = [] if is_demo else sorted((o for o in offers if o.discount_pct and is_food(o)),
                                           key=lambda o: -(o.discount_pct or 0))[:8]
         meal = default_meal()
+        ph = menu_photos()      # головне фото — найапетитніше з готових (Unsplash), інакше своє
+        hero = next((ph[k] for k in (("b-cottage-berries", "b-spinach-omelette") if meal == "breakfast"
+                                     else ("couscous-chicken", "lentil-dal", "herring-potato")) if ph.get(k, "").startswith("http")),
+                    "/static/dishes/kotlety.jpg")
         ip = ip_place(request)
         near_ip = near_stores(ip[0], ip[1], n=1) if ip else []
         soon = menu.expiring(p.fridge_since, p.fridge, within=1, until=p.fridge_until) if u else []
         soon_url = (f"/today/dishes?{today_qs(p.fridge, 60, p.household or 2)}" if soon else None)
         return render(request, "home.html", u, cooking=cooking_items(p)[:3], link=link, is_demo=is_demo, deals=deals,
-                      taste_ask=not p.tastes_seen,
+                      taste_ask=not p.tastes_seen, hero=hero,
                       soon=[(k, menu.INGREDIENTS[k][0], menu.PANTRY_WORDS.get(k, ("", "🥫"))[1],
                              ("" if p.fridge_until.get(k) else "≈ ") + menu.when_label(d))     # ≈ — приблизно, за видом продукту
                             for k, d in soon], soon_url=soon_url, p_fridge_n=len(p.fridge) + len(p.fridge_other),

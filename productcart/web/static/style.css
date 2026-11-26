@@ -1995,3 +1995,16 @@ body:has(.ts-deck) footer{display:none}
   filter:saturate(1.18) contrast(1.06) brightness(1.03) sepia(.06)}
 @media (prefers-color-scheme:dark){.td-ph img,.hm-hero-card img,.td-hero img,.eat-open img{filter:saturate(1.15) contrast(1.05) brightness(.97) sepia(.05)}}
 .hm-taste{margin-top:16px}
+
+/* Головна «Готуємо» (варіант A): одна велика дія + дві плитки */
+.hm-sub{font:400 15px/20px var(--body);color:var(--muted);margin:-8px 0 0}
+.hm-hero-card{height:max(340px,calc(100dvh - 430px - env(safe-area-inset-bottom)));margin-top:16px}
+.hm-hc-t{bottom:84px}.hm-hc-t small{text-transform:none;letter-spacing:0}
+.hm-hc-t b{font-size:28px;display:block;max-width:15ch}
+.hm-hc-b{height:56px;background:var(--tint)!important;color:#fff;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none}
+.hm-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 0}
+.hm-tiles a{display:block;background:var(--card);border-radius:var(--r-md);padding:14px 14px 12px;color:var(--ink);text-decoration:none;box-shadow:0 0 0 .5px var(--line);min-height:44px}
+.hm-tiles i{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:color-mix(in srgb,var(--tint) 12%,transparent);font-style:normal;font-size:18px;margin-bottom:10px}
+.hm-tiles .ico{width:20px;height:20px;--ic:transparent;stroke:var(--tint)}
+.hm-tiles b{display:block;font:600 17px/1.25 var(--body)}.hm-tiles small{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.hm-tiles a:active{transform:scale(.97)}
