@@ -224,3 +224,13 @@ def test_expiring_and_today_prefers_it():
     have = ["minced", "eggs", "milk", "pasta", "kefir"]
     with_soon = menu.today(offers, Profile(), have, n=3, meal="dinner", soon=["minced"])
     assert any("minced" in o.dish.recipe.ingredients for o in with_soon)
+
+
+def test_source_map_skips_pet_food_and_ready_meals():
+    from productcart.models import Offer
+    offers = [Offer(product_id="1", store_id="s", name="Корм для котів Tropi з куркою 150г", price=20, chain="demo-x", category="", pack_qty=150, pack_unit="g"),
+              Offer(product_id="2", store_id="s", name="Вареники Laska з картоплею та кропом 900г", price=9, chain="demo-x", category="", pack_qty=900, pack_unit="g"),
+              Offer(product_id="3", store_id="s", name="Картопля молода 1кг", price=30, chain="demo-x", category="", pack_qty=1000, pack_unit="g")]
+    src = menu.source_map(offers)
+    assert src["potato"].offer and src["potato"].offer.product_id == "3"
+    assert not src["chicken_fillet"].offer and not src["chicken_thigh"].offer

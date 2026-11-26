@@ -396,7 +396,8 @@ def _tokens(name: str) -> list[str]:
 # Інший продукт, хоч і зі словом інгредієнта в назві: «паштет з вершковим маслом» — не масло,
 # «оливки фаршировані» — не фарш, «чипси зі смаком сиру» — не сир.
 OTHER_PRODUCT = ("паштет", "соус", "чипс", "снек", "сухарик", "фарширов", "зі смаком", "смак ", "ароматиз", "корм",
-                 "цукерк", "батончик", "печиво", "сироп", "для котів", "для собак")
+                 "цукерк", "батончик", "печиво", "сироп", "для котів", "для собак", "вареник", "пельмен", "чебурек",
+                 "піца", "напівфабрикат")
 
 
 def matches_ingredient(name: str, key: str) -> bool:
@@ -482,6 +483,8 @@ def source_map(offers: list[Offer]) -> dict[str, Source]:
         cands = []
         for i in idx:
             if any(e in lows[i] for e in excludes):
+                continue
+            if any(w in lows[i] and w not in ing[0].lower() for w in OTHER_PRODUCT):   # корм для котів — не м'ясо
                 continue
             ts = toks[i]
             if not any(all(any(t.startswith(stem) for t in ts) for stem in var) for var in variants):
