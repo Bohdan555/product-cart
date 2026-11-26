@@ -89,7 +89,7 @@ from ..tastes import PHOTO_QUERIES as _TASTES  # noqa: E402 — фото кар�
 QUERIES.update(_TASTES)
 # Перевибір невдалих фото (сирі продукти, люди, не та страва, дублі): конкретніший запит «готова страва на тарілці».
 # Зміна запиту — сигнал перешукати фото (usable() звіряє збережений запит).
-QUERIES.update({
+FIX = {
     "deruny": "potato pancakes latkes sour cream plate", "fish-cream": "baked fish fillet cream sauce rice plate",
     "chicken-julienne": "chicken mushroom julienne cocotte cheese", "chicken-liver-cream": "chicken liver stroganoff buckwheat plate",
     "pelmeni-bake": "baked dumplings melted cheese casserole", "meat-potato-zrazy": "fried potato croquettes plate",
@@ -115,12 +115,13 @@ QUERIES.update({
     "s-cucumber-sourcream": "cucumber salad sour cream dill bowl", "s-turkey-greens": "turkey breast salad greens tomatoes plate",
     "s-herring-coat": "layered beet herring salad shuba", "s-quinoa": "quinoa salad cucumber herbs bowl",
     "s-green-beans-egg": "green beans egg salad plate",
-})
+}
+QUERIES.update(FIX)
 from ..recipes_bs import PHOTO_QUERIES as _BS  # noqa: E402
 QUERIES.update(_BS)
 
 # Невдалі перші підбори: перешукати (нові записи зберігають свій запит у "q").
-REDO = {"liver", "lentils", "casserole", "fish-cream", "zucchini-stew"}
+REDO = {"liver", "lentils", "casserole", "fish-cream", "zucchini-stew"} | set(FIX)   # старі фото без "q" — перешукати
 
 _lock = threading.Lock()
 _mem: dict = {}

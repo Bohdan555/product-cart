@@ -56,3 +56,7 @@ def test_pick_prefers_cooked_dish_over_raw():
     raw = {"id": "a", "urls": {"raw": "r"}, "likes": 900, "alt_description": "raw beets on a wooden table, fresh ingredients"}
     dish = {"id": "b", "urls": {"raw": "r"}, "likes": 40, "alt_description": "beet salad with cheese served in a bowl"}
     assert unsplash.pick([raw, dish], query="beet salad cheese bowl")["id"] == "b"
+
+
+def test_fixed_queries_redo_old_photos():
+    assert not unsplash.usable("s-crab", {"raw": "r"})   # старе фото без запиту — перешукати
