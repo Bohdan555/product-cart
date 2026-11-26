@@ -264,6 +264,7 @@ window.initSay = function (cfg) {
       sync();
     },
     clear: function () { have = []; other = []; sync(); },
+    remove: function (k) { have = have.filter(function (x) { return x !== k; }); sync(); },
     flush: function () { if (inp.value.trim()) flush(); },
     norm: norm
   };

@@ -745,7 +745,7 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         photos = menu_photos()
         dishes = sorted(menu.RECIPES, key=lambda r: (r.id not in photos, r.minutes))   # спершу ті, що з фото
         return render(request, "profile.html", u, p=p, consent=consent, like_tags=LIKE_TAGS, hide_tags=HIDE_TAGS, taste_groups=TASTE_GROUPS,
-                      diets=list(DIETS), silpo=silpo_link(u["id"]), status=status, photos=photos,
+                      diets=list(DIETS), silpo=silpo_link(u["id"]), status=status, photos=photos, kitchen=menu.KITCHEN,
                       tastes=SETUP_TASTES, hideable=SETUP_HIDE,
                       dishes=[{"id": r.id, "title": r.title, "emoji": r.emoji, "minutes": r.minutes} for r in dishes[:12]],
                       **extra)
@@ -2969,6 +2969,8 @@ def profile_from_form(form, prev: Profile) -> tuple[Profile, list[str], bool]:
         p.household = max(1, min(12, num("household", 1, int)))
     if has("diets") or has("health_consent"):
         p.diets = diets if consent else []
+    if has("kitchen"):
+        p.kitchen = [k for k in dict.fromkeys(form.getlist("kitchen")) if k in menu.KITCHEN]
     if has("likes") or has("dislikes"):
         p.likes = [t for t in form.getlist("likes") if t in TAG_LABELS]
         p.dislikes = [t for t in form.getlist("dislikes") if t in TAG_LABELS]

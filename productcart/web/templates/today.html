@@ -1,102 +1,50 @@
 {% extends "base.html" %}
 {% block title %}Що приготувати сьогодні — Кошик з акцій{% endblock %}
 {% block body %}
-<form class="td" id="td" method="get" action="/today/dishes">
+<form class="td vf" id="td" method="get" action="/today/dishes">
   <input type="hidden" name="have" id="tdHave" value="{{ have|join(',') }}">
-  <input type="hidden" name="t" id="tdT" value="{{ t }}">
-  <input type="hidden" name="n" id="tdN" value="{{ n }}">
-  <input type="hidden" name="k" id="tdK" value="{{ kit|join(',') }}">
-
-  <section class="td-step" data-step="1">
-    <div class="td-top"><a class="td-back" href="/" aria-label="Назад">←</a><span class="td-dots" aria-label="Крок 1 з 3"><i class="on"></i><i></i><i></i></span></div>
-    <h1 class="xh">Що є <span class="hl">під рукою?</span></h1>
-    {% include "_say.html" %}
-
-    {% if user %}
-    <div class="hv-photo" id="tdShot">
-      <span class="icotile">{{ ic("fridge", "mid") }}</span>
-      <span class="hv-photo-t"><b id="tdShotTxt">Або фото холодильника</b></span>
-      <div class="pick-row">
-        <label class="btn alt small pick-btn">{{ ic("camera", "sm") }} Камера<input type="file" accept="image/*" capture="environment" class="pick-in" data-photo aria-label="Сфотографувати камерою"></label>
-        <label class="btn alt small pick-btn">{{ ic("image", "sm") }} Галерея<input type="file" accept="image/*" class="pick-in" data-photo aria-label="Обрати фото з галереї"></label>
-      </div>
-    </div>
-    {% else %}
-    <a class="hv-photo" href="/register"><span class="icotile">{{ ic("fridge", "mid") }}</span>
-      <span class="hv-photo-t"><b>Або фото холодильника</b><small class="td-lock">{{ ic("lock", "sm") }} після входу</small></span></a>
-    {% endif %}
-    <div class="td-nav"><button type="button" class="btn alt" data-skip>Пропустити</button><button type="button" class="btn" data-next>Далі</button></div>
-  </section>
-
-  <section class="td-step" data-step="2" hidden>
-    <div class="td-top"><button type="button" class="td-back" data-prev aria-label="Назад">←</button><span class="td-dots" aria-label="Крок 2 з 3"><i class="on"></i><i class="on"></i><i></i></span></div>
-    <h1 class="xh">Скільки часу <span class="hl">і на скількох?</span></h1>
-    <p class="td-lbl">Час</p>
-    <div class="td-chips" data-field="tdT">
-      {% for v, l in [(15, '15 хв'), (30, '30 хв'), (60, '1 год'), (180, 'не важливо')] %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == t else 'false' }}">{% if v == 15 %}{{ ic("bolt", "sm") }} {% endif %}{{ l }}</button>{% endfor %}
-    </div>
-    <p class="td-lbl">Нас</p>
-    <div class="td-chips" data-field="tdN">
-      {% for v in (1, 2, 3, 4, 6) %}<button type="button" data-v="{{ v }}" aria-pressed="{{ 'true' if v == n else 'false' }}">{{ v }}</button>{% endfor %}
-    </div>
-    <p class="td-lbl">Що є на кухні <small id="tdKHint">{{ 'не вибрано — покажемо все' if not kit else '' }}</small></p>
-    <div class="td-chips td-kit" id="tdKit" role="group" aria-label="Кухонні прилади">
-      {% for k, label in kitchen.items() %}<button type="button" data-k="{{ k }}" aria-pressed="{{ 'true' if k in kit else 'false' }}">{{ ic(k) }} {{ label }}</button>{% endfor %}
-    </div>
-    <div class="td-nav"><button type="submit" class="btn">Показати страви</button></div>
-  </section>
+  <input type="hidden" name="t" value="{{ t if request.query_params.get('t') else 60 }}">
+  <input type="hidden" name="n" value="{{ n }}">
+  <input type="hidden" name="k" value="{{ kit|join(',') }}">
+  <div class="td-top"><a class="td-back" href="/" aria-label="Назад">←</a></div>
+  <h1 class="vf-h" id="vfH">Скажіть, що є вдома</h1>
+  <p class="vf-sub" id="vfSub">Наприклад: «курка, рис і трохи сиру»</p>
+  <button type="button" class="vf-mic" id="vfMic" aria-label="Говорити">{{ ic("mic") }}</button>
+  <p class="vf-hint" id="vfHint" aria-live="polite"></p>
+  <div class="vf-chips" id="vfChips"></div>
+  <div class="vf-type" id="vfType" hidden>{% include "_say.html" %}</div>
+  <button type="button" class="vf-alt" id="vfAlt">{{ ic("keyboard", "sm") }} Написати або вибрати зі списку</button>
+  <div class="vf-go"><button type="submit" class="btn" id="vfGo">Показати страви</button></div>
 </form>
-
 <script>
 (function () {
   var form = document.getElementById('td'); if (!form) return;
   var $ = function (id) { return document.getElementById(id); };
-  var steps = form.querySelectorAll('.td-step'), tap = function (ms) { if (window.haptic) haptic(ms || 8); };
-  function show(i, fromHistory) {
-    steps.forEach(function (s, k) { s.hidden = k !== i; }); window.scrollTo(0, 0);
-    // крок 2 — окремий запис в історії: жест «назад» повертає на крок 1, а не виходить зі сценарію
-    if (!fromHistory && i === 1) history.pushState({ tdStep: 1 }, '', location.href);
-  }
-  window.addEventListener('popstate', function (e) {
-    if (!document.getElementById('td')) return;
-    if (!(e.state && e.state.tdStep) && !steps[1].hidden) show(0, true);
-  });
-  // Кухонні прилади: кілька можна вибрати; нічого не вибрано — без обмежень
-  var kit = $('tdKit');
-  if (kit) kit.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-k]'); if (!b) return;
-    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); tap();
-    var on = [].slice.call(kit.querySelectorAll('button[aria-pressed="true"]')).map(function (x) { return x.dataset.k; });
-    $('tdK').value = on.join(',');
-    $('tdKHint').textContent = on.length ? '' : 'не вибрано — покажемо все';
-  });
-  var WORDS = {{ words|tojson }};
-  var say = window.initSay({ words: WORDS, have: {{ have|tojson }}, onChange: function (h) { $('tdHave').value = h.join(','); } });
-  form.querySelector('[data-next]').onclick = function () { say.flush(); tap(12); show(1); };
-  form.querySelector('[data-skip]').onclick = function () { say.clear(); show(1); };
-  form.querySelector('[data-prev]').onclick = function () { if (history.state && history.state.tdStep) history.back(); else show(0, true); };
-  form.querySelectorAll('.td-chips[data-field]').forEach(function (g) { g.querySelectorAll('button').forEach(function (b) { b.onclick = function () {
-    g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); $(g.dataset.field).value = b.dataset.v; tap(); }; }); });
-  // фото холодильника: розпізнаємо й позначаємо знайдене
-  function onPhoto() {
-    var f = this.files && this.files[0], input = this; if (!f) return;
-    $('tdShot').classList.add('scanning'); $('tdShotTxt').textContent = 'Дивимось, що є…'; tap(15);
-    window.shrinkPhoto(f).then(function (blob) {
-      input.value = '';
-      var fd = new FormData(); fd.append('csrf', '{{ user.csrf if user else "" }}'); fd.append('photo', blob, blob.type === 'image/jpeg' ? 'fridge.jpg' : (f.name || 'fridge'));
-      return fetch('/fridge/scan', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
-    }).then(function (d) {
-      $('tdShot').classList.remove('scanning');
-      if (d.error) { $('tdShotTxt').textContent = d.error; return; }
-      var before = say.have().length;
-      say.add(d.items.filter(function (it) { return it.ingredient !== 'other' && WORDS[it.ingredient]; }).map(function (it) { return it.ingredient; }),
-              d.items.filter(function (it) { return it.ingredient === 'other' || !WORDS[it.ingredient]; }).map(function (it) { return it.name; }));
-      var n = say.have().length - before;
-      $('tdShotTxt').textContent = n ? 'Знайшли й додали: ' + n : 'Нічого з наших рецептів не знайшли — допишіть вручну';
-      tap(25);
-    }).catch(function () { $('tdShot').classList.remove('scanning'); $('tdShotTxt').textContent = 'Не вдалося надіслати фото. Перевірте інтернет.'; });
-  }
-  form.querySelectorAll('[data-photo]').forEach(function (i) { i.addEventListener('change', onPhoto); });
+  var WORDS = {{ words|tojson }}, typing = false;
+  var say = window.initSay({ words: WORDS, have: {{ have|tojson }}, onChange: function (h, o) {
+    $('tdHave').value = h.join(',');
+    var box = $('vfChips'); if (!box) return; box.innerHTML = '';
+    if (!typing) h.forEach(function (k) {
+      var c = document.createElement('button'); c.type = 'button'; c.className = 'vf-chip';
+      c.textContent = WORDS[k][1] + ' ' + WORDS[k][0]; c.setAttribute('aria-label', 'Прибрати: ' + WORDS[k][0]);
+      c.onclick = function () { say.remove(k); if (window.haptic) haptic(8); }; box.appendChild(c);
+    });
+    var go = $('vfGo'); go.textContent = h.length ? 'Показати страви · ' + h.length : 'Показати будь-які страви';
+    go.classList.toggle('alt', !h.length);
+  } });
+  if (!say) return;
+  // велика кнопка — та сама, що 🎤 у полі (дозволи, підказки, розбір фрази)
+  $('vfMic').onclick = function () { $('hvMic').click(); };
+  new MutationObserver(function () { $('vfMic').classList.toggle('on', $('hvMic').classList.contains('on')); })
+    .observe($('hvMic'), { attributes: true, attributeFilter: ['class'] });
+  // статус розпізнавання («Слухаю…», «Не почули») — під великою кнопкою
+  var mirror = function () { $('vfHint').textContent = $('hvHint').dataset.touched ? $('hvHint').textContent : ''; };
+  new MutationObserver(function () { $('hvHint').dataset.touched = '1'; mirror(); }).observe($('hvHint'), { childList: true, characterData: true, subtree: true });
+  $('vfAlt').onclick = function () {
+    typing = true; $('vfH').textContent = 'Що є вдома?'; $('vfSub').textContent = 'Пишіть через кому або оберіть з підказок'; $('vfType').hidden = false; $('vfAlt').hidden = true; form.classList.add('typing');
+    say.add([]); $('hvIn').focus();
+  };
+  form.addEventListener('submit', function () { say.flush(); });
 })();
 </script>
 {% endblock %}

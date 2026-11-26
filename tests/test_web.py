@@ -699,7 +699,7 @@ def test_today_flow_guest_and_user(client):
     assert r.status_code == 200 and "Омлет з перцем і сиром" in r.text and "✓ Є все" in r.text and "Демо-ціни" in r.text
     assert r.text.count('class="td-dish sw-card') >= 6 and 'class="sw-b no"' in r.text and 'class="sw-b yes"' in r.text   # одна картка зі свайпом
     assert "Сніданок" in r.text and "Салат" in r.text and "meal=breakfast" in r.text
-    assert 'data-k="multicooker"' in client.get("/today").text
+    assert "Скажіть, що є вдома" in client.get("/today").text
     mw = client.get("/today/dishes", params={"have": "eggs", "t": "60", "n": "2", "meal": "breakfast", "k": "microwave"}).text
     assert "k=microwave" in mw and "Сирники" not in mw and "Скрембл" not in mw
     ac = client.get("/today/dishes", params={"have": "chicken_thigh", "t": "60", "n": "2", "meal": "dinner", "k": "airfryer,multicooker"}).text
@@ -717,6 +717,7 @@ def test_today_flow_guest_and_user(client):
     assert "Реальні ціни в «Сільпо»" in d2 and 'href="/register"' in d2
     assert "Смачного" in client.post("/today/cooked", data={"id": "omelette"}).text
     token = register(client)
+    assert 'value="multicooker"' in client.get("/profile").text          # прилади — у профілі
     assert "Смачного" in client.post("/today/cooked", data={"csrf": token, "id": "omelette"}).text
     assert client.post("/today/cooked", data={"csrf": "bad", "id": "omelette"}).status_code == 400
     assert client.get("/today/dish/nope").headers["location"].startswith("/today/dishes")
