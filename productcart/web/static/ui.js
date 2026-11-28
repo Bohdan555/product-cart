@@ -168,7 +168,7 @@
   function bindPush() {
     document.querySelectorAll('[data-push]').forEach(function (box) {
       paint(box);
-      var t = box.querySelector('[data-push-toggle]'); if (!t || t.dataset.bound) return; t.dataset.bound = '1';
+      var t = box.querySelector('[data-push-toggle]'); if (!t || t._bound) return; t._bound = true;
       t.addEventListener('change', function () {
         t.disabled = true;
         (t.checked ? window.pushOn() : window.pushOff()).then(function () {

@@ -27,14 +27,14 @@
 </div>
 <script>
 (function () {
-  var deck = document.getElementById('tsDeck'); if (!deck || deck.dataset.bound) return; deck.dataset.bound = '1';
+  var deck = document.getElementById('tsDeck'); if (!deck || deck._bound) return; deck._bound = true;
   var total = deck.querySelectorAll('.ts-card').length, done = 0, n = { like: 0, no: 0 };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   function cards() { return [].slice.call(deck.querySelectorAll('.ts-card')); }
   function top() { return cards()[0]; }
   function layout() {
     var cs = cards();
-    cs.forEach(function (c, i) { c.hidden = i > 1; c.classList.toggle('next', i === 1); c.style.transform = ''; c.setAttribute('aria-hidden', i ? 'true' : 'false');
+    cs.forEach(function (c, i) { c.classList.remove('out-r', 'out-l', 'out-u', 'drag'); c.hidden = i > 1; c.classList.toggle('next', i === 1); c.style.transform = ''; c.setAttribute('aria-hidden', i ? 'true' : 'false');
       c.querySelector('.ts-n').textContent = (done + 1) + ' з ' + total; });
     if (cs[1]) { var im = cs[1].querySelector('img'); if (im) im.removeAttribute('loading'); }
     document.getElementById('tsBar').style.width = (done / total * 100) + '%';

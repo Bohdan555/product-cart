@@ -2181,3 +2181,13 @@ body:has(.rc-hero) header.top{position:relative;z-index:30}
 .ct-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .ct-clear{min-height:44px;padding:0 4px;border:0;background:none;color:var(--tint);font:500 17px var(--body);cursor:pointer}
 .ct-go .btn.is-off{background:color-mix(in srgb,var(--muted) 20%,var(--bg));color:var(--muted);pointer-events:none;box-shadow:none}
+
+/* ---- QA: виправлення ---- */
+/* Згода на аналітику — вгорі, не закриває головних дій унизу */
+.consent-bar{top:calc(8px + env(safe-area-inset-top));bottom:auto!important}
+/* Зони дотику ≥ 44 */
+.btn.small,.consent-bar .btn,.wk a{min-height:44px}
+/* Підписи нижнього меню — 12 (три вкладки вміщаються) */
+.dock a{font-size:12px}
+/* Картка страви під час свайпу не зсуває сторінку вбік */
+body:has(.sw-deck),body:has(.ts-deck){overflow-x:clip}

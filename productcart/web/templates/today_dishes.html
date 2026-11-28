@@ -36,13 +36,13 @@
 <script>try { localStorage.setItem('saw-dishes', '1'); } catch (e) {}</script>
 <script>
 (function () {
-  var deck = document.getElementById('swDeck'); if (!deck || deck.dataset.bound) return; deck.dataset.bound = '1';
+  var deck = document.getElementById('swDeck'); if (!deck || deck._bound) return; deck._bound = true;
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, gone = [];
   function cards() { return [].slice.call(deck.querySelectorAll('.sw-card')); }
   function top() { return cards()[0]; }
   function layout() {
     var cs = cards();
-    cs.forEach(function (c, i) { c.hidden = i > 1; c.classList.toggle('next', i === 1); c.style.transform = ''; c.setAttribute('aria-hidden', i ? 'true' : 'false'); });
+    cs.forEach(function (c, i) { c.classList.remove('out-r', 'out-l', 'out-u', 'drag'); c.hidden = i > 1; c.classList.toggle('next', i === 1); c.style.transform = ''; c.setAttribute('aria-hidden', i ? 'true' : 'false'); });
     if (cs[1]) { var im = cs[1].querySelector('img'); if (im) im.removeAttribute('loading'); }
     document.getElementById('swEnd').hidden = cs.length > 0;
   }

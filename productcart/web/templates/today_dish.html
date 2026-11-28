@@ -51,7 +51,7 @@
 {% else %}
 <script>
 (function () {   // «Готувати покроково» — і запам'ятати, що готуємо (як «Готую!»), без переходу зі сторінки
-  var b = document.getElementById('cmOpen'); if (!b || b.dataset.bound) return; b.dataset.bound = '1';
+  var b = document.getElementById('cmOpen'); if (!b || b._bound) return; b._bound = true;
   b.addEventListener('click', function () {
     if (b.dataset.sent) return; b.dataset.sent = '1';
     var fd = new FormData(); fd.append('csrf', '{{ user.csrf if user else "" }}'); fd.append('id', '{{ d.id }}'); fd.append('n', '{{ n }}');

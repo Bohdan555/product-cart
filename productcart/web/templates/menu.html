@@ -73,7 +73,7 @@
 <a class="wk-bar" href="/buy"><span><b>Що купити · {{ nbuy }}</b><small>≈ {{ uah(m.total|round) }}{% if m.saving >= 1 %} · економія {{ uah(m.saving|round) }}{% endif %}{% if is_demo %} · демо{% endif %}</small></span><em aria-hidden="true">›</em></a>
 <script>
 (function () {
-  var nav = document.getElementById('wkDays'), reel = document.getElementById('wkReel'); if (!nav || nav.dataset.bound) return; nav.dataset.bound = '1';
+  var nav = document.getElementById('wkDays'), reel = document.getElementById('wkReel'); if (!nav || nav._bound) return; nav._bound = true;
   var KEY = 'wk-day';
   function pick(i, save) {
     nav.querySelectorAll('button').forEach(function (b) { var on = +b.dataset.day === i; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
@@ -151,7 +151,7 @@
 </section>
 <script>
 (function () {   // галочка = купуємо; зняли — «вже є», сума одразу менша. Пам'ятаємо для цього меню.
-  var box = document.querySelector('.ct-list'); if (!box || box.dataset.bound) return; box.dataset.bound = '1';
+  var box = document.querySelector('.ct-list'); if (!box || box._bound) return; box._bound = true;
   var KEY = box.dataset.key, skip = {};          // ключ — на самому списку (menudata ще не в DOM, коли скрипт виконується)
   try { skip = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
   var boxes = [].slice.call(box.querySelectorAll('input[data-buy]')), tot = document.getElementById('ctTot'), sv = document.getElementById('ctSave'), n = document.getElementById('ctN');
@@ -217,7 +217,7 @@
       }
     }
     root.querySelectorAll('[data-open]').forEach(function (b) {
-      if (b.dataset.bound) return; b.dataset.bound = '1';       // рядки, що лишились після заміни, вже мають обробник
+      if (b._bound) return; b._bound = true;       // рядки, що лишились після заміни, вже мають обробник
       b.addEventListener('click', function () { var d = document.getElementById(b.dataset.open); if (d && d.showModal) d.showModal(); });
     });
     root.querySelectorAll('dialog').forEach(function (d) {
@@ -334,6 +334,7 @@
         root.querySelectorAll('details[data-copy]').forEach(function (d) { if (d.dataset.copy in opened) d.open = opened[d.dataset.copy]; });
         if (form.dataset.undo) undoToast(form);
         if (oldList && newList) { var place = root.querySelector('.eat-list'); if (place) place.replaceWith(oldList); }
+        root.querySelectorAll('script').forEach(function (o) { var n = document.createElement('script'); n.textContent = o.textContent; o.replaceWith(n); });   // смужка днів, ⚙︎, кошик — знову живі (після повернення старого списку)
         var r1 = document.getElementById('reel'); if (r1) r1.scrollLeft = left;
         root.querySelectorAll('[data-count]').forEach(function (x, k) { if (old[k] !== undefined) x.dataset.from = old[k]; });
         init();

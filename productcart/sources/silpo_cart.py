@@ -751,12 +751,11 @@ async def ensure_fresh_slot(call: Call, cart: "CartState", branches: dict | None
         schema = _schemas.get(name) or {}
         if not _logged_tools or name not in _logged_schemas:
             _logged_schemas.add(name)
-            log.warning("Сільпо: схема %s: %s", name, json.dumps(schema, ensure_ascii=False)[:6000])
+            log.info("Сільпо: схема %s: поля %s", name, sorted((schema.get("properties") or {}).keys()) if isinstance(schema, dict) else [])
         raw = dict(cart.raw or {})
-        log.warning("Сільпо: кошик для оновлення вікна: адреса %s; відправлення %s",
-                    json.dumps(raw.get("address"), ensure_ascii=False, default=str)[:600],
-                    json.dumps([{k: v for k, v in (x or {}).items() if k != "products"} for x in (raw.get("shipments") or [])],
-                               ensure_ascii=False, default=str)[:800])
+        _a = raw.get("address") if isinstance(raw.get("address"), dict) else {}
+        log.info("Сільпо: кошик для оновлення вікна: поля адреси %s; відправлень %d",      # лише назви полів — без адреси й телефону
+                 sorted(_a.keys()), len(raw.get("shipments") or []))
         addr = raw.get("address") if isinstance(raw.get("address"), dict) else {}
         if not (_first(addr, "latitude", "lat") and _first(addr, "longitude", "lon")):
             saved = await _saved_address(call)

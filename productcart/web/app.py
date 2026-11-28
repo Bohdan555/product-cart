@@ -1811,6 +1811,11 @@ def create_app(db_path: str | None = None, app_secret: str | None = None, base_u
         return remember_cart(JSONResponse({"n": n}), n, u["id"])
 
     # ---------- кошик «Сільпо» з меню ----------
+    @app.get("/menu/silpo-cart")
+    def menu_silpo_cart_get():
+        """Повернення на адресу результату (з застосунку «Сільпо» чи «Назад») — до кошика, а не сира помилка."""
+        return go("/silpo/cart")
+
     @app.post("/menu/silpo-cart", response_class=HTMLResponse)
     async def menu_silpo_cart(request: Request):
         form = await request.form()
