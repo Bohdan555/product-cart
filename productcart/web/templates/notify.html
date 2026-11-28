@@ -11,12 +11,12 @@
   <p data-state-msg="ios">На iPhone сповіщення працюють, коли Кошик додано на початковий екран: <b>Поділитися</b> → <b>«На початковий екран»</b>, потім відкрийте його звідти.</p>
   <div data-state-msg="denied">Вимкнено в браузері · <details class="howto"><summary>Як увімкнути</summary>🔒 біля адреси → Сповіщення → Дозволити</details></div>
   <p data-state-msg="unsupported">Цей браузер не вміє сповіщення. Спробуйте Chrome чи Safari — або Telegram.</p>
-  <div class="nt-tg">
+  {% if chat or tg_on %}<div class="nt-tg">
     <span><b>{{ ic("plane", "ii") }}Telegram</b><small>{% if chat %}підключено · <a href="https://t.me/{{ bot }}" target="_blank" rel="noopener">@{{ bot }}</a>{% elif not tg_on %}скоро{% else %}бот @{{ bot }} — натисніть «Start»{% endif %}</small></span>
     {% if chat %}<form method="post" action="/notify" data-turbo="false"><input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="action" value="unlink">
       <button type="submit" class="nt-btn alt">Відключити</button></form>
     {% elif tg_on %}<a class="nt-btn" href="{{ start_url }}" target="_blank" rel="noopener" data-turbo="false">Підключити</a>{% endif %}
-  </div>
+  </div>{% endif %}
 </div>
 
 <h2 class="ph">Про що</h2>
@@ -30,7 +30,7 @@
   <input type="hidden" name="tg_expiry" value="{{ 1 if p.tg_expiry else '' }}">
   <noscript><button type="submit" class="btn">Зберегти</button></noscript>
 </form>
-{% if not silpo %}<p class="nt-note">Сповіщення про акції з'являться, коли <a href="/silpo">підключите «Сільпо»</a>.</p>{% endif %}
+{% if not silpo %}<p class="nt-note">Акції — після <a href="/silpo">підключення «Сільпо»</a></p>{% endif %}
 
 <script>
 document.querySelectorAll('.nset input[type=checkbox]').forEach(function (c) {   // зберігаємо одразу

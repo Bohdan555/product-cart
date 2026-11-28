@@ -30,7 +30,7 @@
       c.onclick = function () { say.remove(k); if (window.haptic) haptic(8); }; box.appendChild(c);
     });
     var go = $('vfGo'); go.textContent = h.length ? 'Показати страви · ' + h.length : 'Показати будь-які страви';
-    go.classList.toggle('alt', !h.length);
+    go.classList.toggle('alt', !h.length); go.classList.toggle('vf-quiet', !h.length);
   } });
   if (!say) return;
   // велика кнопка — та сама, що 🎤 у полі (дозволи, підказки, розбір фрази)

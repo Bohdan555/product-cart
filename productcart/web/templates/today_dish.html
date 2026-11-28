@@ -16,7 +16,7 @@
   <div class="td-li"><span>{{ name_visual(ingredients[k][0]).emoji }} {{ ingredients[k][0] }} <small>{{ fmt_qty(q, ingredients[k][1]) }}</small></span>
     {% if line %}<span class="td-right"><span class="td-cost">{{ uah(line.cost) }}{% if line.regular > line.cost %}<s>{{ uah(line.regular) }}</s>{% endif %}</span>
       {% if k in need %}<a class="td-toggle" href="{{ toggle[k] }}#prod" aria-label="{{ ingredients[k][0] }} насправді є вдома">Є</a>{% endif %}</span>
-    {% elif k in have %}<span class="td-home">є</span>
+    {% elif k in have %}<span class="td-home">є вдома</span>
     {% else %}<span class="td-right"><span class="td-home soft">мабуть, є</span>{% if k in toggle %}<a class="td-toggle no" href="{{ toggle[k] }}#prod" aria-label="{{ ingredients[k][0] }}: немає, треба купити">Немає</a>{% endif %}</span>{% endif %}</div>
   {% endfor %}
   {% for x in d.recipe.extras %}<div class="td-li"><span>{{ name_visual(x).emoji }} {{ x }}</span><span class="td-home soft">без ціни</span></div>{% endfor %}

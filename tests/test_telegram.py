@@ -106,4 +106,4 @@ def test_setup_without_token(tmp_path):
     with TestClient(app, follow_redirects=False) as c:
         assert c.get("/tg/setup").status_code == 503
         token = register(c)
-        assert ">скоро<" in c.get("/notify").text
+        assert "nt-tg" not in c.get("/notify").text

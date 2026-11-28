@@ -70,7 +70,7 @@
 {% endfor %}
 </ol>
 {% set nbuy = m.promo_lines|length + m.other_lines|length %}
-<a class="wk-bar" href="/buy"><span><b>Що купити · {{ nbuy }}</b><small>≈ {{ uah(m.total|round) }}{% if m.saving >= 1 %} · економія {{ uah(m.saving|round) }}{% endif %}{% if is_demo %} · демо-ціни{% endif %}</small></span><em>Список ›</em></a>
+<a class="wk-bar" href="/buy"><span><b>Що купити · {{ nbuy }}</b><small>≈ {{ uah(m.total|round) }}{% if m.saving >= 1 %} · економія {{ uah(m.saving|round) }}{% endif %}{% if is_demo %} · демо{% endif %}</small></span><em aria-hidden="true">›</em></a>
 <script>
 (function () {
   var nav = document.getElementById('wkDays'), reel = document.getElementById('wkReel'); if (!nav || nav.dataset.bound) return; nav.dataset.bound = '1';
@@ -122,6 +122,7 @@
   <h1 class="ct-h">Кошик</h1>
   <p class="ct-sum"><span id="ctN" data-all="{{ nbuy }}">{{ nbuy }} {{ plural(nbuy, 'продукт', 'продукти', 'продуктів') }}</span>
     <span><b id="ctTot" data-v="{{ m.total|round(2) }}">≈ {{ uah(m.total|round) }}</b>{% if m.saving >= 1 %} · <em id="ctSave" data-v="{{ m.saving|round(2) }}">−{{ uah(m.saving|round) }}</em>{% endif %}{% if is_demo %} · <a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо</a>{% endif %}</span></p>
+  <p class="ct-hint">Зніміть галочку з того, що вже є вдома</p>
   <div class="ct-list" data-key="skip:{{ m.ids|join(',') }}:{{ m.people }}">
   {% for cat, rows in aisles %}{% for l, promo in rows %}{% set disc = promo and l.regular > l.cost %}
     <label class="ct-r"><input type="checkbox" checked autocomplete="off" data-buy="{{ l.key }}" data-cost="{{ l.cost|round(2) }}" data-save="{{ (l.regular - l.cost)|round(2) if disc else 0 }}">
@@ -131,16 +132,15 @@
   {% for x in m.extras %}<label class="ct-r"><input type="checkbox" checked autocomplete="off" data-buy="x:{{ x }}" data-cost="0" data-save="0"><span class="ct-c" aria-hidden="true"></span><span class="ct-n">{{ x }}</span><span class="ct-p"></span></label>{% endfor %}
   {% for l in m.pantry_lines if not l.buy %}
     <form method="post" action="/menu/pantry" class="ct-r off" data-pantry="{{ l.key }}"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}">
-      <button type="submit" class="ct-c" aria-label="{{ l.name }}: закінчилось — купити"></button><span class="ct-n">{{ l.name }}</span><span class="ct-p">мабуть, є</span></form>
+      <span class="ct-c" aria-hidden="true"></span><span class="ct-n">{{ l.name }}</span><span class="ct-p">мабуть, є</span><button type="submit" class="ct-hit" aria-label="{{ l.name }}: закінчилось — купити"></button></form>
   {% endfor %}
   {% for l in m.home_lines %}
     <form method="post" action="/menu/have" class="ct-r off" data-home="{{ l.key }}"><input type="hidden" name="csrf" value="{{ user.csrf if user else '' }}"><input type="hidden" name="key" value="{{ l.key }}"><input type="hidden" name="op" value="remove">
-      <button type="submit" class="ct-c" aria-label="{{ l.name }}: немає вдома — купити"></button><span class="ct-n">{{ l.name }}</span><span class="ct-p">є вдома</span></form>
+      <span class="ct-c" aria-hidden="true"></span><span class="ct-n">{{ l.name }}</span><span class="ct-p">є вдома</span><button type="submit" class="ct-hit" aria-label="{{ l.name }}: немає вдома — купити"></button></form>
   {% endfor %}
   </div>
-  <p class="ct-hint">Зніміть галочку з того, що вже є вдома</p>
   <div class="ct-go">
-  {% if guest %}<a class="btn" href="/register">Замовити в «Сільпо»</a>
+  {% if guest %}<a class="btn" href="/register">Увійти й замовити</a>
   {% elif link and not is_demo %}
   <form method="post" action="/menu/silpo-cart" class="scart" data-noajax data-turbo="false">
     <input type="hidden" name="csrf" value="{{ user.csrf }}"><input type="hidden" name="bought" id="ctSkip" value="">

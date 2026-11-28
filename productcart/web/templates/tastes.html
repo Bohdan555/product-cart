@@ -2,7 +2,6 @@
 {% block title %}Що вам смакує — Кошик з акцій{% endblock %}
 {% block body %}
 <div class="ts-top"><h1 class="xh sw-h1">Що вам смакує?</h1><a class="ts-skip" href="{{ next_url }}">Пізніше</a></div>
-<p class="ts-sub">Свайпніть продукти — підберемо страви, які вам сподобаються</p>
 <div class="ts-bar" aria-hidden="true"><i id="tsBar"></i></div>
 <div class="sw-deck ts-deck" id="tsDeck" data-csrf="{{ user.csrf if user else '' }}" aria-live="polite">
   {% for c in cards|sort(attribute='state') %}

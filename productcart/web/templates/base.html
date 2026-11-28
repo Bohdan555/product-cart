@@ -23,7 +23,7 @@
 // Нижня панель постійна між переходами — підсвічуємо поточну вкладку самі
 function markTab() {
   var p = location.pathname;
-  var sect = /^\/(list|go)/.test(p) ? 'deals' : /^\/silpo\/cart/.test(p) ? 'cart'
+  var sect = /^\/(list|go)/.test(p) ? 'deals' : /^\/(silpo\/cart|buy)/.test(p) ? 'cart'
     : (p === '/me' || /^\/(profile|notify|silpo|login|register|dishes|privacy|photos)/.test(p)) ? 'me' : 'cook';
   document.querySelectorAll('.dock a').forEach(function (a) {
     var on = a.dataset.sect === sect;
@@ -37,7 +37,7 @@ document.addEventListener('turbo:load', markTab);
 (function () {
   var t0 = 0, pressed = null;
   function sectOf(path) {
-    return /^\/(list|go)/.test(path) ? 'deals' : /^\/silpo\/cart/.test(path) ? 'cart'
+    return /^\/(list|go)/.test(path) ? 'deals' : /^\/(silpo\/cart|buy)/.test(path) ? 'cart'
       : (path === '/me' || /^\/(profile|notify|silpo|login|register|dishes|privacy|photos)/.test(path)) ? 'me' : 'cook';
   }
   document.addEventListener('turbo:click', function (e) {

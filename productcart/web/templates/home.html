@@ -2,7 +2,6 @@
 {% block title %}Кошик з акцій — що приготувати з того, що є, і з акцій «Сільпо»{% endblock %}
 {% block body %}
 <h1 class="hm-h">Готуємо</h1>
-<p class="hm-sub">Підберемо страву з того, що є вдома</p>
 {% set brk = meal == "breakfast" %}
 <a class="hm-hero-card" href="/today">
   <img src="{{ hero }}" alt="" fetchpriority="high">
@@ -12,7 +11,7 @@
 <nav class="hm-tiles" aria-label="Ще">
   <a href="/week"><i aria-hidden="true">{{ ic("calendar") }}</i><b>Тиждень</b><small>Меню й покупки</small></a>
   {% if user and not taste_ask %}<a href="/dishes"><i aria-hidden="true">{{ ic("book") }}</i><b>Мої страви</b><small>Свої рецепти</small></a>
-  {% else %}<a href="/tastes?next=/"><i aria-hidden="true">😋</i><b>Смаки</b><small>Пів хвилини</small></a>{% endif %}
+  {% else %}<a href="/tastes?next=/"><i aria-hidden="true">{{ ic("taste") }}</i><b>Смаки</b><small>Пів хвилини</small></a>{% endif %}
 </nav>
 {% if cooking %}
 <a class="ck-card" href="/cook">

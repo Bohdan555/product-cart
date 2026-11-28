@@ -217,7 +217,7 @@ def test_nearby_stores_within_radius(client):
 def test_menu_page_and_settings(client):
     token = register(client)
     r = client.get("/menu")
-    assert r.status_code == 200 and "Тиждень" in r.text and "демо-ціни" in r.text and 'href="/buy"' in r.text
+    assert r.status_code == 200 and "Тиждень" in r.text and " · демо" in r.text and 'href="/buy"' in r.text
     assert r.text.count('<li class="eat-row') == 5 and "Як готувати" in r.text and 'id="list"' not in r.text
     assert 'id="list"' in client.get("/buy").text and "Кошик" in client.get("/buy").text
     assert client.post("/menu/settings", data={"csrf": "bad", "dinners": "3"}).status_code == 400
@@ -251,7 +251,7 @@ def test_landing_and_guest_menu(client):
     assert client.get("/today").status_code == 200
     # гість відкриває меню без реєстрації, на демо-цінах
     r = client.get("/menu")
-    assert r.status_code == 200 and "демо-ціни" in r.text and "pc_guest" in client.cookies
+    assert r.status_code == 200 and " · демо" in r.text and "pc_guest" in client.cookies
     assert client.post("/menu/settings", data={"people": "4"}).headers["location"] == "/menu"
     assert client.post("/menu/settings", data={"dinners": "3"}).status_code == 303
     assert client.get("/menu").text.count('<li class="eat-row') == 3
@@ -709,7 +709,7 @@ def test_today_flow_guest_and_user(client):
     bf = client.get("/today/dishes", params={"have": "eggs,milk", "t": "30", "n": "2", "meal": "breakfast"}).text
     assert re.search(r'aria-current="true">[^<]*<svg[^>]*>.*?</svg> Сніданок', bf) and bf.count('class="td-dish sw-card') > 3
     d = client.get("/today/dish/omelette", params={"have": "eggs,cheese,pepper,onion", "t": "15", "n": "2"}).text
-    assert "Омлет з перцем і сиром" in d and 'class="td-home">є<' in d and "Готувати покроково" in d
+    assert "Омлет з перцем і сиром" in d and 'class="td-home">є вдома<' in d and "Готувати покроково" in d
     assert 'id="cmOpen"' in d and 'id="cmData"' in d and "Готувати покроково" in d      # режим «Готую»
     data = json.loads(d.split('id="cmData">')[1].split("</script>")[0])
     assert data["steps"] and any("Яйця" in x for x in data["ings"])
@@ -755,7 +755,7 @@ def test_today_missing_to_silpo_cart(tmp_path):
 
 def test_me_profile_page(client):
     g = client.get("/me").text
-    assert "Ви поки гість" in g and "реальні ціни свого «Сільпо»" in g and 'href="/register"' in g
+    assert "ціни будуть з вашого «Сільпо»" in g and 'href="/register"' in g
     token = register(client)
     client.post("/today/cooked", data={"csrf": token, "id": "omelette"})
     client.post("/cook/done", data={"csrf": token, "id": "omelette"})

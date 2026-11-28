@@ -12,7 +12,7 @@
 <p class="me-sub">{{ user.email }}</p>
 {% else %}
 <section class="me-guest">
-  <p><b>Ви поки гість.</b> Увійдіть, щоб бачити реальні ціни свого «Сільпо», збирати кошик одним дотиком і зберігати смаки.</p>
+  <p>Увійдіть — і ціни будуть з вашого «Сільпо»</p>
   {% if google_on %}<a class="btn" href="/auth/google" data-turbo="false">Увійти через Google</a>{% endif %}
   <a class="btn{% if google_on %} alt{% endif %}" href="/register">{{ 'Увійти з email' if google_on else 'Увійти' }}</a>
 </section>
@@ -22,16 +22,16 @@
 
 {% set DIET_SHORT = {"no_gluten": "без глютену", "no_lactose": "без лактози", "vegetarian": "вегетаріанське", "vegan": "веганське",
                       "no_pork": "без свинини", "no_alcohol": "без алкоголю", "no_sugar": "без солодкого"} %}
-{% macro tile(href, emo, title, sub, cls="") %}<a class="me-tile{{ ' ' ~ cls if cls }}" href="{{ href }}"><i aria-hidden="true">{{ emo }}</i><b>{{ title }}</b><small>{{ sub }}</small></a>{% endmacro %}
+{% macro tile(href, icon, title, sub, cls="") %}<a class="me-tile{{ ' ' ~ cls if cls }}" href="{{ href }}"><i aria-hidden="true">{{ ic(icon) }}</i><b>{{ title }}</b><small>{{ sub }}</small></a>{% endmacro %}
 {% set nl = p.food_likes|length %}
 <nav class="me-tiles" aria-label="Налаштування">
-  {{ tile("/tastes?next=/me", "😋", "Смаки", ("смакує " ~ nl ~ " · не їм " ~ p.food_dislikes|length) if p.tastes_seen else "свайпнути продукти") }}
-  {{ tile("/profile#family" if user else "/register", "👥", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей'), "до " ~ p.max_minutes ~ " хв") }}
-  {{ tile("/profile#dietsH" if user else "/register", "🚫", "Обмеження", (p.diets|map('extract', DIET_SHORT)|join(', ')) if user and p.diets else "немає") }}
-  {{ tile("/profile#kitchenH" if user else "/register", "🍳", "Кухня", (p.kitchen|map('extract', kitchen)|map('lower')|join(', ')) if p.kitchen else "усе, що є") }}
-  {{ tile("/dishes" if user else "/register", "📖", "Мої страви", (mine|length ~ " " ~ plural(mine|length, 'рецепт', 'рецепти', 'рецептів')) if mine else "запишіть свої") }}
-  {% if user and link %}{{ tile("/silpo", "🏪", "«Сільпо»", link.store_title or "підключено") }}
-  {% else %}{{ tile("/silpo" if user else "/register", "🏪", "«Сільпо»", "підключити ціни", "dk") }}{% endif %}
+  {{ tile("/tastes?next=/me", "taste", "Смаки", ("смакує " ~ nl ~ " · не їм " ~ p.food_dislikes|length) if p.tastes_seen else "свайпнути продукти") }}
+  {{ tile("/profile#family" if user else "/register", "family", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей'), "до " ~ p.max_minutes ~ " хв") }}
+  {{ tile("/profile#dietsH" if user else "/register", "block", "Обмеження", (p.diets|map('extract', DIET_SHORT)|join(', ')) if user and p.diets else "немає") }}
+  {{ tile("/profile#kitchenH" if user else "/register", "stove", "Кухня", (p.kitchen|map('extract', kitchen)|map('lower')|join(', ')) if p.kitchen else "усе, що є") }}
+  {{ tile("/dishes" if user else "/register", "book", "Мої страви", (mine|length ~ " " ~ plural(mine|length, 'рецепт', 'рецепти', 'рецептів')) if mine else "запишіть свої") }}
+  {% if user and link %}{{ tile("/silpo", "store", "«Сільпо»", link.store_title or "підключено") }}
+  {% else %}{{ tile("/silpo" if user else "/register", "store", "«Сільпо»", "підключити ціни", "dk" if user else "") }}{% endif %}
 </nav>
 <div class="pgroup">
   {% if user %}{% set ok %}<span class="pok">{{ ic("check", "sm") }}</span>{% endset %}

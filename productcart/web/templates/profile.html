@@ -45,7 +45,7 @@
 
   <h2 class="ph" id="family">Сім'я й час</h2>
   <p class="pr-lbl">Нас</p>
-  <div class="ms-seg pr-seg">{% for v in (1, 2, 3, 4, 5, 6) %}<label><input type="radio" name="household" value="{{ v }}" {% if v == (p.household or 2) %}checked{% endif %}><span>{{ v }}</span></label>{% endfor %}</div>
+  <div class="ms-pm pr-pm" id="prPeople"><button type="button" data-pm="-1" aria-label="Менше">−</button><output>{{ p.household or 2 }}</output><button type="button" data-pm="1" aria-label="Більше">+</button><input type="hidden" name="household" value="{{ p.household or 2 }}"></div>
   <p class="pr-lbl">Час на страву</p>
   {% set mins = 30 if p.max_minutes <= 30 else (45 if p.max_minutes <= 45 else (60 if p.max_minutes <= 60 else 90)) %}
   <div class="ms-seg pr-seg">{% for v, t in [(30, '30 хв'), (45, '45 хв'), (60, '60 хв'), (90, '60+')] %}<label><input type="radio" name="max_minutes" value="{{ v }}" {% if v == mins %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</div>
@@ -136,6 +136,12 @@
   };
 
   diets();
+  var pm = document.getElementById('prPeople');
+  if (pm) pm.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-pm]'); if (!b) return;
+    var i = pm.querySelector('input'), v = Math.max(1, Math.min(12, +i.value + +b.dataset.pm));
+    if (v === +i.value) return; i.value = v; pm.querySelector('output').textContent = v; if (window.haptic) haptic(8); prSave();
+  });
   ready = true;
 })();
 </script>

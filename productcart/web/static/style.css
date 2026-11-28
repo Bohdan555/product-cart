@@ -2145,3 +2145,36 @@ body:has(.ct) footer{display:none}
 .hm-tiles+.ck-card,.hm-tiles~.ck-card{margin-top:12px}
 body:has(.dock) footer{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 body:has(.hm-tiles) footer{display:none}   /* головна коротка: посилання на приватність — у «Профілі» */
+
+/* ---- UX-рецензія: виправлення ---- */
+/* Рецепт і кошик: нижнє меню ховаємо — головна дія липне до низу, зміст не закритий */
+body:has(.rc-hero) .dock,body:has(.ct-go) .dock{display:none}
+body:has(.rc-hero) .cm-open{bottom:calc(14px + env(safe-area-inset-bottom))}
+.ct-go{bottom:calc(14px + env(safe-area-inset-bottom))}
+/* Кошик: підказка вгорі, сірі рядки читаються, «мабуть, є» натискається всім рядком */
+.ct-hint{text-align:left;margin:-6px 0 10px;font-size:15px}
+.ct-r.off,.ct-r.off .ct-p,.ct-r.off .ct-p.g{color:var(--muted)}
+form.ct-r{position:relative}
+.ct-hit{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:none;opacity:0;cursor:pointer}
+.ct-hit:focus-visible{opacity:1;outline:2px solid var(--tint);outline-offset:-2px;border-radius:inherit}
+@media (prefers-color-scheme:dark){.ct-p.g,.ct-sum em{color:#34C759}.ct-c{background:#2EA055}}
+/* Заголовки: корені вкладок — 34, вкладені екрани (з «назад») — 28 зліва */
+.wk-h .xh,.nt-h,body:has(#anketa) .me-lite .xh{font-size:28px;line-height:1.2}
+/* Зони дотику ≥ 44 */
+.td-meals a{min-height:44px}
+.ts-skip{min-height:44px;display:inline-flex;align-items:center;padding:0 6px}
+.nt-card .howto summary{display:inline-flex;align-items:center;min-height:44px}
+/* «Показати будь-які страви» — запасний шлях, тихіше за головну дію */
+.vf-go .btn.vf-quiet{background:none;color:var(--tint);box-shadow:none;height:44px;font-weight:600}
+/* Тиждень: одна ціль у панелі — лише шеврон */
+.wk-bar em{background:none;color:inherit;height:auto;padding:0 8px;font:400 30px/1 var(--body)}
+@media (prefers-color-scheme:dark){.wk-bar em{background:none}}
+/* Профіль: іконки замість емодзі */
+.me-tile i .ico{width:28px;height:28px;--ic:transparent;stroke:var(--tint)}
+.me-tile.dk i .ico{stroke:currentColor}
+.pr-pm{justify-content:flex-start}
+/* Рецепт: фото до самого верху, «назад» — скляна кнопка поверх фото */
+.rc-hero{margin-top:calc(-1 * var(--rc-top, 76px));height:calc(300px + var(--rc-top, 76px))}
+body:has(.rc-hero) .hback{background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+body:has(.rc-hero) .hback{z-index:20}
+body:has(.rc-hero) header.top{position:relative;z-index:30}
