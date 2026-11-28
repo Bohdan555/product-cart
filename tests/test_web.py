@@ -1140,3 +1140,11 @@ def test_tastes_swipe_saves_and_filters(client):
     client.post("/tastes", data={"csrf": token, "like": ["liver"]})
     assert "не їм 3" in client.get("/me").text
     assert client.post("/tastes", data={"csrf": "bad", "like": ["liver"]}).status_code == 400
+
+
+def test_me_tiles_with_diets_and_kitchen(client):
+    token = register(client)
+    client.post("/profile", data={"csrf": token, "_f": ["diets", "kitchen"], "diets": "no_pork", "health_consent": "1",
+                                  "kitchen": ["oven", "airfryer"]})
+    me = client.get("/me")
+    assert me.status_code == 200 and "без свинини" in me.text and "аерогриль" in me.text

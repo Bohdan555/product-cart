@@ -24,11 +24,14 @@
                       "no_pork": "без свинини", "no_alcohol": "без алкоголю", "no_sugar": "без солодкого"} %}
 {% macro tile(href, icon, title, sub, cls="") %}<a class="me-tile{{ ' ' ~ cls if cls }}" href="{{ href }}"><i aria-hidden="true">{{ ic(icon) }}</i><b>{{ title }}</b><small>{{ sub }}</small></a>{% endmacro %}
 {% set nl = p.food_likes|length %}
+{% set ns = namespace(d=[], k=[]) %}{% for d in p.diets %}{% set ns.d = ns.d + [DIET_SHORT.get(d, d)] %}{% endfor %}
+{% for k in p.kitchen %}{% if k in kitchen %}{% set ns.k = ns.k + [kitchen[k]|lower] %}{% endif %}{% endfor %}
+{% set diets_txt = ns.d|join(', ') %}{% set kit_txt = ns.k|join(', ') or "усе, що є" %}
 <nav class="me-tiles" aria-label="Налаштування">
   {{ tile("/tastes?next=/me", "taste", "Смаки", ("смакує " ~ nl ~ " · не їм " ~ p.food_dislikes|length) if p.tastes_seen else "свайпнути продукти") }}
   {{ tile("/profile#family" if user else "/register", "family", p.household ~ " " ~ plural(p.household, 'людина', 'людини', 'людей'), "до " ~ p.max_minutes ~ " хв") }}
-  {{ tile("/profile#dietsH" if user else "/register", "block", "Обмеження", (p.diets|map('extract', DIET_SHORT)|join(', ')) if user and p.diets else "немає") }}
-  {{ tile("/profile#kitchenH" if user else "/register", "stove", "Кухня", (p.kitchen|map('extract', kitchen)|map('lower')|join(', ')) if p.kitchen else "усе, що є") }}
+  {{ tile("/profile#dietsH" if user else "/register", "block", "Обмеження", diets_txt if user and p.diets else "немає") }}
+  {{ tile("/profile#kitchenH" if user else "/register", "stove", "Кухня", kit_txt if p.kitchen else "усе, що є") }}
   {{ tile("/dishes" if user else "/register", "book", "Мої страви", (mine|length ~ " " ~ plural(mine|length, 'рецепт', 'рецепти', 'рецептів')) if mine else "запишіть свої") }}
   {% if user and link %}{{ tile("/silpo", "store", "«Сільпо»", link.store_title or "підключено") }}
   {% else %}{{ tile("/silpo" if user else "/register", "store", "«Сільпо»", "підключити ціни", "dk" if user else "") }}{% endif %}
