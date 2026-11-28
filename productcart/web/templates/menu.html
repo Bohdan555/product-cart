@@ -119,7 +119,7 @@
 {% if view == 'buy' %}
 <section id="list" class="mlist ct">
   {% set nbuy = m.promo_lines|length + m.other_lines|length + m.extras|length %}
-  <h1 class="ct-h">Кошик</h1>
+  <div class="ct-top"><h1 class="ct-h">Кошик</h1><button type="button" class="ct-clear" id="ctClear">Очистити</button></div>
   <p class="ct-sum"><span id="ctN" data-all="{{ nbuy }}">{{ nbuy }} {{ plural(nbuy, 'продукт', 'продукти', 'продуктів') }}</span>
     <span><b id="ctTot" data-v="{{ m.total|round(2) }}">≈ {{ uah(m.total|round) }}</b>{% if m.saving >= 1 %} · <em id="ctSave" data-v="{{ m.saving|round(2) }}">−{{ uah(m.saving|round) }}</em>{% endif %}{% if is_demo %} · <a class="demo" href="{{ '/register' if guest else '/silpo' }}">демо</a>{% endif %}</span></p>
   <p class="ct-hint">Зніміть галочку з того, що вже є вдома</p>
@@ -163,15 +163,27 @@
     var all = +n.dataset.all;
     n.textContent = (on === all ? all : on + ' з ' + all) + ' ' + plural(all);
     tot.textContent = '≈ ' + Math.max(0, Math.round(cost)).toLocaleString('uk-UA').replace(/\u00a0/g, ' ') + ' ₴';
-    if (sv) sv.textContent = '−' + Math.max(0, Math.round(save)) + ' ₴';
+    if (sv) { sv.textContent = '−' + Math.max(0, Math.round(save)) + ' ₴'; sv.hidden = Math.round(save) < 1; if (sv.previousSibling && sv.previousSibling.nodeType === 3) sv.previousSibling.textContent = sv.hidden ? '' : ' · '; }
     var f = document.getElementById('ctSkip'); if (f) f.value = off.join(',');
+    var gb = document.querySelector('.ct-go .btn');      // порожній кошик — замовляти нічого
+    if (gb) { gb.classList.toggle('is-off', !on); if (on) gb.removeAttribute('aria-disabled'); else gb.setAttribute('aria-disabled', 'true'); if ('disabled' in gb && gb.tagName === 'BUTTON') gb.disabled = !on; }
   }
+  // «Очистити» — зняти всі галочки (нічого не купуємо); коли кошик порожній — «Вибрати все»
+  var clr = document.getElementById('ctClear');
+  function clrLabel() { if (clr) clr.textContent = boxes.some(function (b) { return b.checked; }) ? 'Очистити' : 'Вибрати все'; }
+  if (clr) clr.addEventListener('click', function () {
+    var on = !boxes.some(function (b) { return b.checked; });
+    boxes.forEach(function (b) { b.checked = on; if (on) delete skip[b.dataset.buy]; else skip[b.dataset.buy] = 1; });
+    try { localStorage.setItem(KEY, JSON.stringify(skip)); } catch (e) {}
+    if (window.haptic) haptic(15); sync(); clrLabel();
+    if (!on && window.toast) toast('Кошик очищено');
+  });
   boxes.forEach(function (b) {
     if (skip[b.dataset.buy]) b.checked = false;
     b.addEventListener('change', function () { if (b.checked) delete skip[b.dataset.buy]; else skip[b.dataset.buy] = 1;
-      try { localStorage.setItem(KEY, JSON.stringify(skip)); } catch (e) {} if (window.haptic) haptic(8); sync(); });
+      try { localStorage.setItem(KEY, JSON.stringify(skip)); } catch (e) {} if (window.haptic) haptic(8); sync(); clrLabel(); });
   });
-  sync();
+  sync(); clrLabel();
 })();
 </script>
 

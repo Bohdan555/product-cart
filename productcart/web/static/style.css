@@ -2178,3 +2178,6 @@ form.ct-r{position:relative}
 body:has(.rc-hero) .hback{background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
 body:has(.rc-hero) .hback{z-index:20}
 body:has(.rc-hero) header.top{position:relative;z-index:30}
+.ct-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ct-clear{min-height:44px;padding:0 4px;border:0;background:none;color:var(--tint);font:500 17px var(--body);cursor:pointer}
+.ct-go .btn.is-off{background:color-mix(in srgb,var(--muted) 20%,var(--bg));color:var(--muted);pointer-events:none;box-shadow:none}
